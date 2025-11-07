@@ -117,14 +117,14 @@ export function AgreedDocument({ document, totalUsers }: AgreedDocumentProps) {
                 const headingLevel = Math.min(6, 2 + (paragraph.order || 0));
                 return (
                   <div key={paragraph.id} className="relative">
-                    <div className="flex items-start gap-3">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:gap-3 gap-2">
                       {React.createElement(
                         `h${headingLevel}`,
-                        { className: "text-xl font-bold text-gray-900 dark:text-gray-100 flex-1 leading-tight" },
+                        { className: "text-xl font-bold text-gray-900 dark:text-gray-100 leading-tight" },
                         displayText
                       )}
                       {hasChanges && highestApprovedChange && (
-                        <div className="flex flex-col items-end text-xs text-green-600 gap-1 shrink-0">
+                        <div className="hidden sm:flex flex-col items-end text-xs text-green-600 gap-1 shrink-0">
                           <div className="flex items-center gap-1 bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded">
                             <CheckCircle2 className="h-3 w-3" />
                             <span className="font-medium">Accepted</span>
@@ -145,12 +145,12 @@ export function AgreedDocument({ document, totalUsers }: AgreedDocumentProps) {
               // Regular paragraph
               return (
                 <div key={paragraph.id} className="relative">
-                  <div className="flex gap-4">
+                  <div className="flex flex-col sm:flex-row sm:gap-4 gap-2">
                     <p className="flex-1 leading-relaxed text-gray-800 dark:text-gray-200 text-justify indent-8 first-line:font-medium">
                       {displayText}
                     </p>
                     {hasChanges && highestApprovedChange && (
-                      <div className="flex flex-col items-end text-xs text-green-600 gap-1 shrink-0">
+                      <div className="hidden sm:flex flex-col items-end text-xs text-green-600 gap-1 shrink-0">
                         <div className="flex items-center gap-1 bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded">
                           <CheckCircle2 className="h-3 w-3" />
                           <span className="font-medium">Accepted</span>

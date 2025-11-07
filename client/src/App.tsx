@@ -579,22 +579,24 @@ export default function App() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "discussion" | "agreed")}>
-          <div className="flex justify-center mb-6">
-            <TabsList>
-              <TabsTrigger value="discussion" className="gap-2">
-                <Edit3 className="h-4 w-4" />
-                Discussion
+          <div className="flex justify-center mb-6 px-4">
+            <TabsList className="w-full sm:w-auto">
+              <TabsTrigger value="discussion" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm">
+                <Edit3 className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden xs:inline">Discussion</span>
+                <span className="xs:hidden">Disc</span>
                 {totalSuggestions > 0 && (
-                  <Badge variant="secondary" className="ml-1">
+                  <Badge variant="secondary" className="ml-1 text-xs">
                     {totalSuggestions}
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="agreed" className="gap-2">
-                <FileText className="h-4 w-4" />
-                Agreed
+              <TabsTrigger value="agreed" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm">
+                <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden xs:inline">Agreed</span>
+                <span className="xs:hidden">Done</span>
                 {acceptedSuggestions > 0 && (
-                  <Badge variant="default" className="ml-1 bg-green-600">
+                  <Badge variant="default" className="ml-1 bg-green-600 text-xs">
                     {acceptedSuggestions}
                   </Badge>
                 )}
@@ -648,33 +650,33 @@ export default function App() {
                 }
               }}
             >
-              <div className="flex items-center gap-3 text-sm text-gray-600 cursor-pointer hover:text-gray-900 transition-colors">
+              <div className="flex items-center gap-2 sm:gap-3 text-sm text-gray-600 cursor-pointer hover:text-gray-900 transition-colors">
                 <Users className="h-4 w-4" />
-                <div className="flex items-center -space-x-2">
+                <div className="flex items-center -space-x-1 sm:-space-x-2">
                   {/* Owner */}
-                  <Avatar className="h-8 w-8 border-2 border-white">
+                  <Avatar className="h-6 w-6 sm:h-8 sm:w-8 border-2 border-white">
                     <AvatarFallback className="text-xs bg-blue-100 text-blue-700">
                       {currentDocument.owner.name.split(' ').map(n => n[0]).join('')}
                     </AvatarFallback>
                   </Avatar>
                   {/* Collaborators */}
                   {currentDocument.collaborators.slice(0, 3).map((collaborator) => (
-                    <Avatar key={collaborator.id} className="h-8 w-8 border-2 border-white">
+                    <Avatar key={collaborator.id} className="h-6 w-6 sm:h-8 sm:w-8 border-2 border-white">
                       <AvatarFallback className="text-xs bg-gray-200 text-gray-700">
                         {collaborator.user.name.split(' ').map(n => n[0]).join('')}
                       </AvatarFallback>
                     </Avatar>
                   ))}
                   {currentDocument.collaborators.length > 3 && (
-                    <Avatar className="h-8 w-8 border-2 border-white">
+                    <Avatar className="h-6 w-6 sm:h-8 sm:w-8 border-2 border-white">
                       <AvatarFallback className="text-xs bg-gray-200 text-gray-700">
                         +{currentDocument.collaborators.length - 3}
                       </AvatarFallback>
                     </Avatar>
                   )}
                 </div>
-                <span className="font-medium">
-                  {(currentDocument.collaborators.length || 0) + 1} collaborator{(currentDocument.collaborators.length || 0) + 1 !== 1 ? 's' : ''}
+                <span className="font-medium text-xs sm:text-sm">
+                  {(currentDocument.collaborators.length || 0) + 1} collab{(currentDocument.collaborators.length || 0) + 1 !== 1 ? 's' : ''}
                 </span>
               </div>
             </CollaboratorManagement>

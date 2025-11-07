@@ -67,11 +67,11 @@ function InlineAddButton({ onClick, floating = false, position = "top" }: Inline
           type="button"
           variant="ghost"
           size="icon"
-          className="h-8 w-8 rounded-full shadow-sm bg-white/95 dark:bg-slate-900/80 border border-border"
+          className="h-10 w-10 sm:h-8 sm:w-8 rounded-full shadow-sm bg-white/95 dark:bg-slate-900/80 border border-border touch-manipulation"
           onClick={onClick}
           aria-label="Add paragraph"
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-5 w-5 sm:h-4 sm:w-4" />
         </Button>
       </div>
     );
@@ -95,12 +95,12 @@ function InlineAddButton({ onClick, floating = false, position = "top" }: Inline
         type="button"
         variant="ghost"
         size="icon"
-        className="h-8 w-8 rounded-full shadow-sm bg-white/95 dark:bg-slate-900/80 border border-border"
+        className="h-10 w-10 sm:h-8 sm:w-8 rounded-full shadow-sm bg-white/95 dark:bg-slate-900/80 border border-border touch-manipulation"
         onClick={onClick}
         style={{ pointerEvents: "auto" }}
         aria-label="Add paragraph"
       >
-        <Plus className="h-4 w-4" />
+        <Plus className="h-5 w-5 sm:h-4 sm:w-4" />
       </Button>
     </div>
   );
@@ -376,16 +376,16 @@ export function DocumentEditor({
             return (
               <div className="flex items-center justify-center py-16">
                 <div className="text-center">
-                  <p className="text-gray-600 mb-2">Start by adding your first heading</p>
-                  <p className="text-sm text-muted-foreground mb-4">New documents must begin with a heading</p>
+                  <p className="text-gray-600 mb-2">Start your collaborative document</p>
+                  <p className="text-sm text-muted-foreground mb-4">Add your first paragraph - choose between heading or body text</p>
                   <Button
                     type="button"
                     size="lg"
                     onClick={() => openNewParagraphDialog('end', null, true)}
-                    className="gap-2"
+                    className="gap-2 touch-manipulation min-h-[48px] text-base"
                   >
                     <Plus className="h-5 w-5" />
-                    Add First Heading
+                    Add First Paragraph
                   </Button>
                 </div>
               </div>
@@ -414,7 +414,11 @@ export function DocumentEditor({
                         type="button"
                         size="sm"
                         variant={!includeHeading ? "default" : "outline"}
-                        onClick={() => setIncludeHeading(false)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIncludeHeading(false);
+                        }}
+                        className="touch-manipulation min-h-[44px] sm:min-h-auto"
                       >
                         Body
                       </Button>
@@ -422,7 +426,11 @@ export function DocumentEditor({
                         type="button"
                         size="sm"
                         variant={includeHeading ? "default" : "outline"}
-                        onClick={() => setIncludeHeading(true)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIncludeHeading(true);
+                        }}
+                        className="touch-manipulation min-h-[44px] sm:min-h-auto"
                       >
                         Heading
                       </Button>
@@ -446,6 +454,7 @@ export function DocumentEditor({
                       size="sm"
                       variant="ghost"
                       onClick={closeInlineForm}
+                      className="touch-manipulation min-h-[44px] sm:min-h-auto"
                     >
                       Cancel
                     </Button>
@@ -483,6 +492,7 @@ export function DocumentEditor({
                       size="sm"
                       onClick={handleSubmitNewParagraph}
                       disabled={isSubmitting}
+                      className="touch-manipulation min-h-[44px] sm:min-h-auto"
                     >
                       <PlusCircle className="h-4 w-4 mr-1" />
                       {isSubmitting ? "Submitting..." : "Submit Suggestion"}
@@ -505,7 +515,11 @@ export function DocumentEditor({
                         type="button"
                         size="sm"
                         variant={!includeHeading ? "default" : "outline"}
-                        onClick={() => setIncludeHeading(false)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIncludeHeading(false);
+                        }}
+                        className="touch-manipulation min-h-[44px] sm:min-h-auto"
                       >
                         Body
                       </Button>
@@ -513,7 +527,11 @@ export function DocumentEditor({
                         type="button"
                         size="sm"
                         variant={includeHeading ? "default" : "outline"}
-                        onClick={() => setIncludeHeading(true)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIncludeHeading(true);
+                        }}
+                        className="touch-manipulation min-h-[44px] sm:min-h-auto"
                       >
                         Heading
                       </Button>
@@ -537,6 +555,7 @@ export function DocumentEditor({
                       size="sm"
                       variant="ghost"
                       onClick={closeInlineForm}
+                      className="touch-manipulation min-h-[44px] sm:min-h-auto"
                     >
                       Cancel
                     </Button>
@@ -574,6 +593,7 @@ export function DocumentEditor({
                       size="sm"
                       onClick={handleSubmitNewParagraph}
                       disabled={isSubmitting}
+                      className="touch-manipulation min-h-[44px] sm:min-h-auto"
                     >
                       <PlusCircle className="h-4 w-4 mr-1" />
                       {isSubmitting ? "Submitting..." : "Submit Suggestion"}

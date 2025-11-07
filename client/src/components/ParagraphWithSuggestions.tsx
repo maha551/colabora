@@ -414,10 +414,10 @@ export function ParagraphWithSuggestions({
                     e.stopPropagation();
                     toggleDiscussion();
                   }}
-                  className="h-8 w-8 rounded-full"
+                  className="h-10 w-10 sm:h-8 sm:w-8 rounded-full touch-manipulation"
                   aria-label="Toggle discussion"
                 >
-                  <MessageSquare className="h-4 w-4" />
+                  <MessageSquare className="h-5 w-5 sm:h-4 sm:w-4" />
                 </Button>
               )}
               <Button
@@ -427,10 +427,10 @@ export function ParagraphWithSuggestions({
                   e.stopPropagation();
                   toggleHistory();
                 }}
-                className="h-8 w-8 rounded-full"
+                className="h-10 w-10 sm:h-8 sm:w-8 rounded-full touch-manipulation"
                 aria-label="Toggle history"
               >
-                <History className="h-4 w-4" />
+                <History className="h-5 w-5 sm:h-4 sm:w-4" />
               </Button>
               <Button
                 size="icon"
@@ -439,10 +439,10 @@ export function ParagraphWithSuggestions({
                   e.stopPropagation();
                   startEditing();
                 }}
-                className="h-8 w-8 rounded-full"
+                className="h-10 w-10 sm:h-8 sm:w-8 rounded-full touch-manipulation"
                 aria-label="Suggest edit"
               >
-                <Edit className="h-4 w-4" />
+                <Edit className="h-5 w-5 sm:h-4 sm:w-4" />
               </Button>
             </div>
           </div>

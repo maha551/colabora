@@ -140,8 +140,8 @@ async function runSmokeTests() {
     }
 
     const documentsData = await documentsResponse.json();
-    if (!Array.isArray(documentsData)) {
-      throw new Error('Documents response is not an array');
+    if (!documentsData.documents || !Array.isArray(documentsData.documents)) {
+      throw new Error('Documents response does not contain documents array');
     }
     log('✅ Document access working correctly', 'success');
 
@@ -151,10 +151,10 @@ async function runSmokeTests() {
 
     return true;
 
-  } catch (error) {
+    } catch (error) {
     log(`❌ Smoke test failed: ${error.message}`, 'error');
 
-    if (serverOutput) {
+    if (typeof serverOutput !== 'undefined' && serverOutput) {
       log('Server output:', 'warning');
       console.log(serverOutput.slice(-1000)); // Last 1000 chars
     }

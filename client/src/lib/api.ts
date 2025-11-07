@@ -51,6 +51,7 @@ async function apiRequest(
 
   // Add auth token if available
   const token = getAuthToken()
+  console.log(`API Request to ${endpoint}, token:`, token ? `${token.substring(0, 20)}...` : 'none')
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
   }
@@ -141,6 +142,7 @@ export const paragraphsApi = {
       headingLevel?: HeadingLevel
     }
   ) {
+    console.log(`Creating paragraph in document ${documentId}:`, data)
     return apiRequest(`/api/documents/${documentId}/paragraphs`, {
       method: 'POST',
       body: JSON.stringify(data),

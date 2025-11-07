@@ -37,8 +37,8 @@ app = "colabora"
 
   [[services.http_checks]]
     interval = "10s"
-    timeout = "5s"
-    grace_period = "5s"
+    timeout = "10s"
+    grace_period = "30s"
     method = "GET"
     path = "/api/health"
     protocol = "http"

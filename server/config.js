@@ -26,7 +26,7 @@ const config = {
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '24h',
 
   // Database Configuration
-  DATABASE_URL: process.env.DATABASE_URL || path.join(__dirname, '../colabora.db'),
+  DATABASE_URL: process.env.DATABASE_URL || (NODE_ENV === 'production' ? '/data/colabora.db' : path.join(__dirname, '../colabora.db')),
 
   // CORS Configuration
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:3001',

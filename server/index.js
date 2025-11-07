@@ -168,23 +168,29 @@ const db = new sqlite3.Database(dbPath, (err) => {
 });
 
 function initializeDatabaseAndStartServer(db) {
+  console.log('🚀 Starting database initialization...');
   initializeDatabase(db);
 
-  console.log('Waiting for database initialization...');
+  console.log('⏳ Waiting for database initialization...');
+  let checkCount = 0;
   const checkInterval = setInterval(() => {
+    checkCount++;
+    console.log(`🔍 Database readiness check #${checkCount}...`);
+
     db.get('SELECT COUNT(*) as count FROM paragraphs WHERE document_id = ?', ['demo-doc-1'], (err, row) => {
       if (err) {
-        console.log('Database check failed:', err.message);
+        console.log('❌ Database check failed:', err.message);
         return;
       }
 
-      console.log(`Database check: found ${row.count} paragraphs for demo-doc-1`);
+      console.log(`✅ Database check: found ${row.count} paragraphs for demo-doc-1`);
       if (row && row.count > 0) {
+        console.log('🎉 Database initialization complete!');
         clearInterval(checkInterval);
         startServer();
       }
     });
-  }, 1000);
+  }, 2000);
 
   serverStartTimeout = setTimeout(() => {
     clearInterval(checkInterval);
@@ -274,8 +280,8 @@ function startServer() {
   };
 
   // Start server
-  const server = app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+  const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server running on 0.0.0.0:${PORT}`);
     console.log(`🌍 Environment: ${config.NODE_ENV}`);
     console.log(`🔒 Security: ${config.NODE_ENV === 'production' ? 'Production mode enabled' : 'Development mode - NOT SECURE FOR PRODUCTION'}`);
     console.log(`📊 Rate limiting: ${config.RATE_LIMIT_MAX_REQUESTS} requests per ${config.RATE_LIMIT_WINDOW_MS / 1000}s`);
@@ -308,17 +314,29 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Health check endpoint
+// Health check endpoint (available immediately, handles database initialization)
 app.get('/api/health', (req, res) => {
   const db = req.app.locals.db;
   const uptime = process.uptime();
 
-  // Basic database connectivity check
+  // Basic health check - don't fail if database isn't ready yet
+  if (!db) {
+    return res.json({
+      status: 'starting',
+      timestamp: new Date().toISOString(),
+      uptime: `${Math.floor(uptime)}s`,
+      database: 'initializing',
+      environment: config.NODE_ENV,
+      version: '1.0.0'
+    });
+  }
+
+  // Database connectivity check
   db.get('SELECT 1 as test', [], (err, row) => {
     const dbStatus = err ? 'error' : 'healthy';
 
     res.json({
-      status: 'healthy',
+      status: dbStatus === 'healthy' ? 'healthy' : 'degraded',
       timestamp: new Date().toISOString(),
       uptime: `${Math.floor(uptime)}s`,
       database: dbStatus,

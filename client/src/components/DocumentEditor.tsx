@@ -150,9 +150,10 @@ export function DocumentEditor({
     setFormError(null);
     setNewParagraphBody("");
 
-    // Force heading for first paragraph in new documents
+    // Allow choice for all paragraphs, including first one
     const isFirstParagraph = contentParagraphs.length === 0;
-    setIncludeHeading(isFirstParagraph);
+    // Don't force heading for first paragraph - let user choose
+    setIncludeHeading(false); // Default to body text for consistency
     setNewParagraphHeading("");
     setNewParagraphHeadingLevel("h2");
 
@@ -214,8 +215,8 @@ export function DocumentEditor({
       
       setIsInlineFormOpen(false);
       setNewParagraphBody("");
-      // Reset to default state (heading for first paragraph, body for subsequent)
-      setIncludeHeading(contentParagraphs.length === 0);
+      // Reset to default state (body text for consistency)
+      setIncludeHeading(false);
       setNewParagraphHeading("");
       setNewParagraphHeadingLevel("h2");
     } catch (error) {
@@ -308,8 +309,8 @@ export function DocumentEditor({
       
       setIsDialogOpen(false);
       setNewParagraphBody("");
-      // Reset to default state (heading for first paragraph, body for subsequent)
-      setIncludeHeading(contentParagraphs.length === 0);
+      // Reset to default state (body text for consistency)
+      setIncludeHeading(false);
       setNewParagraphHeading("");
       setNewParagraphHeadingLevel("h2");
       setInsertContext({ targetParagraphId: null, position: 'end' });
@@ -408,32 +409,23 @@ export function DocumentEditor({
                 <div key={`inline-form-${insertContext.targetParagraphId}`} className="space-y-3 p-4 border border-primary/20 rounded-lg bg-muted/30">
                   <div className="flex items-center justify-between gap-4 flex-wrap">
                     <div className="flex gap-2 flex-wrap">
-                      {contentParagraphs.length === 0 ? (
-                        // First paragraph must be a heading
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <span className="font-medium">First item must be a heading</span>
-                        </div>
-                      ) : (
-                        // Subsequent paragraphs allow choice
-                        <>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant={!includeHeading ? "default" : "outline"}
-                            onClick={() => setIncludeHeading(false)}
-                          >
-                            Body
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant={includeHeading ? "default" : "outline"}
-                            onClick={() => setIncludeHeading(true)}
-                          >
-                            Heading
-                          </Button>
-                        </>
-                      )}
+                      {/* All paragraphs now allow choice between Body and Heading */}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={!includeHeading ? "default" : "outline"}
+                        onClick={() => setIncludeHeading(false)}
+                      >
+                        Body
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={includeHeading ? "default" : "outline"}
+                        onClick={() => setIncludeHeading(true)}
+                      >
+                        Heading
+                      </Button>
                       {includeHeading && (
                         <Select
                           value={newParagraphHeadingLevel}
@@ -508,32 +500,23 @@ export function DocumentEditor({
                 <div key={`inline-form-${insertContext.targetParagraphId}`} className="space-y-3 p-4 border border-primary/20 rounded-lg bg-muted/30">
                   <div className="flex items-center justify-between gap-4 flex-wrap">
                     <div className="flex gap-2 flex-wrap">
-                      {contentParagraphs.length === 0 ? (
-                        // First paragraph must be a heading
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <span className="font-medium">First item must be a heading</span>
-                        </div>
-                      ) : (
-                        // Subsequent paragraphs allow choice
-                        <>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant={!includeHeading ? "default" : "outline"}
-                            onClick={() => setIncludeHeading(false)}
-                          >
-                            Body
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant={includeHeading ? "default" : "outline"}
-                            onClick={() => setIncludeHeading(true)}
-                          >
-                            Heading
-                          </Button>
-                        </>
-                      )}
+                      {/* All paragraphs now allow choice between Body and Heading */}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={!includeHeading ? "default" : "outline"}
+                        onClick={() => setIncludeHeading(false)}
+                      >
+                        Body
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={includeHeading ? "default" : "outline"}
+                        onClick={() => setIncludeHeading(true)}
+                      >
+                        Heading
+                      </Button>
                       {includeHeading && (
                         <Select
                           value={newParagraphHeadingLevel}
@@ -708,12 +691,9 @@ export function DocumentEditor({
       <Dialog open={isDialogOpen} onOpenChange={(open) => (open ? openNewParagraphDialog(insertContext.position, insertContext.targetParagraphId) : closeNewParagraphDialog())}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{contentParagraphs.length === 0 ? 'New Heading' : 'New Content'}</DialogTitle>
+            <DialogTitle>New Content</DialogTitle>
             <DialogDescription>
-              {contentParagraphs.length === 0
-                ? 'New documents must begin with a heading. Provide the content for your first heading.'
-                : 'Provide the content for the new item. Changes remain suggestions until approved.'
-              }
+              Provide the content for the new item. Choose between body text or heading, then submit as a suggestion for approval.
             </DialogDescription>
           </DialogHeader>
 
@@ -721,32 +701,23 @@ export function DocumentEditor({
             <div className="flex items-center justify-between">
               <Label htmlFor="include-heading" className="text-sm">Type</Label>
               <div className="flex gap-2">
-                {contentParagraphs.length === 0 ? (
-                  // First paragraph must be a heading
-                  <div className="text-sm text-muted-foreground font-medium">
-                    First item must be a heading
-                  </div>
-                ) : (
-                  // Subsequent paragraphs allow choice
-                  <>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={!includeHeading ? "default" : "outline"}
-                      onClick={() => setIncludeHeading(false)}
-                    >
-                      Body
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={includeHeading ? "default" : "outline"}
-                      onClick={() => setIncludeHeading(true)}
-                    >
-                      Heading
-                    </Button>
-                  </>
-                )}
+                {/* All paragraphs now allow choice between Body and Heading */}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={!includeHeading ? "default" : "outline"}
+                  onClick={() => setIncludeHeading(false)}
+                >
+                  Body
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={includeHeading ? "default" : "outline"}
+                  onClick={() => setIncludeHeading(true)}
+                >
+                  Heading
+                </Button>
               </div>
             </div>
 

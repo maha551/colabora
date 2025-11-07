@@ -426,125 +426,189 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
               </Card>
             ) : (
               <div className="space-y-4">
-                {pendingProposals.map((proposal) => (
-                  <Card key={proposal.id} className="overflow-hidden hover:shadow-md transition-shadow border-blue-200">
-                    <div className="p-4 space-y-4">
-                      {/* User and Document Info */}
-                      <div className="flex items-start gap-3">
-                        <Avatar className="h-9 w-9 flex-shrink-0 ring-2 ring-blue-100">
-                          <AvatarImage src={proposal.user.avatar} />
-                          <AvatarFallback className="text-xs bg-gradient-to-br from-blue-500 to-purple-600 text-white">
-                            {proposal.user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
+                {pendingProposals.map((proposal) => {
+                  const proCount = proposal.votes.pro;
+                  const neutralCount = proposal.votes.neutral;
+                  const contraCount = proposal.votes.contra;
+                  const totalVotes = proposal.votes.total;
+                  const notVotedCount = Math.max(proposal.totalUsers - totalVotes, 0);
 
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2 mb-1">
-                            <span className="text-sm font-medium text-gray-900">
-                              {proposal.user.name} proposed a change
-                            </span>
-                            <Badge
-                              variant={proposal.type === 'TITLE' ? 'default' : 'outline'}
-                              className="text-xs"
-                            >
-                              {proposal.type === 'TITLE' ? '📝 Title' : '📄 Body'}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-2 flex-wrap text-xs text-gray-600">
-                            <Badge
-                              variant="secondary"
-                              className="text-xs font-normal cursor-pointer hover:bg-blue-100 hover:text-blue-700 transition-colors"
-                              onClick={() => onNavigateToDocument(proposal.documentId)}
-                            >
-                              <FileText className="h-3 w-3 mr-1" />
-                              {proposal.documentTitle}
-                            </Badge>
-                            {proposal.paragraphTitle && (
-                              <>
-                                <span className="text-gray-400">•</span>
-                                <span className="font-medium">{proposal.paragraphTitle}</span>
-                              </>
-                            )}
-                            <span className="text-gray-400">•</span>
-                            <span className="text-gray-500">{formatTimestamp(proposal.createdAt)}</span>
-                          </div>
-                        </div>
+                  const proPercentage = proposal.totalUsers > 0 ? (proCount / proposal.totalUsers) * 100 : 0;
+                  const neutralPercentage = proposal.totalUsers > 0 ? (neutralCount / proposal.totalUsers) * 100 : 0;
+                  const contraPercentage = proposal.totalUsers > 0 ? (contraCount / proposal.totalUsers) * 100 : 0;
+                  const notVotedPercentage = proposal.totalUsers > 0 ? (notVotedCount / proposal.totalUsers) * 100 : 0;
+
+                  return (
+                    <Card key={proposal.id} className="overflow-hidden hover:shadow-md transition-shadow border-blue-200">
+                      {/* Vote Status Bar at the very top */}
+                      <div
+                        className="flex h-3 w-full overflow-hidden cursor-pointer border-b"
+                        style={{ backgroundColor: '#e5e7eb', minHeight: '12px' }}
+                        title={`Click to view details - ${totalVotes} votes out of ${proposal.totalUsers} participants`}
+                      >
+                        {/* Not voted first (gray) */}
+                        {notVotedPercentage > 0 && (
+                          <div
+                            className="transition-all duration-300"
+                            style={{
+                              width: `${notVotedPercentage}%`,
+                              backgroundColor: '#9ca3af',
+                              flex: `0 0 ${notVotedPercentage}%`
+                            }}
+                            title={`Not voted: ${notVotedCount}`}
+                          />
+                        )}
+                        {/* Reject votes */}
+                        {contraPercentage > 0 && (
+                          <div
+                            className="transition-all duration-300"
+                            style={{
+                              width: `${contraPercentage}%`,
+                              backgroundColor: '#ef4444',
+                              flex: `0 0 ${contraPercentage}%`
+                            }}
+                            title={`Reject: ${contraCount}`}
+                          />
+                        )}
+                        {/* Neutral votes */}
+                        {neutralPercentage > 0 && (
+                          <div
+                            className="transition-all duration-300"
+                            style={{
+                              width: `${neutralPercentage}%`,
+                              backgroundColor: '#3b82f6',
+                              flex: `0 0 ${neutralPercentage}%`
+                            }}
+                            title={`Neutral: ${neutralCount}`}
+                          />
+                        )}
+                        {/* Approve votes */}
+                        {proPercentage > 0 && (
+                          <div
+                            className="transition-all duration-300"
+                            style={{
+                              width: `${proPercentage}%`,
+                              backgroundColor: '#22c55e',
+                              flex: `0 0 ${proPercentage}%`
+                            }}
+                            title={`Approve: ${proCount}`}
+                          />
+                        )}
                       </div>
 
-                      {/* Proposed Content */}
-                      <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                        <h4 className="text-sm font-medium text-gray-700 mb-2">Proposed Change</h4>
-                        <div className="space-y-2">
-                          {proposal.currentText && (
-                            <div className="flex items-start gap-2 p-2 bg-red-50 border border-red-200 rounded">
-                              <div className="w-1.5 h-1.5 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
-                              <div className="flex-1">
-                                <div className="text-xs text-red-600 mb-1">Current</div>
-                                <p className="text-sm text-gray-700 line-through">{proposal.currentText}</p>
+                      <div className="p-4 space-y-4">
+                        {/* Compact Header with inline vote buttons */}
+                        <div className="flex items-start justify-between gap-4 mb-3">
+                          <div className="flex items-start gap-3 flex-1 min-w-0">
+                            <Avatar className="h-8 w-8 flex-shrink-0">
+                              <AvatarImage src={proposal.user.avatar} />
+                              <AvatarFallback className="text-xs bg-gradient-to-br from-blue-500 to-purple-600 text-white">
+                                {proposal.user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                <span className="text-sm font-normal text-muted-foreground">{proposal.user.name}</span>
+                                {proposal.type === 'TITLE' && (
+                                  <Badge variant="outline" className="text-xs">
+                                    Heading
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="text-sm text-gray-900 font-normal line-clamp-2">
+                                "{proposal.proposedText}"
+                              </p>
+                              <div className="flex items-center gap-2 flex-wrap text-xs text-gray-600 mt-1">
+                                <Badge
+                                  variant="secondary"
+                                  className="text-xs font-normal cursor-pointer hover:bg-blue-100 hover:text-blue-700 transition-colors"
+                                  onClick={() => onNavigateToDocument(proposal.documentId)}
+                                >
+                                  <FileText className="h-3 w-3 mr-1" />
+                                  {proposal.documentTitle}
+                                </Badge>
+                                {proposal.paragraphTitle && (
+                                  <>
+                                    <span className="text-gray-400">•</span>
+                                    <span className="font-medium">{proposal.paragraphTitle}</span>
+                                  </>
+                                )}
+                                <span className="text-gray-400">•</span>
+                                <span className="text-gray-500">{formatTimestamp(proposal.createdAt)}</span>
                               </div>
                             </div>
-                          )}
-                          <div className="flex items-start gap-2 p-2 bg-blue-50 border border-blue-200 rounded">
-                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
-                            <div className="flex-1">
-                              <div className="text-xs text-blue-600 mb-1">Proposed</div>
-                              <p className="text-sm text-gray-900">{proposal.proposedText}</p>
+                          </div>
+
+                          {/* Inline Vote Buttons - Icon Only */}
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleVote(proposal.id, proposal.documentId, proposal.paragraphId, 'PRO')}
+                              className="h-8 w-8 p-0"
+                              title={`Approve (${proCount})`}
+                            >
+                              <ThumbsUp className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleVote(proposal.id, proposal.documentId, proposal.paragraphId, 'NEUTRAL')}
+                              className="h-8 w-8 p-0"
+                              title={`Neutral (${neutralCount})`}
+                            >
+                              <span className="text-lg leading-none">○</span>
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleVote(proposal.id, proposal.documentId, proposal.paragraphId, 'CONTRA')}
+                              className="h-8 w-8 p-0"
+                              title={`Reject (${contraCount})`}
+                            >
+                              <ThumbsDown className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Proposed Content */}
+                        <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                          <h4 className="text-sm font-medium text-gray-700 mb-2">Proposed Change</h4>
+                          <div className="space-y-2">
+                            {proposal.currentText && (
+                              <div className="flex items-start gap-2 p-2 bg-red-50 border border-red-200 rounded">
+                                <div className="w-1.5 h-1.5 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
+                                <div className="flex-1">
+                                  <div className="text-xs text-red-600 mb-1">Current</div>
+                                  <p className="text-sm text-gray-700 line-through">{proposal.currentText}</p>
+                                </div>
+                              </div>
+                            )}
+                            <div className="flex items-start gap-2 p-2 bg-blue-50 border border-blue-200 rounded">
+                              <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
+                              <div className="flex-1">
+                                <div className="text-xs text-blue-600 mb-1">Proposed</div>
+                                <p className="text-sm text-gray-900">{proposal.proposedText}</p>
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
 
-                      {/* Voting Section */}
-                      <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                        <h4 className="text-sm font-medium text-gray-700 mb-3">Cast Your Vote</h4>
-                        <div className="flex gap-2">
+                        {/* Action Button */}
+                        <div className="flex justify-end">
                           <Button
                             size="sm"
-                            variant="outline"
-                            className="flex-1 gap-2 border-green-200 hover:bg-green-50 hover:border-green-300"
-                            onClick={() => handleVote(proposal.id, proposal.documentId, proposal.paragraphId, 'PRO')}
+                            onClick={() => onNavigateToDocument(proposal.documentId)}
+                            className="gap-2"
                           >
-                            <ThumbsUp className="h-4 w-4 text-green-600" />
-                            Support
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="flex-1 gap-2 border-yellow-200 hover:bg-yellow-50 hover:border-yellow-300"
-                            onClick={() => handleVote(proposal.id, proposal.documentId, proposal.paragraphId, 'NEUTRAL')}
-                          >
-                            <Minus className="h-4 w-4 text-yellow-600" />
-                            Neutral
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="flex-1 gap-2 border-red-200 hover:bg-red-50 hover:border-red-300"
-                            onClick={() => handleVote(proposal.id, proposal.documentId, proposal.paragraphId, 'CONTRA')}
-                          >
-                            <ThumbsDown className="h-4 w-4 text-red-600" />
-                            Oppose
+                            <MessageSquare className="h-4 w-4" />
+                            View Full Discussion
                           </Button>
                         </div>
-                        <div className="mt-3 text-xs text-gray-600">
-                          Current votes: {proposal.votes.total} of {proposal.totalUsers} participants
-                        </div>
                       </div>
-
-                      {/* Action Button */}
-                      <div className="flex justify-end">
-                        <Button
-                          size="sm"
-                          onClick={() => onNavigateToDocument(proposal.documentId)}
-                          className="gap-2"
-                        >
-                          <MessageSquare className="h-4 w-4" />
-                          View Full Discussion
-                        </Button>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
+                    </Card>
+                  );
+                })}
               </div>
             )}
           </>

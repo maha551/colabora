@@ -127,7 +127,11 @@ app.use((req, res, next) => {
         req.session.user = req.user;
       }
     } catch (error) {
-      // Token invalid, continue to session check
+      // Token invalid - return error for API requests
+      if (req.path.startsWith('/api/')) {
+        return res.status(401).json({ error: 'Invalid or expired token' });
+      }
+      // For non-API requests, continue to session check
     }
   }
 

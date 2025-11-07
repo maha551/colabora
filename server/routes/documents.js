@@ -416,7 +416,7 @@ router.get('/:id', requireAuth, (req, res) => {
 });
 
 // Create a new document
-router.post('/', requireAuth, (req, res) => {
+router.post('/', requireAuth, documentValidation.create, (req, res) => {
   console.log(`[${new Date().toISOString()}] POST /api/documents - Creating document`);
   console.log('Request body:', req.body);
   console.log('User:', req.user ? req.user.name : 'No user');

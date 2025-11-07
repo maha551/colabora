@@ -99,7 +99,7 @@ router.get('/context/:paragraphId', requireAuth, requireDocumentAccess, (req, re
                 SELECT json_group_array(
                   json_object('user_id', v.user_id, 'vote', v.vote)
                 )
-                FROM proposal_votes v WHERE v.proposal_id = pr.id
+                FROM votes v WHERE v.proposal_id = pr.id
               ),
               'comments', (
                 SELECT json_group_array(
@@ -189,7 +189,7 @@ router.get('/', requireAuth, requireDocumentAccess, (req, res) => {
             SELECT json_group_array(
               json_object('user_id', v.user_id, 'vote', v.vote)
             )
-            FROM proposal_votes v WHERE v.proposal_id = pr.id
+            FROM votes v WHERE v.proposal_id = pr.id
           ),
           'comments', (
             SELECT json_group_array(
@@ -335,7 +335,7 @@ function normalizeParagraphOrder(db, documentId) {
 router.post('/', requireAuth, requireDocumentAccess, (req, res) => {
   const db = req.app.locals.db;
   const documentId = req.params.documentId;
-  const { title, text, order, asSuggestion, headingLevel } = req.body;
+  const { title, text, order, order_index, asSuggestion, headingLevel } = req.body;
 
   console.log(`Creating paragraph in document ${documentId} for user ${req.user.id}`);
   console.log('Request body:', { title, text, order, asSuggestion, headingLevel });
@@ -357,7 +357,7 @@ router.post('/', requireAuth, requireDocumentAccess, (req, res) => {
   }
 
   const paragraphId = uuidv4();
-  const orderIndex = typeof order === 'number' ? order : 0;
+  const orderIndex = typeof (order ?? order_index) === 'number' ? (order ?? order_index) : 0;
 
   const paragraphTitle = createAsSuggestion ? null : headingText;
   const paragraphBody = createAsSuggestion ? '' : bodyText;

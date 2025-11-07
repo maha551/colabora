@@ -244,6 +244,58 @@ async function testDebugEndpoints() {
   }
 }
 
+async function testMonitoringEndpoints() {
+  logInfo('Testing monitoring endpoints...');
+
+  // Test metrics endpoint (requires auth)
+  try {
+    const authResponse = await axios.post(`${BASE_URL}/api/auth/login`, {
+      email: 'alice@example.com',
+      password: 'SecurePass123!'
+    });
+
+    const token = authResponse.data.token;
+    const metricsResponse = await axios.get(`${BASE_URL}/api/metrics`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    if (metricsResponse.status === 200 && metricsResponse.data.uptime) {
+      logSuccess('Metrics endpoint working correctly');
+      results.passed++;
+    } else {
+      logError('Metrics endpoint returned unexpected response');
+      results.failed++;
+    }
+  } catch (error) {
+    logError(`Metrics endpoint test failed: ${error.message}`);
+    results.failed++;
+  }
+
+  // Test detailed health endpoint
+  try {
+    const authResponse = await axios.post(`${BASE_URL}/api/auth/login`, {
+      email: 'alice@example.com',
+      password: 'SecurePass123!'
+    });
+
+    const token = authResponse.data.token;
+    const healthResponse = await axios.get(`${BASE_URL}/api/health/detailed`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    if (healthResponse.status === 200 && healthResponse.data.status) {
+      logSuccess('Detailed health endpoint working correctly');
+      results.passed++;
+    } else {
+      logError('Detailed health endpoint returned unexpected response');
+      results.failed++;
+    }
+  } catch (error) {
+    logError(`Detailed health endpoint test failed: ${error.message}`);
+    results.failed++;
+  }
+}
+
 async function runSecurityTests() {
   logInfo('🔒 Starting Colabora Security Test Suite');
   logInfo('==========================================');
@@ -255,6 +307,7 @@ async function runSecurityTests() {
   await testCORSPolicy();
   await testSecurityHeaders();
   await testDebugEndpoints();
+  await testMonitoringEndpoints();
 
   logInfo('==========================================');
   logInfo(`Test Results: ${results.passed} passed, ${results.failed} failed, ${results.warnings} warnings`);

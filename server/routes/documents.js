@@ -1,5 +1,6 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
+const { metricsCollector } = require('../middleware/monitoring');
 
 const router = express.Router();
 
@@ -488,6 +489,14 @@ router.post('/', requireAuth, (req, res) => {
           };
 
           console.log('Document created successfully:', { id: documentId, title: trimmedTitle });
+
+          // Record business metrics
+          metricsCollector.recordBusinessEvent('document_created', {
+            documentId,
+            ownerId: userId,
+            title: trimmedTitle
+          });
+
           res.status(201).json({ document: result });
         });
       });

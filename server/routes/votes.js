@@ -1,4 +1,5 @@
 const express = require('express');
+const { metricsCollector } = require('../middleware/monitoring');
 
 const router = express.Router({ mergeParams: true });
 
@@ -107,6 +108,15 @@ router.post('/', requireAuth, requireDocumentAccess, (req, res) => {
 
           // Check if proposal should be approved
           checkAndUpdateProposalApproval(db, proposalId, documentId);
+
+          // Record business metrics
+          metricsCollector.recordBusinessEvent('vote_cast', {
+            voteId,
+            proposalId,
+            userId,
+            vote,
+            documentId
+          });
 
           res.json({ message: 'Vote cast successfully' });
         });

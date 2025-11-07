@@ -1,5 +1,6 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
+const { metricsCollector } = require('../middleware/monitoring');
 
 const router = express.Router({ mergeParams: true });
 
@@ -138,6 +139,15 @@ router.post('/', requireAuth, requireDocumentAccess, (req, res) => {
             } : null,
             replies: [] // Will be populated by frontend if needed
           };
+
+          // Record business metrics
+          metricsCollector.recordBusinessEvent('comment_posted', {
+            commentId,
+            proposalId,
+            userId,
+            parentId,
+            documentId
+          });
 
           res.status(201).json({ comment: result });
         });

@@ -11,6 +11,7 @@ const rateLimit = require('express-rate-limit');
 const config = require('./config');
 const { requireAuth, generateToken, hashPassword, verifyPassword } = require('./middleware/auth');
 const { requestLogger, errorLogger, securityLogger } = require('./middleware/logger');
+const { metricsCollector, requestMetrics } = require('./middleware/monitoring');
 
 let serverStarted = false;
 let serverStartTimeout = null;
@@ -54,6 +55,11 @@ const limiter = rateLimit({
       req.path,
       req.get('User-Agent')
     );
+    metricsCollector.recordSecurityEvent('rate_limit_hit', {
+      ip: req.ip,
+      endpoint: req.path,
+      userAgent: req.get('User-Agent')
+    });
     res.status(429).json({
       error: 'Too many requests from this IP, please try again later.'
     });
@@ -84,6 +90,9 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 
 // Request logging
 app.use(requestLogger);
+
+// Request metrics collection
+app.use(requestMetrics);
 
 // Session configuration
 app.use(session(config.SESSION_CONFIG));
@@ -248,14 +257,35 @@ function startServer() {
     });
   });
 
+  // Graceful shutdown handling
+  const gracefulShutdown = (signal) => {
+    console.log(`\n🛑 Received ${signal}, shutting down gracefully...`);
+    metricsCollector.shutdown();
+    server.close(() => {
+      console.log('✅ Server shutdown complete');
+      process.exit(0);
+    });
+
+    // Force shutdown after 10 seconds
+    setTimeout(() => {
+      console.error('❌ Forced shutdown after timeout');
+      process.exit(1);
+    }, 10000);
+  };
+
   // Start server
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`🌍 Environment: ${config.NODE_ENV}`);
     console.log(`🔒 Security: ${config.NODE_ENV === 'production' ? 'Production mode enabled' : 'Development mode - NOT SECURE FOR PRODUCTION'}`);
     console.log(`📊 Rate limiting: ${config.RATE_LIMIT_MAX_REQUESTS} requests per ${config.RATE_LIMIT_WINDOW_MS / 1000}s`);
+    console.log(`📈 Monitoring: Active - collecting metrics every 60s`);
     console.log('✅ Server initialization complete');
   });
+
+  // Register shutdown handlers
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 }
 
 // Test endpoint (defined in startServer function)
@@ -295,6 +325,29 @@ app.get('/api/health', (req, res) => {
       environment: config.NODE_ENV,
       version: '1.0.0'
     });
+  });
+});
+
+// Metrics endpoint (admin only)
+app.get('/api/metrics', requireAuth, (req, res) => {
+  // TODO: Add admin role check when roles are implemented
+  // For now, return basic metrics for authenticated users
+
+  const metrics = metricsCollector.getMetricsSummary();
+
+  res.json({
+    timestamp: new Date().toISOString(),
+    ...metrics
+  });
+});
+
+// Advanced health check with monitoring data
+app.get('/api/health/detailed', requireAuth, (req, res) => {
+  const healthStatus = metricsCollector.getHealthStatus();
+
+  res.json({
+    timestamp: new Date().toISOString(),
+    ...healthStatus
   });
 });
 

@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const { body, validationResult } = require('express-validator');
 const { generateToken, hashPassword, verifyPassword } = require('../middleware/auth');
 const { securityLogger } = require('../middleware/logger');
+const { metricsCollector } = require('../middleware/monitoring');
 const config = require('../config');
 
 const router = express.Router();
@@ -33,6 +34,7 @@ router.post('/login', [
 
       if (!user) {
         securityLogger.authFailure(email, 'user_not_found', ip, userAgent);
+        metricsCollector.recordAuthEvent('login_attempt', false, { reason: 'user_not_found' });
         return res.status(401).json({ error: 'Invalid credentials' });
       }
 
@@ -40,6 +42,7 @@ router.post('/login', [
       const isValidPassword = await verifyPassword(password, user.password_hash);
       if (!isValidPassword) {
         securityLogger.authFailure(email, 'invalid_password', ip, userAgent);
+        metricsCollector.recordAuthEvent('login_attempt', false, { reason: 'invalid_password', userId: user.id });
         return res.status(401).json({ error: 'Invalid credentials' });
       }
 
@@ -62,8 +65,9 @@ router.post('/login', [
         };
       }
 
-      // Log successful authentication
+      // Log successful authentication and record metrics
       securityLogger.authAttempt(email, true, ip, userAgent);
+      metricsCollector.recordAuthEvent('login_attempt', true, { userId: user.id });
 
       res.json({
         user: {
@@ -80,6 +84,7 @@ router.post('/login', [
   } catch (error) {
     console.error('Login error:', error);
     securityLogger.authFailure(email, 'system_error', ip, userAgent);
+    metricsCollector.recordAuthEvent('login_attempt', false, { error: error.message });
     res.status(500).json({ error: 'Authentication failed' });
   }
 });
@@ -156,8 +161,9 @@ router.post('/register', [
             };
           }
 
-          // Log successful registration
+          // Log successful registration and record metrics
           securityLogger.authAttempt(email, true, ip, userAgent);
+          metricsCollector.recordAuthEvent('registration', true, { userId });
 
           res.status(201).json({
             user: {

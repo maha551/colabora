@@ -864,29 +864,46 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
 
                       {/* Comments */}
                       {proposal.comments && proposal.comments.length > 0 && (
-                        <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                          <h4 className="text-sm font-medium text-gray-700 mb-3">Recent Comments</h4>
-                          <div className="space-y-3 max-h-48 overflow-y-auto">
-                            {proposal.comments.slice(0, 5).map((comment) => (
-                              <div key={comment.id} className="flex items-start gap-3 p-3 bg-white border border-gray-200 rounded-lg">
-                                <Avatar className="h-6 w-6 flex-shrink-0">
+                        <div className="border-t pt-3">
+                          <button
+                            onClick={() => {
+                              // For now, just show all comments since we're in a summary view
+                              // Could be made collapsible if needed
+                            }}
+                            className="flex items-center justify-between w-full text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            <div className="flex items-center gap-2">
+                              <MessageSquare className="h-4 w-4" />
+                              <span>
+                                Discussion ({proposal.comments.length})
+                              </span>
+                              <Badge variant="secondary" className="h-5 text-xs">
+                                {proposal.comments.length}
+                              </Badge>
+                            </div>
+                          </button>
+
+                          <div className="mt-4 space-y-3 max-h-64 overflow-y-auto">
+                            {proposal.comments.slice(0, 10).map((comment) => (
+                              <div key={comment.id} className="flex gap-3 p-3 rounded-lg bg-muted/30">
+                                <Avatar className="h-8 w-8 flex-shrink-0">
                                   <AvatarImage src={comment.user.avatar} />
-                                  <AvatarFallback className="text-xs bg-blue-100 text-blue-700">
-                                    {comment.user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                                  <AvatarFallback className="bg-primary/10 text-xs">
+                                    {comment.user.name.split(' ').map(n => n[0]).join('')}
                                   </AvatarFallback>
                                 </Avatar>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <span className="text-xs font-medium text-gray-900">{comment.user.name}</span>
-                                    <span className="text-xs text-gray-500">{formatTimestamp(comment.createdAt)}</span>
+                                <div className="flex-1 space-y-2 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium text-foreground">{comment.user.name}</span>
+                                    <span className="text-xs text-muted-foreground">• {formatTimestamp(comment.createdAt)}</span>
                                   </div>
-                                  <p className="text-sm text-gray-700 break-words">{comment.text}</p>
+                                  <p className="text-sm text-foreground leading-relaxed break-words">{comment.text}</p>
                                 </div>
                               </div>
                             ))}
-                            {proposal.comments.length > 5 && (
-                              <div className="text-center text-xs text-gray-500 py-2">
-                                And {proposal.comments.length - 5} more comments...
+                            {proposal.comments.length > 10 && (
+                              <div className="text-center text-xs text-muted-foreground py-2">
+                                And {proposal.comments.length - 10} more comments...
                               </div>
                             )}
                           </div>

@@ -39,7 +39,7 @@ console.log(`🚪 Port: ${PORT}`);
 console.log(`💾 Database: ${config.DATABASE_URL}`);
 
 // Trust proxy in production
-if (config.NODE_ENV === 'production') {
+if (process.env.NODE_ENV === 'production') {
   app.set('trust proxy', 1);
 }
 

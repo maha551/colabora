@@ -9,9 +9,8 @@ let testDbPath;
 
 describe('Authentication API Integration Tests', () => {
   beforeAll(async () => {
-    // Set up test database
-    testDbPath = path.join(__dirname, '../../test-colabora-integration.db');
-    process.env.DATABASE_URL = testDbPath;
+    // Get the database path (set by setup.js with timestamp)
+    testDbPath = process.env.DATABASE_URL;
     process.env.NODE_ENV = 'test';
 
     // Clean up any existing test database
@@ -19,8 +18,9 @@ describe('Authentication API Integration Tests', () => {
       fs.unlinkSync(testDbPath);
     }
 
-    // Import app after setting environment
-    app = require('../../server/index');
+    // Import and start test server
+    const startTestServer = require('../../server/index');
+    server = await startTestServer(3001); // Use port 3001 for auth tests
 
     // Wait for database initialization
     await new Promise(resolve => setTimeout(resolve, 2000));
@@ -50,7 +50,7 @@ describe('Authentication API Integration Tests', () => {
         password: 'TestPass123!'
       };
 
-      const response = await request(app)
+      const response = await request(server)
         .post('/api/auth/register')
         .send(userData)
         .expect(201);
@@ -69,7 +69,7 @@ describe('Authentication API Integration Tests', () => {
         password: 'AnotherPass123!'
       };
 
-      const response = await request(app)
+      const response = await request(server)
         .post('/api/auth/register')
         .send(userData)
         .expect(400);
@@ -84,7 +84,7 @@ describe('Authentication API Integration Tests', () => {
         password: 'weak'
       };
 
-      const response = await request(app)
+      const response = await request(server)
         .post('/api/auth/register')
         .send(invalidData)
         .expect(400);
@@ -101,7 +101,7 @@ describe('Authentication API Integration Tests', () => {
         password: 'TestPass123!'
       };
 
-      const response = await request(app)
+      const response = await request(server)
         .post('/api/auth/login')
         .send(loginData)
         .expect(200);
@@ -118,7 +118,7 @@ describe('Authentication API Integration Tests', () => {
         password: 'WrongPassword123!'
       };
 
-      const response = await request(app)
+      const response = await request(server)
         .post('/api/auth/login')
         .send(loginData)
         .expect(401);
@@ -132,7 +132,7 @@ describe('Authentication API Integration Tests', () => {
         password: 'SomePassword123!'
       };
 
-      const response = await request(app)
+      const response = await request(server)
         .post('/api/auth/login')
         .send(loginData)
         .expect(401);
@@ -146,7 +146,7 @@ describe('Authentication API Integration Tests', () => {
 
     beforeAll(async () => {
       // Get authentication token for subsequent tests
-      const loginResponse = await request(app)
+      const loginResponse = await request(server)
         .post('/api/auth/login')
         .send({
           email: 'integration@test.com',
@@ -157,7 +157,7 @@ describe('Authentication API Integration Tests', () => {
     });
 
     test('should return current user with valid token', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .get('/api/auth/me')
         .set('Authorization', `Bearer ${authToken}`)
         .expect(200);
@@ -168,7 +168,7 @@ describe('Authentication API Integration Tests', () => {
     });
 
     test('should reject request without token', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .get('/api/auth/me')
         .expect(401);
 
@@ -176,7 +176,7 @@ describe('Authentication API Integration Tests', () => {
     });
 
     test('should reject request with invalid token', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .get('/api/auth/me')
         .set('Authorization', 'Bearer invalid.jwt.token')
         .expect(401);
@@ -187,7 +187,7 @@ describe('Authentication API Integration Tests', () => {
 
   describe('POST /api/auth/logout', () => {
     test('should logout successfully', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .post('/api/auth/logout')
         .expect(200);
 
@@ -202,7 +202,7 @@ describe('Authentication API Integration Tests', () => {
         password: "' OR '1'='1'; --"
       };
 
-      const response = await request(app)
+      const response = await request(server)
         .post('/api/auth/login')
         .send(maliciousData)
         .expect(400); // Should get validation error, not 401
@@ -217,7 +217,7 @@ describe('Authentication API Integration Tests', () => {
         password: 'SecurePass123!'
       };
 
-      const response = await request(app)
+      const response = await request(server)
         .post('/api/auth/register')
         .send(xssData)
         .expect(400);
@@ -227,7 +227,7 @@ describe('Authentication API Integration Tests', () => {
 
     test('should handle rate limiting', async () => {
       const requests = Array(15).fill().map(() =>
-        request(app)
+        request(server)
           .post('/api/auth/login')
           .send({
             email: 'integration@test.com',
@@ -255,7 +255,7 @@ describe('Authentication API Integration Tests', () => {
       ];
 
       for (const user of demoUsers) {
-        const response = await request(app)
+        const response = await request(server)
           .post('/api/auth/login')
           .send(user)
           .expect(200);

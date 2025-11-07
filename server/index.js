@@ -200,9 +200,12 @@ function initializeDatabaseAndStartServer(db) {
 
       console.log(`✅ Database check: found ${row.count} paragraphs for demo-doc-1`);
       if (row && row.count > 0) {
-        console.log('🎉 Database initialization complete!');
-        clearInterval(checkInterval);
+      console.log('🎉 Database initialization complete!');
+      clearInterval(checkInterval);
+      // Only start server in non-test mode
+      if (process.env.NODE_ENV !== 'test') {
         startServer();
+      }
       }
     });
   }, 2000);
@@ -211,7 +214,10 @@ function initializeDatabaseAndStartServer(db) {
     clearInterval(checkInterval);
     if (!serverStarted) {
       console.log('Database initialization timeout, starting server anyway for debugging...');
-      startServer();
+      // Only start server in non-test mode
+      if (process.env.NODE_ENV !== 'test') {
+        startServer();
+      }
     }
   }, 10000);
 }
@@ -256,6 +262,26 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+function registerRoutes() {
+  // Debug middleware to log all API requests
+  app.use('/api', (req, res, next) => {
+    console.log(`API REQUEST: ${req.method} ${req.path}`);
+    next();
+  });
+
+  // Routes
+  app.use('/api/auth', authRoutes);
+  app.use('/api/pending-votes', pendingVotesRoutes);
+  app.use('/api/debated-proposals', debatedProposalsRoutes);
+  app.use('/api/agreed-versions', agreedVersionsRoutes);
+  app.use('/api/documents', documentRoutes);
+  app.use('/api/documents/:documentId/activity', activityRoutes);
+  app.use('/api/documents/:documentId/paragraphs', paragraphRoutes);
+  app.use('/api/documents/:documentId/paragraphs/:paragraphId/proposals', proposalRoutes);
+  app.use('/api/documents/:documentId/paragraphs/:paragraphId/proposals/:proposalId/vote', voteRoutes);
+  app.use('/api/documents/:documentId/paragraphs/:paragraphId/proposals/:proposalId/comments', commentRoutes);
+}
+
 function startServer() {
   if (serverStarted) {
     return;
@@ -269,23 +295,8 @@ function startServer() {
 
   console.log('Starting HTTP server...');
 
-  // Debug middleware to log all API requests
-  app.use('/api', (req, res, next) => {
-    console.log(`API REQUEST: ${req.method} ${req.path}`);
-    next();
-  });
-
-  // Routes (moved here from global scope to ensure they're registered after DB init)
-  app.use('/api/auth', authRoutes);
-  app.use('/api/pending-votes', pendingVotesRoutes);
-  app.use('/api/debated-proposals', debatedProposalsRoutes);
-  app.use('/api/agreed-versions', agreedVersionsRoutes);
-  app.use('/api/documents', documentRoutes);
-  app.use('/api/documents/:documentId/activity', activityRoutes);
-  app.use('/api/documents/:documentId/paragraphs', paragraphRoutes);
-  app.use('/api/documents/:documentId/paragraphs/:paragraphId/proposals', proposalRoutes);
-  app.use('/api/documents/:documentId/paragraphs/:paragraphId/proposals/:proposalId/vote', voteRoutes);
-  app.use('/api/documents/:documentId/paragraphs/:paragraphId/proposals/:proposalId/comments', commentRoutes);
+  // Register routes
+  registerRoutes();
 
   // Serve static files from client build in production
   if (process.env.NODE_ENV === 'production') {
@@ -337,6 +348,7 @@ function startServer() {
   // Start server
   console.log(`🔄 Attempting to start server on 0.0.0.0:${PORT}...`);
   const server = app.listen(PORT, '0.0.0.0', () => {
+    serverInstance = server; // For testing export
     console.log(`🚀 Server successfully started on 0.0.0.0:${PORT}`);
     console.log(`🌍 Environment: ${config.NODE_ENV}`);
     console.log(`🔒 Security: ${config.NODE_ENV === 'production' ? 'Production mode enabled' : 'Development mode - NOT SECURE FOR PRODUCTION'}`);
@@ -816,4 +828,34 @@ async function insertDemoData(db) {
       });
     });
   }
+}
+
+// Always register routes
+registerRoutes();
+
+// Only start listening in non-test mode
+if (process.env.NODE_ENV !== 'test') {
+  startServer();
+}
+
+// Export server instance for testing
+if (process.env.NODE_ENV === 'test') {
+  // For tests, export a function to start the server
+  module.exports = async function startTestServer(port = 3000) {
+    return new Promise((resolve) => {
+      console.log(`🔄 Starting test server on port ${port}...`);
+      const testServer = app.listen(port, '0.0.0.0', () => {
+        console.log(`🚀 Test server started on port ${port}`);
+        resolve(testServer);
+      });
+
+      testServer.on('error', (error) => {
+        console.error('❌ Test server failed to start:', error.message);
+        process.exit(1);
+      });
+    });
+  };
+} else {
+  // For production, just export the app
+  module.exports = app;
 }

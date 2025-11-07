@@ -1,6 +1,14 @@
 const { body, validationResult } = require('express-validator');
 const { userValidation, documentValidation, paragraphValidation, proposalValidation, voteValidation, commentValidation } = require('../../server/middleware/validation');
 
+// Helper function to run validation without the error handler
+async function runValidation(validators, req, res, next) {
+  // Run all validators except the last one (handleValidationErrors)
+  for (let i = 0; i < validators.length - 1; i++) {
+    await validators[i](req, res, next);
+  }
+}
+
 describe('Input Validation Middleware', () => {
   let mockReq, mockRes, mockNext;
 
@@ -22,13 +30,8 @@ describe('Input Validation Middleware', () => {
           password: 'SecurePass123!'
         };
 
-        // Run validation middleware
-        const validationChain = userValidation.register.slice(0, -1); // Exclude handleValidationErrors
-        for (const validator of validationChain) {
-          if (typeof validator === 'function') {
-            await validator(mockReq, mockRes, mockNext);
-          }
-        }
+        // Run validation
+        await runValidation(userValidation.register, mockReq, mockRes, mockNext);
 
         expect(mockNext).toHaveBeenCalled();
       });
@@ -41,10 +44,7 @@ describe('Input Validation Middleware', () => {
         };
 
         // Run validation
-        const emailValidator = userValidation.register.find(v => v.builder && v.builder.field === 'email');
-        if (emailValidator) {
-          await emailValidator(mockReq, mockRes, mockNext);
-        }
+        await runValidation(userValidation.register, mockReq, mockRes, mockNext);
 
         // Check for validation errors
         const errors = validationResult(mockReq);
@@ -63,10 +63,7 @@ describe('Input Validation Middleware', () => {
           password: 'weak'
         };
 
-        const passwordValidator = userValidation.register.find(v => v.builder && v.builder.field === 'password');
-        if (passwordValidator) {
-          await passwordValidator(mockReq, mockRes, mockNext);
-        }
+        await runValidation(userValidation.register, mockReq, mockRes, mockNext);
 
         const errors = validationResult(mockReq);
         expect(errors.isEmpty()).toBe(false);
@@ -79,10 +76,7 @@ describe('Input Validation Middleware', () => {
           password: 'SecurePass123!'
         };
 
-        const nameValidator = userValidation.register.find(v => v.builder && v.builder.field === 'name');
-        if (nameValidator) {
-          await nameValidator(mockReq, mockRes, mockNext);
-        }
+        await runValidation(userValidation.register, mockReq, mockRes, mockNext);
 
         const errors = validationResult(mockReq);
         expect(errors.isEmpty()).toBe(false);
@@ -110,10 +104,7 @@ describe('Input Validation Middleware', () => {
           password: 'SecurePass123!'
         };
 
-        const emailValidator = userValidation.login.find(v => v.builder && v.builder.field === 'email');
-        if (emailValidator) {
-          await emailValidator(mockReq, mockRes, mockNext);
-        }
+        await runValidation(userValidation.login, mockReq, mockRes, mockNext);
 
         const errors = validationResult(mockReq);
         expect(errors.isEmpty()).toBe(false);
@@ -124,10 +115,7 @@ describe('Input Validation Middleware', () => {
           email: 'john@example.com'
         };
 
-        const passwordValidator = userValidation.login.find(v => v.builder && v.builder.field === 'password');
-        if (passwordValidator) {
-          await passwordValidator(mockReq, mockRes, mockNext);
-        }
+        await runValidation(userValidation.login, mockReq, mockRes, mockNext);
 
         const errors = validationResult(mockReq);
         expect(errors.isEmpty()).toBe(false);
@@ -155,10 +143,7 @@ describe('Input Validation Middleware', () => {
         title: ''
       };
 
-      const titleValidator = documentValidation.create.find(v => v.builder && v.builder.field === 'title');
-      if (titleValidator) {
-        await titleValidator(mockReq, mockRes, mockNext);
-      }
+      await runValidation(documentValidation.create, mockReq, mockRes, mockNext);
 
       const errors = validationResult(mockReq);
       expect(errors.isEmpty()).toBe(false);
@@ -169,10 +154,7 @@ describe('Input Validation Middleware', () => {
         title: 'A'.repeat(201) // 201 characters, exceeds 200 limit
       };
 
-      const titleValidator = documentValidation.create.find(v => v.builder && v.builder.field === 'title');
-      if (titleValidator) {
-        await titleValidator(mockReq, mockRes, mockNext);
-      }
+      await runValidation(documentValidation.create, mockReq, mockRes, mockNext);
 
       const errors = validationResult(mockReq);
       expect(errors.isEmpty()).toBe(false);
@@ -201,10 +183,7 @@ describe('Input Validation Middleware', () => {
         order_index: 5
       };
 
-      const textValidator = paragraphValidation.create.find(v => v.builder && v.builder.field === 'text');
-      if (textValidator) {
-        await textValidator(mockReq, mockRes, mockNext);
-      }
+      await runValidation(paragraphValidation.create, mockReq, mockRes, mockNext);
 
       const errors = validationResult(mockReq);
       expect(errors.isEmpty()).toBe(false);
@@ -216,10 +195,7 @@ describe('Input Validation Middleware', () => {
         order_index: -1
       };
 
-      const orderValidator = paragraphValidation.create.find(v => v.builder && v.builder.field === 'order_index');
-      if (orderValidator) {
-        await orderValidator(mockReq, mockRes, mockNext);
-      }
+      await runValidation(paragraphValidation.create, mockReq, mockRes, mockNext);
 
       const errors = validationResult(mockReq);
       expect(errors.isEmpty()).toBe(false);
@@ -232,10 +208,7 @@ describe('Input Validation Middleware', () => {
         heading_level: 'h7' // Invalid heading level
       };
 
-      const headingValidator = paragraphValidation.create.find(v => v.builder && v.builder.field === 'heading_level');
-      if (headingValidator) {
-        await headingValidator(mockReq, mockRes, mockNext);
-      }
+      await runValidation(paragraphValidation.create, mockReq, mockRes, mockNext);
 
       const errors = validationResult(mockReq);
       expect(errors.isEmpty()).toBe(false);
@@ -249,11 +222,7 @@ describe('Input Validation Middleware', () => {
         type: 'BODY'
       };
 
-      for (const validator of proposalValidation.create) {
-        if (typeof validator === 'function') {
-          await validator(mockReq, mockRes, mockNext);
-        }
-      }
+      await runValidation(proposalValidation.create, mockReq, mockRes, mockNext);
 
       expect(mockNext).toHaveBeenCalled();
     });
@@ -264,10 +233,7 @@ describe('Input Validation Middleware', () => {
         type: 'INVALID_TYPE'
       };
 
-      const typeValidator = proposalValidation.create.find(v => v.builder && v.builder.field === 'type');
-      if (typeValidator) {
-        await typeValidator(mockReq, mockRes, mockNext);
-      }
+      await runValidation(proposalValidation.create, mockReq, mockRes, mockNext);
 
       const errors = validationResult(mockReq);
       expect(errors.isEmpty()).toBe(false);
@@ -280,11 +246,7 @@ describe('Input Validation Middleware', () => {
         vote: 'PRO'
       };
 
-      for (const validator of voteValidation.create) {
-        if (typeof validator === 'function') {
-          await validator(mockReq, mockRes, mockNext);
-        }
-      }
+      await runValidation(voteValidation.create, mockReq, mockRes, mockNext);
 
       expect(mockNext).toHaveBeenCalled();
     });
@@ -294,10 +256,7 @@ describe('Input Validation Middleware', () => {
         vote: 'INVALID_VOTE'
       };
 
-      const voteValidator = voteValidation.create.find(v => v.builder && v.builder.field === 'vote');
-      if (voteValidator) {
-        await voteValidator(mockReq, mockRes, mockNext);
-      }
+      await runValidation(voteValidation.create, mockReq, mockRes, mockNext);
 
       const errors = validationResult(mockReq);
       expect(errors.isEmpty()).toBe(false);
@@ -310,11 +269,7 @@ describe('Input Validation Middleware', () => {
         text: 'This is a valid comment.'
       };
 
-      for (const validator of commentValidation.create) {
-        if (typeof validator === 'function') {
-          await validator(mockReq, mockRes, mockNext);
-        }
-      }
+      await runValidation(commentValidation.create, mockReq, mockRes, mockNext);
 
       expect(mockNext).toHaveBeenCalled();
     });
@@ -324,10 +279,7 @@ describe('Input Validation Middleware', () => {
         text: 'A'.repeat(1001) // Exceeds 1000 character limit
       };
 
-      const textValidator = commentValidation.create.find(v => v.builder && v.builder.field === 'text');
-      if (textValidator) {
-        await textValidator(mockReq, mockRes, mockNext);
-      }
+      await runValidation(commentValidation.create, mockReq, mockRes, mockNext);
 
       const errors = validationResult(mockReq);
       expect(errors.isEmpty()).toBe(false);
@@ -341,10 +293,7 @@ describe('Input Validation Middleware', () => {
       };
 
       // This should pass validation but input should be sanitized
-      const titleValidator = documentValidation.create.find(v => v.builder && v.builder.field === 'title');
-      if (titleValidator) {
-        await titleValidator(mockReq, mockRes, mockNext);
-      }
+      await runValidation(documentValidation.create, mockReq, mockRes, mockNext);
 
       const errors = validationResult(mockReq);
       expect(errors.isEmpty()).toBe(true); // Should pass validation
@@ -353,13 +302,11 @@ describe('Input Validation Middleware', () => {
 
     test('should handle XSS attempts in text fields', async () => {
       mockReq.body = {
-        text: '<script>alert("xss")</script>'
+        text: '<script>alert("xss")</script>',
+        order_index: 0
       };
 
-      const textValidator = paragraphValidation.create.find(v => v.builder && v.builder.field === 'text');
-      if (textValidator) {
-        await textValidator(mockReq, mockRes, mockNext);
-      }
+      await runValidation(paragraphValidation.create, mockReq, mockRes, mockNext);
 
       const errors = validationResult(mockReq);
       expect(errors.isEmpty()).toBe(true); // Should pass validation

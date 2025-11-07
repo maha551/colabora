@@ -5,7 +5,9 @@ const path = require('path');
 process.env.NODE_ENV = 'test';
 process.env.SESSION_SECRET = 'test-session-secret-for-jest-testing-only';
 process.env.JWT_SECRET = 'test-jwt-secret-for-jest-testing-only';
-process.env.DATABASE_URL = path.join(__dirname, '../test-colabora.db');
+// Use a timestamp-based database name to avoid conflicts between test runs
+const timestamp = Date.now();
+process.env.DATABASE_URL = path.join(__dirname, `../test-colabora-${timestamp}.db`);
 
 // Global test utilities
 global.testConfig = {
@@ -28,7 +30,7 @@ afterAll(async () => {
   // Close any open database connections
   const fs = require('fs');
   const path = require('path');
-  const dbPath = path.join(__dirname, '../test-colabora.db');
+  const dbPath = process.env.DATABASE_URL;
 
   try {
     if (fs.existsSync(dbPath)) {

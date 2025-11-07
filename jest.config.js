@@ -32,5 +32,6 @@ module.exports = {
   testTimeout: 10000,
   verbose: true,
   forceExit: true,
-  detectOpenHandles: true
+  detectOpenHandles: true,
+  maxWorkers: 1, // Run tests serially to avoid conflicts
 };

@@ -10,9 +10,8 @@ let testDbPath;
 
 describe('Documents API Integration Tests', () => {
   beforeAll(async () => {
-    // Set up test database
-    testDbPath = path.join(__dirname, '../../test-docs-integration.db');
-    process.env.DATABASE_URL = testDbPath;
+    // Get the database path (set by setup.js with timestamp)
+    testDbPath = process.env.DATABASE_URL;
     process.env.NODE_ENV = 'test';
 
     // Clean up any existing test database
@@ -20,19 +19,21 @@ describe('Documents API Integration Tests', () => {
       fs.unlinkSync(testDbPath);
     }
 
-    // Import app after setting environment
-    app = require('../../server/index');
+    // Import and start test server
+    const startTestServer = require('../../server/index');
+    server = await startTestServer(3002); // Use port 3002 for documents tests
 
     // Wait for database initialization
     await new Promise(resolve => setTimeout(resolve, 3000));
 
     // Login and get auth token
-    const loginResponse = await request(app)
+    const loginResponse = await request(server)
       .post('/api/auth/login')
       .send({
         email: 'alice@example.com',
         password: 'SecurePass123!'
       });
+
 
     authToken = loginResponse.body.token;
     testUserId = loginResponse.body.user.id;
@@ -55,7 +56,7 @@ describe('Documents API Integration Tests', () => {
         title: 'Integration Test Document'
       };
 
-      const response = await request(app)
+      const response = await request(server)
         .post('/api/documents')
         .set('Authorization', `Bearer ${authToken}`)
         .send(docData)
@@ -69,7 +70,7 @@ describe('Documents API Integration Tests', () => {
     });
 
     test('should retrieve user documents', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .get('/api/documents')
         .set('Authorization', `Bearer ${authToken}`)
         .expect(200);
@@ -83,7 +84,7 @@ describe('Documents API Integration Tests', () => {
     });
 
     test('should retrieve specific document', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .get(`/api/documents/${testDocumentId}`)
         .set('Authorization', `Bearer ${authToken}`)
         .expect(200);
@@ -99,7 +100,7 @@ describe('Documents API Integration Tests', () => {
         title: 'Updated Integration Test Document'
       };
 
-      const response = await request(app)
+      const response = await request(server)
         .put(`/api/documents/${testDocumentId}`)
         .set('Authorization', `Bearer ${authToken}`)
         .send(updateData)
@@ -110,7 +111,7 @@ describe('Documents API Integration Tests', () => {
 
     test('should reject unauthorized document access', async () => {
       // Create a document with a different user (Bob)
-      const bobLogin = await request(app)
+      const bobLogin = await request(server)
         .post('/api/auth/login')
         .send({
           email: 'bob@example.com',
@@ -119,14 +120,14 @@ describe('Documents API Integration Tests', () => {
 
       const bobToken = bobLogin.body.token;
 
-      const bobDoc = await request(app)
+      const bobDoc = await request(server)
         .post('/api/documents')
         .set('Authorization', `Bearer ${bobToken}`)
         .send({ title: 'Bob\'s Private Document' })
         .expect(201);
 
       // Try to access Bob's document with Alice's token
-      await request(app)
+      await request(server)
         .get(`/api/documents/${bobDoc.body.document.id}`)
         .set('Authorization', `Bearer ${authToken}`)
         .expect(403);
@@ -142,7 +143,7 @@ describe('Documents API Integration Tests', () => {
         order_index: 1
       };
 
-      const response = await request(app)
+      const response = await request(server)
         .post(`/api/documents/${testDocumentId}/paragraphs`)
         .set('Authorization', `Bearer ${authToken}`)
         .send(paragraphData)
@@ -156,7 +157,7 @@ describe('Documents API Integration Tests', () => {
     });
 
     test('should retrieve document paragraphs', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .get(`/api/documents/${testDocumentId}/paragraphs`)
         .set('Authorization', `Bearer ${authToken}`)
         .expect(200);
@@ -174,7 +175,7 @@ describe('Documents API Integration Tests', () => {
         text: 'This is an updated test paragraph for integration testing.'
       };
 
-      const response = await request(app)
+      const response = await request(server)
         .put(`/api/documents/${testDocumentId}/paragraphs/${testParagraphId}`)
         .set('Authorization', `Bearer ${authToken}`)
         .send(updateData)
@@ -193,7 +194,7 @@ describe('Documents API Integration Tests', () => {
         type: 'BODY'
       };
 
-      const response = await request(app)
+      const response = await request(server)
         .post(`/api/documents/${testDocumentId}/paragraphs/${testParagraphId}/proposals`)
         .set('Authorization', `Bearer ${authToken}`)
         .send(proposalData)
@@ -207,7 +208,7 @@ describe('Documents API Integration Tests', () => {
     });
 
     test('should retrieve paragraph proposals', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .get(`/api/documents/${testDocumentId}/paragraphs/${testParagraphId}/proposals`)
         .set('Authorization', `Bearer ${authToken}`)
         .expect(200);
@@ -224,7 +225,7 @@ describe('Documents API Integration Tests', () => {
         vote: 'PRO'
       };
 
-      const response = await request(app)
+      const response = await request(server)
         .post(`/api/documents/${testDocumentId}/paragraphs/${testParagraphId}/proposals/${testProposalId}/vote`)
         .set('Authorization', `Bearer ${authToken}`)
         .send(voteData)
@@ -238,7 +239,7 @@ describe('Documents API Integration Tests', () => {
         vote: 'CONTRA'
       };
 
-      await request(app)
+      await request(server)
         .post(`/api/documents/${testDocumentId}/paragraphs/${testParagraphId}/proposals/${testProposalId}/vote`)
         .set('Authorization', `Bearer ${authToken}`)
         .send(voteData)
@@ -252,7 +253,7 @@ describe('Documents API Integration Tests', () => {
         text: 'This is a test comment on the proposal.'
       };
 
-      const response = await request(app)
+      const response = await request(server)
         .post(`/api/documents/${testDocumentId}/paragraphs/paragraphId/proposals/proposalId/comments`)
         .set('Authorization', `Bearer ${authToken}`)
         .send(commentData)
@@ -269,7 +270,7 @@ describe('Documents API Integration Tests', () => {
         title: '' // Empty title
       };
 
-      await request(app)
+      await request(server)
         .post('/api/documents')
         .set('Authorization', `Bearer ${authToken}`)
         .send(invalidData)
@@ -281,7 +282,7 @@ describe('Documents API Integration Tests', () => {
         title: 'A'.repeat(201) // Exceeds 200 character limit
       };
 
-      await request(app)
+      await request(server)
         .post('/api/documents')
         .set('Authorization', `Bearer ${authToken}`)
         .send(invalidData)
@@ -294,7 +295,7 @@ describe('Documents API Integration Tests', () => {
         order_index: -1 // Negative order
       };
 
-      await request(app)
+      await request(server)
         .post(`/api/documents/${testDocumentId}/paragraphs`)
         .set('Authorization', `Bearer ${authToken}`)
         .send(invalidData)
@@ -307,7 +308,7 @@ describe('Documents API Integration Tests', () => {
       };
 
       // This should succeed but the script tag should be sanitized
-      const response = await request(app)
+      const response = await request(server)
         .post('/api/documents')
         .set('Authorization', `Bearer ${authToken}`)
         .send(xssData)
@@ -320,20 +321,20 @@ describe('Documents API Integration Tests', () => {
 
   describe('Authentication and Authorization', () => {
     test('should require authentication for document operations', async () => {
-      await request(app)
+      await request(server)
         .get('/api/documents')
         .expect(401);
     });
 
     test('should require authentication for paragraph operations', async () => {
-      await request(app)
+      await request(server)
         .post(`/api/documents/${testDocumentId}/paragraphs`)
         .send({ text: 'Test', order_index: 1 })
         .expect(401);
     });
 
     test('should require authentication for proposal operations', async () => {
-      await request(app)
+      await request(server)
         .post(`/api/documents/${testDocumentId}/paragraphs/para-1/proposals`)
         .send({ text: 'Test proposal', type: 'BODY' })
         .expect(401);

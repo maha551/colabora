@@ -40,6 +40,18 @@ describe('Documents API Integration Tests', () => {
   });
 
   afterAll(async () => {
+    // Close server and wait for it to actually close
+    if (server) {
+      await new Promise((resolve) => {
+        server.close((err) => {
+          if (err) {
+            console.warn('Error closing server:', err.message);
+          }
+          resolve();
+        });
+      });
+    }
+
     // Clean up test database
     try {
       if (fs.existsSync(testDbPath)) {

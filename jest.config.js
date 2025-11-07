@@ -29,9 +29,11 @@ module.exports = {
     }
   },
   setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
-  testTimeout: 10000,
+  testTimeout: 15000,
   verbose: true,
   forceExit: true,
   detectOpenHandles: true,
   maxWorkers: 1, // Run tests serially to avoid conflicts
+  // Allow proper cleanup of servers
+  teardown: true
 };

@@ -10,6 +10,31 @@ const crypto = require('crypto');
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 
+// Wait for app to be ready
+async function waitForApp(maxAttempts = 30) {
+  logInfo('Waiting for application to be ready...');
+
+  for (let i = 1; i <= maxAttempts; i++) {
+    try {
+      const response = await axios.get(`${BASE_URL}/api/health`, { timeout: 5000 });
+      if (response.status === 200) {
+        logSuccess(`Application is ready after ${i} attempts`);
+        return true;
+      }
+    } catch (error) {
+      // Expected while app is starting
+    }
+
+    if (i < maxAttempts) {
+      logInfo(`Waiting... (${i}/${maxAttempts})`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+  }
+
+  logError(`Application failed to start after ${maxAttempts} attempts`);
+  return false;
+}
+
 // Colors for console output
 const colors = {
   red: '\x1b[31m',
@@ -299,6 +324,13 @@ async function testMonitoringEndpoints() {
 async function runSecurityTests() {
   logInfo('🔒 Starting Colabora Security Test Suite');
   logInfo('==========================================');
+
+  // Wait for app to be ready
+  const appReady = await waitForApp();
+  if (!appReady) {
+    logError('Cannot run security tests - application is not ready');
+    process.exit(1);
+  }
 
   await testHealthEndpoint();
   await testRateLimiting();

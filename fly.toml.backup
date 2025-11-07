@@ -1,0 +1,76 @@
+app = "colabora-fresh"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  DATABASE_URL = "/data/colabora.db"
+
+# Deploy to EU regions (Frankfurt, Germany primary)
+primary_region = "fra"
+
+# Secure secrets (generate random values for production)
+[secrets]
+  SESSION_SECRET = "your-generated-session-secret-here"
+  JWT_SECRET = "your-generated-jwt-secret-here"
+
+# Persistent volume for database (1GB in EU)
+[mounts]
+  source = "colabora_data"
+  destination = "/data"
+  initial_size = "1GB"
+  auto_extend_size_threshold = 80
+  auto_extend_size_increment = "1GB"
+  auto_extend_size_limit = "10GB"
+
+  # Ensure volume is in EU regions
+  [mounts.regions]
+    fra = { priority = 1 }
+    ams = { priority = 2 }
+    cdg = { priority = 3 }
+
+# Deployment configuration
+[deploy]
+  strategy = "rolling"
+  max_unavailable = 0.5
+  release_command = ""
+
+# Instance configuration - 2 machines
+[experimental]
+  auto_rollback = true
+
+[processes]
+  app = "npm start"
+
+# Scale to 2 machines
+[[vm]]
+  count = 2
+  size = "shared-cpu-1x"
+
+[[services]]
+  internal_port = 3000
+  processes = ["app"]
+  protocol = "tcp"
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+
+  [[services.http_checks]]
+    interval = "15s"
+    timeout = "10s"
+    grace_period = "120s"
+    method = "GET"
+    path = "/api/health"
+    protocol = "http"
+    restart_limit = 10
+
+  [[services.tcp_checks]]
+    interval = "15s"
+    timeout = "2s"
+    grace_period = "5s"

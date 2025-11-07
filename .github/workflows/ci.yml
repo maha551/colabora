@@ -7,6 +7,11 @@ on:
     branches: [ main, develop ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
 jobs:
   security-audit:
     name: Security Audit
@@ -173,6 +178,7 @@ jobs:
       if: always()
       with:
         sarif_file: 'trivy-results.sarif'
+        category: container-security-scan
 
   full-test-suite:
     name: Full Test Suite

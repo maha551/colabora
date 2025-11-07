@@ -30,8 +30,10 @@ jobs:
 
     - name: Check for vulnerable dependencies
       run: |
-        if [ "$(npm audit --audit-level=moderate --json | jq '.metadata.vulnerabilities.total')" -gt 0 ]; then
-          echo "🚨 Security vulnerabilities found!"
+        npm audit --audit-level=moderate --json > audit-results.json
+        VULNERABILITIES=$(node -p "JSON.parse(require('fs').readFileSync('audit-results.json')).metadata.vulnerabilities.total")
+        if [ "$VULNERABILITIES" -gt 0 ]; then
+          echo "🚨 Security vulnerabilities found: $VULNERABILITIES"
           npm audit --audit-level=moderate
           exit 1
         else

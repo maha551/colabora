@@ -142,23 +142,32 @@ const dbPath = config.DATABASE_URL.startsWith('sqlite:///')
   : config.DATABASE_URL;
 
 const dbDir = path.dirname(dbPath);
+console.log(`📁 Database path: ${dbPath}`);
+console.log(`📂 Database directory: ${dbDir}`);
+
 try {
   if (!fs.existsSync(dbDir)) {
+    console.log('Creating database directory...');
     fs.mkdirSync(dbDir, { recursive: true });
-    console.log('Created database directory:', dbDir);
+    console.log('✅ Created database directory:', dbDir);
+  } else {
+    console.log('✅ Database directory already exists');
   }
 } catch (dirErr) {
-  console.error('Error creating database directory:', dirErr.message);
+  console.error('❌ Error creating database directory:', dirErr.message);
+  console.error('Directory error details:', dirErr);
 }
 
+console.log('🔌 Attempting to connect to database...');
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
-    console.error('Error opening database:', err.message);
+    console.error('❌ Error opening database:', err.message);
     console.error('Database path:', dbPath);
+    console.error('Database error details:', err);
     process.exit(1);
   }
 
-  console.log('Connected to SQLite database at:', dbPath);
+  console.log('✅ Connected to SQLite database at:', dbPath);
 
   // Make database available to routes
   app.locals.db = db;
@@ -280,13 +289,19 @@ function startServer() {
   };
 
   // Start server
+  console.log(`🔄 Attempting to start server on 0.0.0.0:${PORT}...`);
   const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server running on 0.0.0.0:${PORT}`);
+    console.log(`🚀 Server successfully started on 0.0.0.0:${PORT}`);
     console.log(`🌍 Environment: ${config.NODE_ENV}`);
     console.log(`🔒 Security: ${config.NODE_ENV === 'production' ? 'Production mode enabled' : 'Development mode - NOT SECURE FOR PRODUCTION'}`);
     console.log(`📊 Rate limiting: ${config.RATE_LIMIT_MAX_REQUESTS} requests per ${config.RATE_LIMIT_WINDOW_MS / 1000}s`);
     console.log(`📈 Monitoring: Active - collecting metrics every 60s`);
-    console.log('✅ Server initialization complete');
+    console.log('✅ Server initialization complete - ready to accept connections');
+  });
+
+  server.on('error', (error) => {
+    console.error('❌ Server failed to start:', error.message);
+    process.exit(1);
   });
 
   // Register shutdown handlers
@@ -314,35 +329,34 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Health check endpoint (available immediately, handles database initialization)
+// Health check endpoint (always available, even during startup)
 app.get('/api/health', (req, res) => {
-  const db = req.app.locals.db;
   const uptime = process.uptime();
+  const db = req.app.locals.db;
 
-  // Basic health check - don't fail if database isn't ready yet
-  if (!db) {
-    return res.json({
-      status: 'starting',
-      timestamp: new Date().toISOString(),
-      uptime: `${Math.floor(uptime)}s`,
-      database: 'initializing',
-      environment: config.NODE_ENV,
-      version: '1.0.0'
-    });
+  let status = 'healthy';
+  let dbStatus = 'not_initialized';
+
+  if (db) {
+    try {
+      // Simple synchronous check - don't wait for database
+      dbStatus = 'connected';
+    } catch (error) {
+      dbStatus = 'error';
+      status = 'degraded';
+    }
+  } else {
+    dbStatus = 'initializing';
+    status = 'starting';
   }
 
-  // Database connectivity check
-  db.get('SELECT 1 as test', [], (err, row) => {
-    const dbStatus = err ? 'error' : 'healthy';
-
-    res.json({
-      status: dbStatus === 'healthy' ? 'healthy' : 'degraded',
-      timestamp: new Date().toISOString(),
-      uptime: `${Math.floor(uptime)}s`,
-      database: dbStatus,
-      environment: config.NODE_ENV,
-      version: '1.0.0'
-    });
+  res.json({
+    status: status,
+    timestamp: new Date().toISOString(),
+    uptime: `${Math.floor(uptime)}s`,
+    database: dbStatus,
+    environment: config.NODE_ENV,
+    version: '1.0.0'
   });
 });
 

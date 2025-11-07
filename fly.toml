@@ -6,6 +6,9 @@ app = "colabora"
 [env]
   NODE_ENV = "production"
 
+# Deploy to Frankfurt, Germany region only
+primary_region = "fra"
+
 # Secure secrets (generate random values for production)
 [secrets]
   SESSION_SECRET = "your-generated-session-secret-here"
@@ -18,6 +21,16 @@ app = "colabora"
   auto_extend_size_threshold = 80
   auto_extend_size_increment = "1GB"
   auto_extend_size_limit = "10GB"
+
+# Deployment configuration
+[deploy]
+  strategy = "rolling"
+  max_unavailable = 0.5
+  release_command = ""
+
+# Instance configuration
+[experimental]
+  auto_rollback = true
 
 [processes]
   app = "npm start"
@@ -36,12 +49,13 @@ app = "colabora"
     port = 443
 
   [[services.http_checks]]
-    interval = "10s"
-    timeout = "10s"
-    grace_period = "30s"
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "60s"
     method = "GET"
     path = "/api/health"
     protocol = "http"
+    restart_limit = 10
 
   [[services.tcp_checks]]
     interval = "15s"

@@ -32,6 +32,12 @@ const agreedVersionsRoutes = require('./routes/agreed-versions');
 const app = express();
 const PORT = config.PORT;
 
+// Log environment information
+console.log('🌍 Starting Colabora Server...');
+console.log(`📍 Environment: ${config.NODE_ENV}`);
+console.log(`🚪 Port: ${PORT}`);
+console.log(`💾 Database: ${config.DATABASE_URL}`);
+
 // Trust proxy in production
 if (config.NODE_ENV === 'production') {
   app.set('trust proxy', 1);

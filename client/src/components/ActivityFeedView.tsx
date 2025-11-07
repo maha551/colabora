@@ -20,7 +20,8 @@ import {
   AlertCircle,
   FileText,
   Expand,
-  ArrowUpDown
+  ArrowUpDown,
+  TrendingUp
 } from "lucide-react";
 import { cn } from "./ui/utils";
 import {
@@ -181,6 +182,36 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
   const [loadingPending, setLoadingPending] = useState(true);
   const [filterType, setFilterType] = useState<string>('all');
   const [filterDocument, setFilterDocument] = useState<string>('all');
+  const [activePanel, setActivePanel] = useState<'agreed' | 'pending' | 'debated'>('pending');
+  const [agreedVersions, setAgreedVersions] = useState<any[]>([]);
+  const [loadingAgreed, setLoadingAgreed] = useState(false);
+  const [debatedProposals, setDebatedProposals] = useState<any[]>([]);
+  const [loadingDebated, setLoadingDebated] = useState(false);
+  const [lastViewedTimestamps, setLastViewedTimestamps] = useState<Record<string, string>>({});
+
+  // Load last viewed timestamps from localStorage
+  const loadLastViewedTimestamps = () => {
+    try {
+      const stored = localStorage.getItem('activityFeedLastViewed');
+      if (stored) {
+        setLastViewedTimestamps(JSON.parse(stored));
+      }
+    } catch (error) {
+      console.error('Failed to load last viewed timestamps:', error);
+    }
+  };
+
+  // Update last viewed timestamp for a panel
+  const updateLastViewedTimestamp = (panel: string) => {
+    const now = new Date().toISOString();
+    const updated = { ...lastViewedTimestamps, [panel]: now };
+    setLastViewedTimestamps(updated);
+    try {
+      localStorage.setItem('activityFeedLastViewed', JSON.stringify(updated));
+    } catch (error) {
+      console.error('Failed to save last viewed timestamp:', error);
+    }
+  };
 
   // Pending proposals filters and sorting
   const [pendingFilterDocument, setPendingFilterDocument] = useState<string>('all');
@@ -293,6 +324,7 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
   };
 
   useEffect(() => {
+    loadLastViewedTimestamps();
     fetchAllActivities();
     fetchPendingProposals();
     // Refresh every 30 seconds
@@ -302,6 +334,20 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
     }, 30000);
     return () => clearInterval(interval);
   }, [documents]);
+
+  // Fetch agreed versions when activities are loaded
+  useEffect(() => {
+    if (allActivities.length > 0) {
+      fetchAgreedVersions();
+    }
+  }, [allActivities]);
+
+  // Fetch debated proposals when pending proposals or comments change
+  useEffect(() => {
+    if (pendingProposals.length > 0) {
+      fetchDebatedProposals();
+    }
+  }, [pendingProposals, commentsMap]);
 
   // Fetch comments for all pending proposals
   useEffect(() => {
@@ -423,6 +469,93 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
       console.error('Failed to fetch pending proposals:', error);
     } finally {
       setLoadingPending(false);
+    }
+  };
+
+  const fetchAgreedVersions = async () => {
+    setLoadingAgreed(true);
+    try {
+      // For now, simulate agreed versions by filtering accepted proposals from activities
+      // In a real implementation, this would be a dedicated API endpoint
+      let acceptedActivities = allActivities.filter(activity => activity.type === 'proposal_accepted');
+
+      // Filter by last viewed timestamp for "new since last time"
+      const lastViewedAgreed = lastViewedTimestamps['agreed'];
+      if (lastViewedAgreed) {
+        const lastViewedDate = new Date(lastViewedAgreed);
+        acceptedActivities = acceptedActivities.filter(activity =>
+          new Date(activity.timestamp) > lastViewedDate
+        );
+      }
+
+      // Transform activities into agreed versions format
+      const agreedVersionsData = acceptedActivities.slice(0, 10).map(activity => ({
+        id: `agreed-${activity.id}`,
+        documentId: activity.documentId,
+        documentTitle: activity.documentTitle,
+        paragraphTitle: activity.paragraphTitle,
+        acceptedText: activity.proposalText || 'Accepted content',
+        acceptedAt: activity.timestamp,
+        approvalPercentage: 85, // Mock data - would come from API
+        userName: activity.userName,
+        userId: activity.userId,
+        previousText: 'Previous version of this content...', // Mock data
+      }));
+
+      setAgreedVersions(agreedVersionsData);
+    } catch (error) {
+      console.error('Failed to fetch agreed versions:', error);
+    } finally {
+      setLoadingAgreed(false);
+    }
+  };
+
+  const fetchDebatedProposals = async () => {
+    setLoadingDebated(true);
+    try {
+      // Calculate debate scores for pending proposals
+      const debatedData = pendingProposals.map(proposal => {
+        const commentCount = commentsMap[proposal.id]?.length || 0;
+        const totalVotes = proposal.votes.total;
+        const proVotes = proposal.votes.pro;
+        const contraVotes = proposal.votes.contra;
+        const neutralVotes = proposal.votes.neutral;
+
+        // Calculate controversy score (high when PRO + CONTRA are both significant)
+        const controversyScore = totalVotes > 0 ?
+          (proVotes / totalVotes) * (contraVotes / totalVotes) * 4 : 0; // Multiply by 4 to boost the score
+
+        // Calculate age factor (older proposals get slightly higher scores)
+        const ageInHours = (new Date().getTime() - new Date(proposal.createdAt).getTime()) / (1000 * 60 * 60);
+        const ageFactor = Math.min(ageInHours / 24, 2); // Cap at 2x multiplier for proposals older than 24 hours
+
+        // Combined debate score
+        const debateScore = (commentCount * 2) + (controversyScore * 10) + ageFactor;
+
+        return {
+          ...proposal,
+          debateScore,
+          commentCount,
+          controversyScore,
+          engagement: {
+            comments: commentCount,
+            proPercentage: totalVotes > 0 ? (proVotes / totalVotes) * 100 : 0,
+            contraPercentage: totalVotes > 0 ? (contraVotes / totalVotes) * 100 : 0,
+            neutralPercentage: totalVotes > 0 ? (neutralVotes / totalVotes) * 100 : 0,
+          }
+        };
+      });
+
+      // Sort by debate score descending and take top 10
+      const topDebated = debatedData
+        .sort((a, b) => b.debateScore - a.debateScore)
+        .slice(0, 10);
+
+      setDebatedProposals(topDebated);
+    } catch (error) {
+      console.error('Failed to fetch debated proposals:', error);
+    } finally {
+      setLoadingDebated(false);
     }
   };
 
@@ -756,8 +889,65 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
     <div className="min-h-screen bg-gray-50">
       {/* Main Content */}
       <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* Pending Your Vote Section */}
-        {(filteredAndSortedPendingProposals || []).length > 0 && (
+        {/* Navigation Buttons */}
+        <div className="flex gap-3 mb-6">
+          <Button
+            variant={activePanel === 'agreed' ? 'default' : 'outline'}
+            className="flex-1 gap-2"
+            onClick={() => {
+              setActivePanel('agreed');
+              updateLastViewedTimestamp('agreed');
+            }}
+          >
+            <CheckCircle2 className="h-4 w-4" />
+            New Agreed Versions
+            {agreedVersions.length > 0 && (
+              <Badge className="ml-2 bg-green-600 text-xs">
+                {agreedVersions.length}
+              </Badge>
+            )}
+          </Button>
+
+          <Button
+            variant={activePanel === 'pending' ? 'default' : 'outline'}
+            className="flex-1 gap-2"
+            onClick={() => {
+              setActivePanel('pending');
+              updateLastViewedTimestamp('pending');
+            }}
+          >
+            <AlertCircle className="h-4 w-4" />
+            Pending Votes
+            {(filteredAndSortedPendingProposals || []).length > 0 && (
+              <Badge className="ml-2 bg-orange-600 text-xs">
+                {(filteredAndSortedPendingProposals || []).length}
+              </Badge>
+            )}
+          </Button>
+
+          <Button
+            variant={activePanel === 'debated' ? 'default' : 'outline'}
+            className="flex-1 gap-2"
+            onClick={() => {
+              setActivePanel('debated');
+              updateLastViewedTimestamp('debated');
+            }}
+          >
+            <TrendingUp className="h-4 w-4" />
+            Most Debated
+            {debatedProposals.length > 0 && (
+              <Badge className="ml-2 bg-purple-600 text-xs">
+                {debatedProposals.length}
+              </Badge>
+            )}
+          </Button>
+        </div>
+
+        {/* Panel Content */}
+        {activePanel === 'pending' && (
+          <>
+            {/* Pending Your Vote Section */}
+            {(filteredAndSortedPendingProposals || []).length > 0 && (
           <Card className="mb-6 border-orange-200 bg-white shadow-lg">
             <div className="bg-gradient-to-r from-orange-50 to-amber-50 p-4 border-b border-orange-200">
               <div className="flex items-center justify-between">
@@ -1304,175 +1494,492 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
           </Card>
         )}
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-          <Card className="p-4">
-            <div className="text-2xl font-bold text-gray-900">{activityStats.total}</div>
-            <div className="text-sm text-gray-600">Total Activities</div>
-          </Card>
-          <Card className="p-4">
-            <div className="text-2xl font-bold text-blue-600">{activityStats.proposals}</div>
-            <div className="text-sm text-gray-600">Proposals</div>
-          </Card>
-          <Card className="p-4">
-            <div className="text-2xl font-bold text-purple-600">{activityStats.votes}</div>
-            <div className="text-sm text-gray-600">Votes</div>
-          </Card>
-          <Card className="p-4">
-            <div className="text-2xl font-bold text-orange-600">{activityStats.comments}</div>
-            <div className="text-sm text-gray-600">Comments</div>
-          </Card>
-          <Card className="p-4">
-            <div className="text-2xl font-bold text-green-600">{activityStats.acceptances}</div>
-            <div className="text-sm text-gray-600">Accepted</div>
-          </Card>
-        </div>
-
-        {/* Filters */}
-        <Card className="p-4 mb-6">
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-gray-500" />
-              <span className="text-sm font-medium text-gray-700">Filters:</span>
-            </div>
-            
-            <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-              <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger className="w-full sm:w-[180px]">
-                  <SelectValue placeholder="Activity Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="proposal_created">Proposals</SelectItem>
-                  <SelectItem value="vote_cast">Votes</SelectItem>
-                  <SelectItem value="comment_added">Comments</SelectItem>
-                  <SelectItem value="proposal_accepted">Acceptances</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={filterDocument} onValueChange={setFilterDocument}>
-                <SelectTrigger className="w-full sm:w-[220px]">
-                  <SelectValue placeholder="Document" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Documents</SelectItem>
-                  {documents.map(doc => (
-                    <SelectItem key={doc.id} value={doc.id}>
-                      {doc.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {(filterType !== 'all' || filterDocument !== 'all') && (
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  onClick={() => {
-                    setFilterType('all');
-                    setFilterDocument('all');
-                  }}
-                >
-                  Clear Filters
-                </Button>
-              )}
-            </div>
+        {/* Stats Cards - Only show for pending panel */}
+        {activePanel === 'pending' && (
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+            <Card className="p-4">
+              <div className="text-2xl font-bold text-gray-900">{activityStats.total}</div>
+              <div className="text-sm text-gray-600">Total Activities</div>
+            </Card>
+            <Card className="p-4">
+              <div className="text-2xl font-bold text-blue-600">{activityStats.proposals}</div>
+              <div className="text-sm text-gray-600">Proposals</div>
+            </Card>
+            <Card className="p-4">
+              <div className="text-2xl font-bold text-purple-600">{activityStats.votes}</div>
+              <div className="text-sm text-gray-600">Votes</div>
+            </Card>
+            <Card className="p-4">
+              <div className="text-2xl font-bold text-orange-600">{activityStats.comments}</div>
+              <div className="text-sm text-gray-600">Comments</div>
+            </Card>
+            <Card className="p-4">
+              <div className="text-2xl font-bold text-green-600">{activityStats.acceptances}</div>
+              <div className="text-sm text-gray-600">Accepted</div>
+            </Card>
           </div>
-          
-          <div className="flex items-center gap-2 mt-3 text-sm text-gray-600">
-            <Clock className="h-3 w-3" />
-            <span>
-              Showing {filteredActivities.length} of {allActivities.length} activities
-            </span>
-            <span className="text-gray-400">•</span>
-            <span>Last updated {formatTimestamp(lastRefresh.toISOString())}</span>
-          </div>
-        </Card>
+        )}
 
-        {/* Activities List */}
-        {filteredActivities.length === 0 ? (
-          <Card className="p-12">
-            <div className="text-center text-gray-500">
-              <Clock className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-              <p className="text-lg font-medium mb-2">No activities found</p>
-              <p className="text-sm">
-                {filterType !== 'all' || filterDocument !== 'all' 
-                  ? 'Try adjusting your filters'
-                  : 'Start collaborating to see activities here'}
-              </p>
-            </div>
-          </Card>
-        ) : (
-          <div className="space-y-6">
-            {Object.entries(groupedActivities).map(([dateGroup, activities]) => (
-              <div key={dateGroup}>
-                <div className="flex items-center gap-3 mb-4">
-                  <Calendar className="h-4 w-4 text-gray-400" />
-                  <h2 className="text-lg font-semibold text-gray-900">{dateGroup}</h2>
-                  <div className="flex-1 h-px bg-gray-200"></div>
+        {/* Filters and Activities - Only show for pending panel */}
+        {activePanel === 'pending' && (
+          <>
+            {/* Filters */}
+            <Card className="p-4 mb-6">
+              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Filter className="h-4 w-4 text-gray-500" />
+                  <span className="text-sm font-medium text-gray-700">Filters:</span>
                 </div>
-                
-                <div className="space-y-3">
-                  {activities.map((activity) => {
-                    const { title, detail } = getActivityDescription(activity);
-                    const isCurrentUser = activity.userId === currentUser.id;
-                    
-                    return (
-                      <Card
-                        key={activity.id}
-                        className={cn(
-                          "p-4 hover:shadow-md transition-shadow",
-                          isCurrentUser && "bg-blue-50/50 border-blue-200"
-                        )}
-                      >
-                        <div className="flex gap-4">
-                          <div className="flex-shrink-0">
-                            <Avatar className="h-10 w-10">
-                              <AvatarImage src={activity.userAvatar} />
-                              <AvatarFallback className="text-sm bg-gradient-to-br from-blue-500 to-purple-600 text-white">
-                                {activity.userName.split(' ').map(n => n[0]).join('').toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                          </div>
-                          
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="flex-1">
-                                <p className="text-sm">
-                                  <span className="font-semibold text-gray-900">
-                                    {isCurrentUser ? 'You' : activity.userName}
-                                  </span>
-                                  {' '}
-                                  <span className="text-gray-600">{title}</span>
-                                </p>
-                                {detail && (
-                                  <p className="text-sm text-gray-500 mt-1 line-clamp-2">
-                                    {detail}
-                                  </p>
-                                )}
-                                <div className="flex items-center gap-3 mt-2">
-                                  <Badge variant="secondary" className="text-xs">
-                                    {activity.documentTitle}
-                                  </Badge>
-                                  <span className="text-xs text-gray-400">
-                                    {formatFullTimestamp(activity.timestamp)}
-                                  </span>
+
+                <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                  <Select value={filterType} onValueChange={setFilterType}>
+                    <SelectTrigger className="w-full sm:w-[180px]">
+                      <SelectValue placeholder="Activity Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Types</SelectItem>
+                      <SelectItem value="proposal_created">Proposals</SelectItem>
+                      <SelectItem value="vote_cast">Votes</SelectItem>
+                      <SelectItem value="comment_added">Comments</SelectItem>
+                      <SelectItem value="proposal_accepted">Acceptances</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={filterDocument} onValueChange={setFilterDocument}>
+                    <SelectTrigger className="w-full sm:w-[220px]">
+                      <SelectValue placeholder="Document" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Documents</SelectItem>
+                      {documents.map(doc => (
+                        <SelectItem key={doc.id} value={doc.id}>
+                          {doc.title}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  {(filterType !== 'all' || filterDocument !== 'all') && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setFilterType('all');
+                        setFilterDocument('all');
+                      }}
+                    >
+                      Clear Filters
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 mt-3 text-sm text-gray-600">
+                <Clock className="h-3 w-3" />
+                <span>
+                  Showing {filteredActivities.length} of {allActivities.length} activities
+                </span>
+                <span className="text-gray-400">•</span>
+                <span>Last updated {formatTimestamp(lastRefresh.toISOString())}</span>
+              </div>
+            </Card>
+
+            {/* Activities List */}
+            {filteredActivities.length === 0 ? (
+              <Card className="p-12">
+                <div className="text-center text-gray-500">
+                  <Clock className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                  <p className="text-lg font-medium mb-2">No activities found</p>
+                  <p className="text-sm">
+                    {filterType !== 'all' || filterDocument !== 'all'
+                      ? 'Try adjusting your filters'
+                      : 'Start collaborating to see activities here'}
+                  </p>
+                </div>
+              </Card>
+            ) : (
+              <div className="space-y-6">
+                {Object.entries(groupedActivities).map(([dateGroup, activities]) => (
+                  <div key={dateGroup}>
+                    <div className="flex items-center gap-3 mb-4">
+                      <Calendar className="h-4 w-4 text-gray-400" />
+                      <h2 className="text-lg font-semibold text-gray-900">{dateGroup}</h2>
+                      <div className="flex-1 h-px bg-gray-200"></div>
+                    </div>
+
+                    <div className="space-y-3">
+                      {activities.map((activity) => {
+                        const { title, detail } = getActivityDescription(activity);
+                        const isCurrentUser = activity.userId === currentUser.id;
+
+                        return (
+                          <Card
+                            key={activity.id}
+                            className={cn(
+                              "p-4 hover:shadow-md transition-shadow",
+                              isCurrentUser && "bg-blue-50/50 border-blue-200"
+                            )}
+                          >
+                            <div className="flex gap-4">
+                              <div className="flex-shrink-0">
+                                <Avatar className="h-10 w-10">
+                                  <AvatarImage src={activity.userAvatar} />
+                                  <AvatarFallback className="text-sm bg-gradient-to-br from-blue-500 to-purple-600 text-white">
+                                    {activity.userName.split(' ').map(n => n[0]).join('').toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                              </div>
+
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start justify-between gap-4">
+                                  <div className="flex-1">
+                                    <p className="text-sm">
+                                      <span className="font-semibold text-gray-900">
+                                        {isCurrentUser ? 'You' : activity.userName}
+                                      </span>
+                                      {' '}
+                                      <span className="text-gray-600">{title}</span>
+                                    </p>
+                                    {detail && (
+                                      <p className="text-sm text-gray-500 mt-1 line-clamp-2">
+                                        {detail}
+                                      </p>
+                                    )}
+                                    <div className="flex items-center gap-3 mt-2">
+                                      <Badge variant="secondary" className="text-xs">
+                                        {activity.documentTitle}
+                                      </Badge>
+                                      <span className="text-xs text-gray-400">
+                                        {formatFullTimestamp(activity.timestamp)}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex-shrink-0">
+                                    {getActivityIcon(activity.type, activity.voteType)}
+                                  </div>
                                 </div>
                               </div>
-                              
-                              <div className="flex-shrink-0">
-                                {getActivityIcon(activity.type, activity.voteType)}
+                            </div>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* New Agreed Versions Panel */}
+        {activePanel === 'agreed' && (
+          <>
+            {loadingAgreed ? (
+              <Card className="p-12">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto mb-4"></div>
+                  <p className="text-gray-600">Loading agreed versions...</p>
+                </div>
+              </Card>
+            ) : agreedVersions.length === 0 ? (
+              <Card className="p-12">
+                <div className="text-center text-gray-500">
+                  <CheckCircle2 className="h-12 w-12 mx-auto mb-4 text-green-400" />
+                  <p className="text-lg font-medium mb-2">No New Agreed Versions</p>
+                  <p className="text-sm">
+                    Recently accepted proposals will appear here, showing what changed in your documents.
+                  </p>
+                </div>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {agreedVersions.map((version) => (
+                  <Card key={version.id} className="overflow-hidden border-green-200 hover:shadow-md transition-shadow">
+                    {/* Header */}
+                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 border-b border-green-200">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-green-100 rounded-full">
+                            <CheckCircle2 className="h-5 w-5 text-green-600" />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-semibold text-green-900">
+                              Proposal Accepted
+                            </h3>
+                            <p className="text-sm text-green-700">
+                              {version.approvalPercentage}% approval • {formatTimestamp(version.acceptedAt)}
+                            </p>
+                          </div>
+                        </div>
+                        <Badge className="bg-green-600 hover:bg-green-700 text-white">
+                          {version.approvalPercentage}% Approved
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {/* Content */}
+                    <div className="p-4 space-y-4">
+                      {/* Document and User Info */}
+                      <div className="flex items-center justify-between text-sm text-gray-600">
+                        <div className="flex items-center gap-4">
+                          <Badge
+                            variant="secondary"
+                            className="cursor-pointer hover:bg-blue-100 hover:text-blue-700 transition-colors"
+                            onClick={() => onNavigateToDocument(version.documentId)}
+                          >
+                            <FileText className="h-3 w-3 mr-1" />
+                            {version.documentTitle}
+                          </Badge>
+                          {version.paragraphTitle && (
+                            <>
+                              <span className="text-gray-400">•</span>
+                              <span className="font-medium">{version.paragraphTitle}</span>
+                            </>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span>by</span>
+                          <span className="font-medium">{version.userName}</span>
+                        </div>
+                      </div>
+
+                      {/* Diff Display */}
+                      <div className="border border-gray-200 rounded-lg overflow-hidden">
+                        <div className="bg-gray-50 px-3 py-2 border-b border-gray-200">
+                          <h4 className="text-sm font-medium text-gray-700">What Changed</h4>
+                        </div>
+                        <div className="p-4 bg-white">
+                          <div className="space-y-3">
+                            {/* Previous Version */}
+                            <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded">
+                              <div className="flex-shrink-0 mt-0.5">
+                                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                              </div>
+                              <div className="flex-1">
+                                <div className="text-xs text-red-600 font-medium mb-1">Previous Version</div>
+                                <p className="text-sm text-gray-700 line-through">{version.previousText}</p>
+                              </div>
+                            </div>
+
+                            {/* New Version */}
+                            <div className="flex items-start gap-3 p-3 bg-green-50 border border-green-200 rounded">
+                              <div className="flex-shrink-0 mt-0.5">
+                                <CheckCircle2 className="w-4 h-4 text-green-600" />
+                              </div>
+                              <div className="flex-1">
+                                <div className="text-xs text-green-600 font-medium mb-1">New Accepted Version</div>
+                                <p className="text-sm text-gray-900">{version.acceptedText}</p>
                               </div>
                             </div>
                           </div>
                         </div>
-                      </Card>
-                    );
-                  })}
-                </div>
+                      </div>
+
+                      {/* Action Button */}
+                      <div className="flex justify-end">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onNavigateToDocument(version.documentId)}
+                          className="gap-2"
+                        >
+                          <FileText className="h-4 w-4" />
+                          View in Document
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
               </div>
-            ))}
-          </div>
+            )}
+          </>
+        )}
+
+        {/* Most Debated Panel */}
+        {activePanel === 'debated' && (
+          <>
+            {loadingDebated ? (
+              <Card className="p-12">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-4"></div>
+                  <p className="text-gray-600">Finding most debated proposals...</p>
+                </div>
+              </Card>
+            ) : debatedProposals.length === 0 ? (
+              <Card className="p-12">
+                <div className="text-center text-gray-500">
+                  <TrendingUp className="h-12 w-12 mx-auto mb-4 text-purple-400" />
+                  <p className="text-lg font-medium mb-2">No Debated Proposals</p>
+                  <p className="text-sm">
+                    Proposals with high engagement and discussion will appear here.
+                  </p>
+                </div>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {debatedProposals.map((proposal, index) => {
+                  const totalUsers = proposal.totalUsers;
+                  const approvalPercentage = totalUsers > 0 ? (proposal.votes.pro / totalUsers) * 100 : 0;
+                  const isControversial = proposal.engagement.proPercentage > 30 && proposal.engagement.contraPercentage > 30;
+
+                  return (
+                    <Card key={proposal.id} className="overflow-hidden hover:shadow-md transition-shadow border-purple-200">
+                      {/* Header with ranking */}
+                      <div className="bg-gradient-to-r from-purple-50 to-violet-50 p-4 border-b border-purple-200">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                                <span className="text-sm font-bold text-purple-700">#{index + 1}</span>
+                              </div>
+                              <div className="p-2 bg-purple-100 rounded-full">
+                                <TrendingUp className="h-5 w-5 text-purple-600" />
+                              </div>
+                            </div>
+                            <div>
+                              <h3 className="text-lg font-semibold text-purple-900">
+                                Most Debated Proposal
+                              </h3>
+                              <p className="text-sm text-purple-700">
+                                High engagement • {proposal.engagement.comments} comments
+                                {isControversial && " • Controversial"}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {isControversial && (
+                              <Badge className="bg-orange-100 text-orange-700 border-orange-200">
+                                ⚖️ Controversial
+                              </Badge>
+                            )}
+                            <Badge className="bg-purple-100 text-purple-700">
+                              💬 {proposal.engagement.comments} comments
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Vote Progress Bar */}
+                      <VoteProgressBar
+                        totalUsers={totalUsers}
+                        proVotes={proposal.votes.pro}
+                        neutralVotes={proposal.votes.neutral}
+                        contraVotes={proposal.votes.contra}
+                        className="rounded-none border-b"
+                      />
+
+                      {/* Content */}
+                      <div className="p-4 space-y-4">
+                        {/* User and Document Info */}
+                        <div className="flex items-start gap-3">
+                          <Avatar className="h-9 w-9 flex-shrink-0 ring-2 ring-purple-100">
+                            <AvatarImage src={proposal.user.avatar} />
+                            <AvatarFallback className="text-xs bg-gradient-to-br from-blue-500 to-purple-600 text-white">
+                              {proposal.user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <span className="text-sm font-medium text-gray-900">
+                                {proposal.user.name}
+                              </span>
+                              <Badge
+                                variant={proposal.type === 'TITLE' ? 'default' : 'outline'}
+                                className="text-xs"
+                              >
+                                {proposal.type === 'TITLE' ? '📝 Title' : '📄 Body'}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap text-xs text-gray-600">
+                              <Badge
+                                variant="secondary"
+                                className="text-xs font-normal cursor-pointer hover:bg-blue-100 hover:text-blue-700 transition-colors"
+                                onClick={() => onNavigateToDocument(proposal.documentId)}
+                              >
+                                <FileText className="h-3 w-3 mr-1" />
+                                {proposal.documentTitle}
+                              </Badge>
+                              {proposal.paragraphTitle && (
+                                <>
+                                  <span className="text-gray-400">•</span>
+                                  <span className="font-medium">{proposal.paragraphTitle}</span>
+                                </>
+                              )}
+                              <span className="text-gray-400">•</span>
+                              <span className="text-gray-500">{formatTimestamp(proposal.createdAt)}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Proposed Content */}
+                        <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                          <h4 className="text-sm font-medium text-gray-700 mb-2">Proposed Change</h4>
+                          <div className="space-y-2">
+                            {proposal.currentText && (
+                              <div className="flex items-start gap-2 p-2 bg-red-50 border border-red-200 rounded">
+                                <div className="w-1.5 h-1.5 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
+                                <div className="flex-1">
+                                  <div className="text-xs text-red-600 mb-1">Current</div>
+                                  <p className="text-sm text-gray-700 line-through">{proposal.currentText}</p>
+                                </div>
+                              </div>
+                            )}
+                            <div className="flex items-start gap-2 p-2 bg-purple-50 border border-purple-200 rounded">
+                              <div className="w-1.5 h-1.5 bg-purple-500 rounded-full mt-2 flex-shrink-0"></div>
+                              <div className="flex-1">
+                                <div className="text-xs text-purple-600 mb-1">Proposed</div>
+                                <p className="text-sm text-gray-900">{proposal.proposedText}</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Engagement Stats */}
+                        <div className="grid grid-cols-3 gap-4 text-center">
+                          <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                            <div className="text-lg font-bold text-green-700">{Math.round(proposal.engagement.proPercentage)}%</div>
+                            <div className="text-xs text-green-600">Support</div>
+                          </div>
+                          <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                            <div className="text-lg font-bold text-gray-700">{Math.round(proposal.engagement.neutralPercentage)}%</div>
+                            <div className="text-xs text-gray-600">Neutral</div>
+                          </div>
+                          <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+                            <div className="text-lg font-bold text-red-700">{Math.round(proposal.engagement.contraPercentage)}%</div>
+                            <div className="text-xs text-red-600">Oppose</div>
+                          </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-2 flex-wrap justify-center">
+                          <Button
+                            size="sm"
+                            className="bg-purple-600 hover:bg-purple-700 text-white gap-1.5"
+                            onClick={() => onNavigateToDocument(proposal.documentId)}
+                          >
+                            <MessageSquare className="h-4 w-4" />
+                            Join Discussion
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5 border-purple-300 hover:bg-purple-50"
+                            onClick={() => handleVote(proposal.id, proposal.documentId, proposal.paragraphId, 'PRO')}
+                            disabled={votingProposalId === proposal.id}
+                          >
+                            <ThumbsUp className="h-4 w-4" />
+                            Vote
+                          </Button>
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
 
       </div>

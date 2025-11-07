@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useCallback } from "react";
 import { Document, User, ElementType, HeadingLevel, Paragraph } from "../types";
 import { ParagraphWithSuggestions } from "./ParagraphWithSuggestions";
 import { Button } from "./ui/button";
@@ -106,7 +106,7 @@ function InlineAddButton({ onClick, floating = false, position = "top" }: Inline
   );
 }
 
-export function DocumentEditor({
+export const DocumentEditor = React.memo(function DocumentEditor({
   document,
   totalUsers,
   currentUser,
@@ -174,9 +174,10 @@ export function DocumentEditor({
     setIsInlineFormOpen(false);
   };
 
-  const handleSubmitNewParagraph = async () => {
+  const handleSubmitNewParagraph = useCallback(async () => {
     const body = newParagraphBody.trim();
     const heading = newParagraphHeading.trim();
+
 
     if (includeHeading) {
       // Heading mode: only heading text required
@@ -212,7 +213,6 @@ export function DocumentEditor({
           order,
         });
       }
-      
       setIsInlineFormOpen(false);
       setNewParagraphBody("");
       // Reset to default state (body text for consistency)
@@ -221,11 +221,11 @@ export function DocumentEditor({
       setNewParagraphHeadingLevel("h2");
     } catch (error) {
       console.error("Error creating paragraph:", error);
-      setFormError("Failed to create paragraph. Please try again.");
+      setFormError(`Failed to create paragraph: ${error.message || 'Please try again.'}`);
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [includeHeading, newParagraphBody, newParagraphHeading, newParagraphHeadingLevel, insertContext, onAddElement]);
 
   const computeInsertOrder = (context: InsertContext): number => {
     const availableParagraphs = [...document.paragraphs].sort((a, b) => {
@@ -418,7 +418,7 @@ export function DocumentEditor({
                           e.stopPropagation();
                           setIncludeHeading(false);
                         }}
-                        className="touch-manipulation min-h-[44px] sm:min-h-auto"
+                        className="touch-manipulation min-h-[44px] sm:min-h-0"
                       >
                         Body
                       </Button>
@@ -430,7 +430,7 @@ export function DocumentEditor({
                           e.stopPropagation();
                           setIncludeHeading(true);
                         }}
-                        className="touch-manipulation min-h-[44px] sm:min-h-auto"
+                        className="touch-manipulation min-h-[44px] sm:min-h-0"
                       >
                         Heading
                       </Button>
@@ -454,7 +454,7 @@ export function DocumentEditor({
                       size="sm"
                       variant="ghost"
                       onClick={closeInlineForm}
-                      className="touch-manipulation min-h-[44px] sm:min-h-auto"
+                      className="touch-manipulation min-h-[44px] sm:min-h-0"
                     >
                       Cancel
                     </Button>
@@ -490,9 +490,13 @@ export function DocumentEditor({
                   <div className="flex gap-2 justify-end">
                     <Button
                       size="sm"
-                      onClick={handleSubmitNewParagraph}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleSubmitNewParagraph();
+                      }}
                       disabled={isSubmitting}
-                      className="touch-manipulation min-h-[44px] sm:min-h-auto"
+                      className="touch-manipulation min-h-[44px] sm:min-h-0"
                     >
                       <PlusCircle className="h-4 w-4 mr-1" />
                       {isSubmitting ? "Submitting..." : "Submit Suggestion"}
@@ -519,7 +523,7 @@ export function DocumentEditor({
                           e.stopPropagation();
                           setIncludeHeading(false);
                         }}
-                        className="touch-manipulation min-h-[44px] sm:min-h-auto"
+                        className="touch-manipulation min-h-[44px] sm:min-h-0"
                       >
                         Body
                       </Button>
@@ -531,7 +535,7 @@ export function DocumentEditor({
                           e.stopPropagation();
                           setIncludeHeading(true);
                         }}
-                        className="touch-manipulation min-h-[44px] sm:min-h-auto"
+                        className="touch-manipulation min-h-[44px] sm:min-h-0"
                       >
                         Heading
                       </Button>
@@ -555,7 +559,7 @@ export function DocumentEditor({
                       size="sm"
                       variant="ghost"
                       onClick={closeInlineForm}
-                      className="touch-manipulation min-h-[44px] sm:min-h-auto"
+                      className="touch-manipulation min-h-[44px] sm:min-h-0"
                     >
                       Cancel
                     </Button>
@@ -591,9 +595,13 @@ export function DocumentEditor({
                   <div className="flex gap-2 justify-end">
                     <Button
                       size="sm"
-                      onClick={handleSubmitNewParagraph}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleSubmitNewParagraph();
+                      }}
                       disabled={isSubmitting}
-                      className="touch-manipulation min-h-[44px] sm:min-h-auto"
+                      className="touch-manipulation min-h-[44px] sm:min-h-0"
                     >
                       <PlusCircle className="h-4 w-4 mr-1" />
                       {isSubmitting ? "Submitting..." : "Submit Suggestion"}
@@ -796,4 +804,4 @@ export function DocumentEditor({
       </div>
     </div>
   );
-}
+});

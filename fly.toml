@@ -1,4 +1,4 @@
-app = "colabora-app"
+app = "colabora"
 
 [build]
   dockerfile = "Dockerfile"
@@ -11,6 +11,10 @@ app = "colabora-app"
 [mounts]
   source = "colabora_data"
   destination = "/data"
+  initial_size = "1GB"
+  auto_extend_size_threshold = 80
+  auto_extend_size_increment = "1GB"
+  auto_extend_size_limit = "10GB"
 
 [processes]
   app = "npm start"

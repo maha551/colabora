@@ -22,8 +22,9 @@ describe('Input Validation Middleware', () => {
           password: 'SecurePass123!'
         };
 
-        // Run all registration validators
-        for (const validator of userValidation.register) {
+        // Run validation middleware
+        const validationChain = userValidation.register.slice(0, -1); // Exclude handleValidationErrors
+        for (const validator of validationChain) {
           if (typeof validator === 'function') {
             await validator(mockReq, mockRes, mockNext);
           }

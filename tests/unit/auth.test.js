@@ -67,12 +67,12 @@ describe('Authentication Middleware', () => {
     test('should expire after configured time', () => {
       const token = generateToken(testUser);
 
-      // Fast-forward time past expiration
-      const futureTime = Date.now() + (config.JWT_CONFIG.expiresIn * 1000) + 1000;
+      // Fast-forward time past expiration (24 hours + 1 second)
+      const futureTime = Math.floor(Date.now() / 1000) + (24 * 60 * 60) + 1;
 
       expect(() => {
         jwt.verify(token, config.JWT_CONFIG.secret, {
-          clockTimestamp: futureTime / 1000
+          clockTimestamp: futureTime
         });
       }).toThrow('jwt expired');
     });

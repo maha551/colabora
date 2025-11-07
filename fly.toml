@@ -22,12 +22,6 @@ app = "colabora"
 [processes]
   app = "npm start"
 
-# Remove complex checks that might cause issues
-# [[services.http_checks]]
-#   interval = "10s"
-#   timeout = "5s"
-#   path = "/health"
-
 [[services]]
   internal_port = 3000
   processes = ["app"]
@@ -44,8 +38,12 @@ app = "colabora"
   [[services.http_checks]]
     interval = "10s"
     timeout = "5s"
-    path = "/health"
+    grace_period = "5s"
+    method = "GET"
+    path = "/api/health"
+    protocol = "http"
 
   [[services.tcp_checks]]
-    interval = "10s"
+    interval = "15s"
     timeout = "2s"
+    grace_period = "5s"

@@ -6,7 +6,7 @@ app = "colabora"
 [env]
   NODE_ENV = "production"
 
-# Deploy to Frankfurt, Germany region only
+# Deploy to Germany regions (allow fallback if Frankfurt is full)
 primary_region = "fra"
 
 # Secure secrets (generate random values for production)
@@ -14,17 +14,18 @@ primary_region = "fra"
   SESSION_SECRET = "your-generated-session-secret-here"
   JWT_SECRET = "your-generated-jwt-secret-here"
 
-[mounts]
-  source = "colabora_data"
-  destination = "/data"
-  initial_size = "1GB"
-  auto_extend_size_threshold = 80
-  auto_extend_size_increment = "1GB"
-  auto_extend_size_limit = "10GB"
+# Temporarily disabled volume for initial deployment
+# [mounts]
+#   source = "colabora_data"
+#   destination = "/data"
+#   initial_size = "1GB"
+#   auto_extend_size_threshold = 80
+#   auto_extend_size_increment = "1GB"
+#   auto_extend_size_limit = "10GB"
 
-  # Ensure volume is in Frankfurt, Germany
-  [mounts.regions]
-    fra = { priority = 1 }
+#   # Ensure volume is in Frankfurt, Germany
+#   [mounts.regions]
+#     fra = { priority = 1 }
 
 # Deployment configuration
 [deploy]

@@ -107,43 +107,48 @@ The app comes with 4 pre-configured demo users:
 - The app is configured to work with Railway's domain
 - If you add a custom domain, you may need to update CORS settings
 
-## Alternative Deployment Options
+## Alternative Deployment Options (Non-AWS)
 
-If Railway doesn't work for you, here are excellent alternatives:
+If you want to avoid AWS servers, here are excellent alternatives that don't use AWS infrastructure:
 
-### **🏆 Top Recommendations for Full-Stack Apps**
+### **🏆 Top Non-AWS Recommendations**
 
-#### **1. Render** ⭐⭐⭐⭐⭐
-**Best Railway Alternative**
-- **Free tier**: 750 hours/month, static sites free
-- **Pros**: Automatic builds, full-stack support, PostgreSQL database option
-- **Setup**: Similar to Railway - connect GitHub, auto-deploys
-- **Cost**: ~$7/month for persistent apps
-- **Perfect for**: Colabora (matches Railway closely)
+#### **1. DigitalOcean App Platform** ⭐⭐⭐⭐⭐
+**Best Non-AWS Alternative**
+- **Infrastructure**: DigitalOcean's own cloud (not AWS)
+- **Free tier**: None, but $5/month minimum (very affordable)
+- **Pros**: Simple pricing, good performance, managed databases
+- **Setup**: Connect GitHub repo, auto-deploys
+- **Cost**: $5/month minimum + usage-based pricing
+- **Database**: Managed PostgreSQL or MySQL available
+- **Perfect for**: Colabora - easy deployment, reliable
 
-#### **2. Heroku** ⭐⭐⭐⭐⭐
+#### **2. Fly.io** ⭐⭐⭐⭐⭐
+**Global Edge Network**
+- **Infrastructure**: Fly.io's global network (not AWS)
+- **Free tier**: 3 shared VMs with 256MB RAM each
+- **Pros**: Excellent performance, SQLite support, global deployment
+- **Setup**: `fly launch`, `fly deploy` (CLI-based)
+- **Cost**: ~$2.50/month per app + usage
+- **Database**: SQLite works perfectly
+- **Best for**: Apps like Colabora with SQLite databases
+
+#### **3. Heroku** ⭐⭐⭐⭐
 **Industry Standard**
+- **Infrastructure**: Heroku's own infrastructure (moved away from AWS)
 - **Free tier**: 550-1000 hours/month (varies by region)
 - **Pros**: Mature platform, excellent docs, add-ons ecosystem
 - **Setup**: `heroku create`, `git push heroku main`
 - **Cost**: ~$7/month for basic dyno
-- **Database**: Heroku Postgres available
+- **Database**: Heroku Postgres (optional)
 
-#### **3. DigitalOcean App Platform** ⭐⭐⭐⭐⭐
-**Developer-Friendly Cloud**
-- **Free tier**: None, but $5/month minimum
-- **Pros**: Simple pricing, good performance, managed databases
-- **Setup**: Connect repo, auto-deploys like Railway
-- **Cost**: $5/month minimum + usage
-- **Database**: Managed PostgreSQL available
-
-#### **4. Fly.io** ⭐⭐⭐⭐
-**Global Deployment**
-- **Free tier**: 3 shared VMs (limited resources)
-- **Pros**: Global edge network, great performance, SQLite support
-- **Setup**: `fly launch`, `fly deploy`
-- **Cost**: ~$2.50/month per app + usage
-- **Perfect for**: Apps like Colabora with SQLite
+#### **4. Railway** ⭐⭐⭐⭐
+**Developer-Friendly**
+- **Infrastructure**: Railway's cloud (may use multiple providers, but not AWS-only)
+- **Free tier**: Generous free tier
+- **Pros**: Simple setup, great DX, automatic builds
+- **Setup**: Connect GitHub, auto-deploys
+- **Cost**: $5+/month for persistent apps
 
 ### **Frontend-Focused (More Complex Backend)**
 
@@ -193,36 +198,43 @@ If Railway doesn't work for you, here are excellent alternatives:
 - **Setup**: `npx localtunnel --port 3000`
 - **Use**: Same as ngrok - instant public URL
 
-### **Comparison Table**
+### **Comparison Table (Non-AWS Only)**
 
-| Platform | Free Tier | Setup Complexity | Full-Stack Support | Best For |
-|----------|-----------|------------------|-------------------|----------|
-| **Railway** | ✅ Good | 🔧 Simple | ✅ Excellent | Colabora (current) |
-| **Render** | ✅ Good | 🔧 Simple | ✅ Excellent | Colabora alternative |
-| **Heroku** | ✅ Limited | 🔧 Simple | ✅ Excellent | Production apps |
-| **Fly.io** | ✅ Basic | 🔧 Medium | ✅ Good | Global apps |
-| **DO App Platform** | ❌ None | 🔧 Simple | ✅ Good | Simple deployments |
-| **Vercel** | ✅ Excellent | 🔧 Medium | ⚠️ Needs rework | Frontend-heavy |
-| **ngrok** | ✅ Basic | ⚡ Instant | ✅ Perfect | Quick testing |
+| Platform | Infrastructure | Free Tier | Setup Complexity | Cost/Month | Best For Colabora |
+|----------|----------------|-----------|------------------|------------|-------------------|
+| **DigitalOcean App Platform** | DigitalOcean | ❌ None ($5 min) | 🔧 Simple | $5+ | ✅ Excellent choice |
+| **Fly.io** | Fly.io Global | ✅ 3 VMs | 🔧 Medium | $2.50+ | ✅ SQLite-friendly |
+| **Heroku** | Heroku | ✅ 550h/month | 🔧 Simple | $7+ | ✅ Mature & reliable |
+| **Railway** | Railway | ✅ Generous | 🔧 Simple | $5+ | ✅ Easy deployment |
+| **ngrok** | Local tunnel | ✅ Basic | ⚡ Instant | Free/Paid | ✅ Quick testing |
 
-### **Recommendation for Colabora**
+### **Recommendation for Colabora (Non-AWS)**
 
-**For your collaborative app, I recommend:**
+**For your collaborative app without AWS, I recommend:**
 
-1. **Render** - Most similar to Railway, easiest transition
-2. **Heroku** - If you want maximum reliability
-3. **Fly.io** - If you want global performance
-4. **ngrok** - For immediate testing without deployment
+1. **DigitalOcean App Platform** - Best balance of cost, simplicity, and reliability
+2. **Fly.io** - Best for SQLite apps with global performance
+3. **Heroku** - Maximum reliability and enterprise features
+4. **ngrok** - For immediate testing without any deployment
 
-### **Quick Start with Render**
+### **Quick Start with DigitalOcean App Platform**
 
-1. Go to [render.com](https://render.com)
+1. Go to [digitalocean.com/products/app-platform](https://digitalocean.com/products/app-platform)
 2. Connect your GitHub repo
-3. Choose "Web Service" for Node.js
+3. Choose "Autodeploy" for automatic deployments
 4. Set build command: `npm run build`
-5. Set start command: `npm start`
+5. Set run command: `npm start`
 6. Add environment variables: `NODE_ENV=production`, `SESSION_SECRET=your-secret`
-7. Deploy!
+7. Deploy! (Minimum $5/month)
+
+### **Quick Start with Fly.io**
+
+1. Install Fly CLI: `curl -L https://fly.io/install.sh | sh`
+2. Login: `fly auth login`
+3. In your project directory: `fly launch`
+4. Follow prompts, choose region
+5. Deploy: `fly deploy`
+6. Your app gets a `*.fly.dev` URL
 
 All alternatives support your SQLite database approach and the collaborative features will work identically.
 

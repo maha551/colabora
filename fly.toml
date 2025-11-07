@@ -1,0 +1,33 @@
+app = "colabora-app"
+
+[build]
+  builder = "paketobuildpacks/builder:base"
+  buildpacks = ["gcr.io/paketo-buildpacks/nodejs"]
+
+[[build.buildpacks]]
+  uri = "docker://paketo-buildpacks/nodejs:0.21.0"
+
+[env]
+  NODE_ENV = "production"
+  # Change this to a secure random secret before deploying!
+  SESSION_SECRET = "colabora-secure-session-secret-change-this-in-production"
+
+[processes]
+  app = "npm start"
+
+[[services]]
+  internal_port = 3000
+  processes = ["app"]
+  protocol = "tcp"
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+
+  [[services.tcp_checks]]
+    interval = "10s"
+    timeout = "2s"

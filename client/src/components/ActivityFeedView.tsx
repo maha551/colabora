@@ -1980,10 +1980,8 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
               </div>
             )}
           </>
-        )}
-
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
 }
-

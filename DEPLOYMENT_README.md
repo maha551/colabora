@@ -251,6 +251,33 @@ All alternatives support your SQLite database approach and the collaborative fea
 - The SESSION_SECRET should be kept secure
 - SQLite database is file-based (resets on redeploy)
 
+## 🗄️ Fly.io Database Persistence
+
+**For Fly.io deployments only**: You need persistent volumes to keep your database between deployments.
+
+### **Option 1: CLI + Web Interface (Recommended)**
+
+1. **Create volume first:**
+   ```bash
+   fly volumes create colabora_data --size 1 --region lax
+   ```
+
+2. **Deploy via web interface** - volume auto-mounts
+
+### **Option 2: Web Interface Only**
+
+1. **Deploy app first** via web interface
+2. **Create volume in dashboard:**
+   - App dashboard → "Volumes" tab
+   - "Create volume" → Name: `colabora_data`, Size: `1 GB`
+3. **Redeploy** to mount the volume
+
+### **Option 3: Use Deploy Script**
+```bash
+npm run deploy:fly
+```
+**Creates volume and deploys automatically!**
+
 ---
 
 **Happy collaborating!** 🎉

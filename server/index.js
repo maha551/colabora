@@ -206,6 +206,15 @@ app.get('/api/test', (req, res) => {
   });
 });
 
+// Health check endpoint for Fly.io
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
+
 // Debug endpoint for document access
 app.get('/api/debug-doc/:id', (req, res) => {
   const db = req.app.locals.db;

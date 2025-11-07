@@ -11,7 +11,8 @@
     "build:frontend": "cd client && npm run build",
     "install:frontend": "cd client && npm install",
     "dev:full": "concurrently \"npm run dev\" \"npm run dev:frontend\"",
-    "dev:frontend": "cd client && npm run dev"
+    "dev:frontend": "cd client && npm run dev",
+    "deploy:fly": "chmod +x deploy-fly.sh && ./deploy-fly.sh"
   },
   "keywords": ["collaborative", "drafting", "document", "editing"],
   "author": "",

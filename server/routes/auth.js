@@ -1,46 +1,180 @@
 const express = require('express');
-const demoUsers = require('../demoUsers');
+const { v4: uuidv4 } = require('uuid');
+const { body, validationResult } = require('express-validator');
+const { generateToken, hashPassword, verifyPassword } = require('../middleware/auth');
+const { securityLogger } = require('../middleware/logger');
+const config = require('../config');
 
 const router = express.Router();
 
-// Login endpoint - token-based for demo
-router.post('/login', (req, res) => {
+// Login endpoint - secure authentication
+router.post('/login', [
+  body('email').isEmail().normalizeEmail(),
+  body('password').notEmpty()
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ error: 'Invalid input', details: errors.array() });
+  }
+
   const { email, password } = req.body;
+  const db = req.app.locals.db;
+  const ip = req.ip || req.connection.remoteAddress;
+  const userAgent = req.get('User-Agent') || 'unknown';
 
-  // Find user by email (ignoring password for demo)
-  const user = demoUsers.find(u => u.email === email);
+  try {
+    // Find user by email
+    db.get('SELECT id, name, email, password_hash, avatar, bio FROM users WHERE email = ?', [email], async (err, user) => {
+      if (err) {
+        console.error('Database error during login:', err);
+        securityLogger.authFailure(email, 'database_error', ip, userAgent);
+        return res.status(500).json({ error: 'Authentication failed' });
+      }
 
-  if (!user) {
-    return res.status(401).json({ error: 'Invalid credentials' });
+      if (!user) {
+        securityLogger.authFailure(email, 'user_not_found', ip, userAgent);
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+
+      // Verify password
+      const isValidPassword = await verifyPassword(password, user.password_hash);
+      if (!isValidPassword) {
+        securityLogger.authFailure(email, 'invalid_password', ip, userAgent);
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+
+      // Generate JWT token
+      const token = generateToken({
+        id: user.id,
+        name: user.name,
+        email: user.email
+      });
+
+      // Update session for backward compatibility
+      if (req.session) {
+        req.session.userId = user.id;
+        req.session.user = {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          avatar: user.avatar,
+          bio: user.bio
+        };
+      }
+
+      // Log successful authentication
+      securityLogger.authAttempt(email, true, ip, userAgent);
+
+      res.json({
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          avatar: user.avatar,
+          bio: user.bio
+        },
+        token,
+        message: 'Login successful'
+      });
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    securityLogger.authFailure(email, 'system_error', ip, userAgent);
+    res.status(500).json({ error: 'Authentication failed' });
   }
-
-  // Create a simple token (in production, use JWT)
-  const token = `demo-token-${user.id}-${Date.now()}`;
-
-  if (req.session) {
-    req.session.userId = user.id;
-    req.session.user = user;
-  }
-
-  res.json({
-    user,
-    token,
-    message: 'Login successful'
-  });
 });
 
-// Register endpoint - simplified for demo (just returns existing users)
-router.post('/register', (req, res) => {
-  const { name, email, password } = req.body;
+// Register endpoint - secure user registration
+router.post('/register', [
+  body('name')
+    .isLength({ min: 2, max: 50 })
+    .withMessage('Name must be between 2 and 50 characters')
+    .matches(/^[a-zA-Z\s]+$/)
+    .withMessage('Name can only contain letters and spaces'),
 
-  // Check if user already exists
-  const existingUser = demoUsers.find(u => u.email === email);
-  if (existingUser) {
-    return res.status(400).json({ error: 'User already exists' });
+  body('email')
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Please provide a valid email address'),
+
+  body('password')
+    .isLength({ min: 8 })
+    .withMessage('Password must be at least 8 characters long')
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
+    .withMessage('Password must contain at least one lowercase letter, one uppercase letter, and one number')
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ error: 'Invalid input', details: errors.array() });
   }
 
-  // For demo, just return an error since we're using fixed demo users
-  res.status(400).json({ error: 'Registration is disabled in demo mode. Use one of the demo accounts.' });
+  const { name, email, password } = req.body;
+  const db = req.app.locals.db;
+  const userId = uuidv4();
+  const ip = req.ip || req.connection.remoteAddress;
+  const userAgent = req.get('User-Agent') || 'unknown';
+
+  try {
+    // Check if user already exists
+    db.get('SELECT id FROM users WHERE email = ?', [email], async (err, existingUser) => {
+      if (err) {
+        console.error('Database error during registration check:', err);
+        return res.status(500).json({ error: 'Registration failed' });
+      }
+
+      if (existingUser) {
+        return res.status(400).json({ error: 'User with this email already exists' });
+      }
+
+      // Hash password
+      const passwordHash = await hashPassword(password);
+
+      // Create user
+      db.run(
+        'INSERT INTO users (id, name, email, password_hash, created_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)',
+        [userId, name, email, passwordHash],
+        function(err) {
+          if (err) {
+            console.error('Database error during user creation:', err);
+            return res.status(500).json({ error: 'Registration failed' });
+          }
+
+          // Generate JWT token
+          const token = generateToken({
+            id: userId,
+            name: name,
+            email: email
+          });
+
+          // Update session
+          if (req.session) {
+            req.session.userId = userId;
+            req.session.user = {
+              id: userId,
+              name: name,
+              email: email
+            };
+          }
+
+          // Log successful registration
+          securityLogger.authAttempt(email, true, ip, userAgent);
+
+          res.status(201).json({
+            user: {
+              id: userId,
+              name: name,
+              email: email
+            },
+            token,
+            message: 'Registration successful'
+          });
+        }
+      );
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Registration failed' });
+  }
 });
 
 // Logout endpoint

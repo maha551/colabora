@@ -5,8 +5,11 @@ app = "colabora"
 
 [env]
   NODE_ENV = "production"
-  # Change this to a secure random secret before deploying!
-  SESSION_SECRET = "colabora-secure-session-secret-change-this-in-production"
+
+# Secure secrets (generate random values for production)
+[secrets]
+  SESSION_SECRET = "your-generated-session-secret-here"
+  JWT_SECRET = "your-generated-jwt-secret-here"
 
 [mounts]
   source = "colabora_data"

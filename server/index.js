@@ -5,7 +5,12 @@ const session = require('express-session');
 const bodyParser = require('body-parser');
 const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
-const demoUsers = require('./demoUsers');
+const rateLimit = require('express-rate-limit');
+
+// Security imports
+const config = require('./config');
+const { requireAuth, generateToken, hashPassword, verifyPassword } = require('./middleware/auth');
+const { requestLogger, errorLogger, securityLogger } = require('./middleware/logger');
 
 let serverStarted = false;
 let serverStartTimeout = null;
@@ -24,99 +29,117 @@ const agreedVersionsRoutes = require('./routes/agreed-versions');
 
 // Initialize Express app
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = config.PORT;
 
-// Middleware
-app.use(helmet());
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production'
-    ? process.env.FRONTEND_URL
-    : /^http:\/\/localhost:\d+$/,
-  credentials: true
-}));
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
-
-if (process.env.NODE_ENV === 'production') {
+// Trust proxy in production
+if (config.NODE_ENV === 'production') {
   app.set('trust proxy', 1);
 }
 
-app.use(session({
-  name: 'colabora.sid',
-  secret: process.env.SESSION_SECRET || 'colabora-secret',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: 7 * 24 * 60 * 60 * 1000
+// Security headers
+app.use(helmet(config.SECURITY_HEADERS));
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: config.RATE_LIMIT_WINDOW_MS,
+  max: config.RATE_LIMIT_MAX_REQUESTS,
+  message: {
+    error: 'Too many requests from this IP, please try again later.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    securityLogger.rateLimitHit(
+      req.ip,
+      req.path,
+      req.get('User-Agent')
+    );
+    res.status(429).json({
+      error: 'Too many requests from this IP, please try again later.'
+    });
   }
+});
+app.use('/api', limiter);
+
+// CORS configuration
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, etc.)
+    if (!origin) return callback(null, true);
+
+    if (config.ALLOWED_ORIGINS.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-// Token-based authentication middleware
+// Body parsing
+app.use(bodyParser.json({ limit: '10mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
+
+// Request logging
+app.use(requestLogger);
+
+// Session configuration
+app.use(session(config.SESSION_CONFIG));
+
+// Secure authentication middleware (for backward compatibility)
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} - Auth check`);
-
-  if (req.session && req.session.userId && !req.user) {
-    const sessionUser = demoUsers.find(u => u.id === req.session.userId);
-    if (sessionUser) {
-      req.user = sessionUser;
-      console.log(`Session auth successful for user: ${sessionUser.name}`);
-    }
-  }
-
-  if (!req.user) {
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
+  // Try JWT token first
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
       const token = authHeader.substring(7);
-      console.log(`Token received: ${token.substring(0, 20)}...`);
-      if (token && token.startsWith('demo-token-')) {
-        const tokenParts = token.split('-');
-        if (tokenParts.length >= 3) {
-          const userId = tokenParts[2];
-          const user = demoUsers.find(u => u.id === userId);
-          if (user) {
-            req.user = user;
-            console.log(`Token auth successful for user: ${user.name}`);
-            if (req.session) {
-              req.session.userId = user.id;
-              req.session.user = user;
-            }
-          } else {
-            console.log(`Token auth failed - user not found: ${userId}`);
-          }
-        } else {
-          console.log('Token auth failed - invalid token format');
-        }
-      } else {
-        console.log('Token auth failed - invalid token prefix');
+      const decoded = require('jsonwebtoken').verify(token, config.JWT_CONFIG.secret, {
+        issuer: config.JWT_CONFIG.issuer,
+        audience: config.JWT_CONFIG.audience
+      });
+
+      req.user = {
+        id: decoded.userId,
+        email: decoded.email,
+        name: decoded.name
+      };
+
+      // Update session for backward compatibility
+      if (req.session) {
+        req.session.userId = decoded.userId;
+        req.session.user = req.user;
       }
-    } else {
-      console.log('No authorization header found');
+    } catch (error) {
+      // Token invalid, continue to session check
     }
-  } else {
-    console.log(`User already authenticated: ${req.user?.name}`);
   }
+
+  // Fallback to session auth
+  if (!req.user && req.session && req.session.userId) {
+    req.user = req.session.user;
+  }
+
   next();
 });
 
 // Initialize database and start server only after initialization completes
-// Note: Using /data/ for Fly.io persistent storage (survives redeploys)
 const fs = require('fs');
 
 // Ensure data directory exists
-const dataDir = '/data';
-const dbPath = path.join(dataDir, 'colabora.db');
+const dbPath = config.DATABASE_URL.startsWith('sqlite:///')
+  ? config.DATABASE_URL.replace('sqlite:///', '')
+  : config.DATABASE_URL;
 
+const dbDir = path.dirname(dbPath);
 try {
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-    console.log('Created data directory:', dataDir);
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+    console.log('Created database directory:', dbDir);
   }
 } catch (dirErr) {
-  console.error('Error creating data directory:', dirErr.message);
-  // Continue anyway, might work with existing directory
+  console.error('Error creating database directory:', dirErr.message);
 }
 
 const db = new sqlite3.Database(dbPath, (err) => {
@@ -203,16 +226,35 @@ function startServer() {
   }
 
   // Error handling middleware
+  app.use(errorLogger);
   app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({ error: 'Something went wrong!' });
+    // Don't leak error details in production
+    const isDevelopment = config.NODE_ENV === 'development';
+
+    // Log security-related errors
+    if (err.message && err.message.includes('CORS')) {
+      securityLogger.suspiciousActivity(
+        req.user?.id || 'anonymous',
+        'cors_violation',
+        { origin: req.headers.origin, error: err.message },
+        req.ip,
+        req.get('User-Agent')
+      );
+    }
+
+    res.status(err.status || 500).json({
+      error: isDevelopment ? err.message : 'Something went wrong!',
+      ...(isDevelopment && { stack: err.stack })
+    });
   });
 
   // Start server
   app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log('Demo data should now be available!');
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`🌍 Environment: ${config.NODE_ENV}`);
+    console.log(`🔒 Security: ${config.NODE_ENV === 'production' ? 'Production mode enabled' : 'Development mode - NOT SECURE FOR PRODUCTION'}`);
+    console.log(`📊 Rate limiting: ${config.RATE_LIMIT_MAX_REQUESTS} requests per ${config.RATE_LIMIT_WINDOW_MS / 1000}s`);
+    console.log('✅ Server initialization complete');
   });
 }
 
@@ -236,30 +278,22 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Debug endpoint for document access
-app.get('/api/debug-doc/:id', (req, res) => {
+// Health check endpoint
+app.get('/api/health', (req, res) => {
   const db = req.app.locals.db;
-  const documentId = req.params.id;
-  const userId = req.user ? req.user.id : 'no-user';
+  const uptime = process.uptime();
 
-  console.log(`Debug: User ${userId} checking document ${documentId}`);
+  // Basic database connectivity check
+  db.get('SELECT 1 as test', [], (err, row) => {
+    const dbStatus = err ? 'error' : 'healthy';
 
-  db.all('SELECT document_id, COUNT(*) as count FROM paragraphs GROUP BY document_id', [], (err, docCounts) => {
-    if (err) {
-      return res.json({ error: 'Query failed', details: err.message });
-    }
-
-    db.get('SELECT * FROM documents WHERE id = ?', [documentId], (err, doc) => {
-      if (err) {
-        return res.json({ error: 'Document query failed', details: err.message });
-      }
-
-      res.json({
-        user: req.user,
-        document: doc,
-        documentCounts: docCounts,
-        requestedId: documentId
-      });
+    res.json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      uptime: `${Math.floor(uptime)}s`,
+      database: dbStatus,
+      environment: config.NODE_ENV,
+      version: '1.0.0'
     });
   });
 });
@@ -327,7 +361,11 @@ function initializeDatabase(db) {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       email TEXT UNIQUE NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      password_hash TEXT,
+      avatar TEXT,
+      bio TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`,
 
     `CREATE TABLE IF NOT EXISTS documents (
@@ -427,9 +465,8 @@ function initializeDatabase(db) {
       ensureColumn(db, 'users', 'bio', 'TEXT');
       
       // Wait a bit for column additions to complete, then insert demo data
-      setTimeout(() => {
-        console.log('Inserting demo data...');
-        insertDemoData(db);
+      setTimeout(async () => {
+        await insertDemoData(db);
       }, 500);
       return;
     }
@@ -449,27 +486,41 @@ function initializeDatabase(db) {
   createNextTable();
 }
 
-function insertDemoData(db) {
+async function insertDemoData(db) {
   console.log('Inserting demo data...');
 
-  // Insert demo users
-  let usersInserted = 0;
-  demoUsers.forEach(user => {
-    db.run(`
-      INSERT OR IGNORE INTO users (id, name, email) VALUES (?, ?, ?)
-    `, [user.id, user.name, user.email], (err) => {
-      if (err) {
-        console.error('Error inserting user:', err);
-      }
-      usersInserted++;
-      if (usersInserted === demoUsers.length) {
-        console.log('Users inserted, inserting document...');
-        insertDocument();
-      }
-    });
-  });
+  // Demo users with secure passwords
+  const demoUsers = [
+    { id: 'cmgxlfj9z0000orjgnfy3revt', name: 'Alice Johnson', email: 'alice@example.com', password: 'SecurePass123!' },
+    { id: 'cmgxlfj9z0000orjgnfy3revu', name: 'Bob Smith', email: 'bob@example.com', password: 'SecurePass123!' },
+    { id: 'cmgxlfj9z0000orjgnfy3revv', name: 'Charlie Brown', email: 'charlie@example.com', password: 'SecurePass123!' },
+    { id: 'cmgxlfj9z0000orjgnfy3revw', name: 'Diana Prince', email: 'diana@example.com', password: 'SecurePass123!' }
+  ];
 
-  function insertDocument() {
+  // Insert demo users with hashed passwords
+  let usersInserted = 0;
+  for (const user of demoUsers) {
+    try {
+      const passwordHash = await hashPassword(user.password);
+      db.run(`
+        INSERT OR IGNORE INTO users (id, name, email, password_hash) VALUES (?, ?, ?, ?)
+      `, [user.id, user.name, user.email, passwordHash], (err) => {
+        if (err) {
+          console.error('Error inserting user:', err);
+        }
+        usersInserted++;
+        if (usersInserted === demoUsers.length) {
+          console.log('Users inserted, inserting document...');
+          insertDocument(db);
+        }
+      });
+    } catch (error) {
+      console.error('Error hashing password for demo user:', error);
+      usersInserted++;
+    }
+  }
+
+  function insertDocument(db) {
     // Insert demo document
     db.run(`
       INSERT OR IGNORE INTO documents (id, title, owner_id) VALUES (?, ?, ?)
@@ -479,11 +530,11 @@ function insertDemoData(db) {
         return;
       }
       console.log('Document inserted, inserting paragraphs...');
-      insertParagraphs();
+      insertParagraphs(db);
     });
   }
 
-  function insertParagraphs() {
+  function insertParagraphs(db) {
     // Insert demo paragraphs with headings
     const demoParagraphs = [
       { id: 'demo-doc-1-title', title: 'Sample Collaborative Document', text: 'Sample Collaborative Document', order_index: -1, heading_level: 'h1' },
@@ -508,13 +559,13 @@ function insertDemoData(db) {
         paragraphsInserted++;
         if (paragraphsInserted === demoParagraphs.length) {
           console.log('Paragraphs inserted, inserting collaborators...');
-          insertCollaborators();
+          insertCollaborators(db);
         }
       });
     });
   }
 
-  function insertCollaborators() {
+  function insertCollaborators(db) {
     // Add collaborators
     const collaborators = ['cmgxlfj9z0000orjgnfy3revu', 'cmgxlfj9z0000orjgnfy3revv', 'cmgxlfj9z0000orjgnfy3revw'];
     let collaboratorsInserted = 0;
@@ -529,13 +580,13 @@ function insertDemoData(db) {
         collaboratorsInserted++;
         if (collaboratorsInserted === collaborators.length) {
           console.log('Collaborators inserted, inserting proposals...');
-          insertProposals();
+          insertProposals(db);
         }
       });
     });
   }
 
-  function insertProposals() {
+  function insertProposals(db) {
     // Insert demo proposals
     const demoProposals = [
       {
@@ -594,13 +645,13 @@ function insertDemoData(db) {
         proposalsInserted++;
         if (proposalsInserted === demoProposals.length) {
           console.log('Proposals inserted, inserting votes...');
-          insertVotes();
+          insertVotes(db);
         }
       });
     });
   }
 
-  function insertVotes() {
+  function insertVotes(db) {
     // Insert demo votes
     const demoVotes = [
       { id: 'vote-1', proposal_id: 'proposal-1', user_id: 'cmgxlfj9z0000orjgnfy3revt', vote: 'PRO' },
@@ -624,13 +675,13 @@ function insertDemoData(db) {
         votesInserted++;
         if (votesInserted === demoVotes.length) {
           console.log('Votes inserted, inserting comments...');
-          insertComments();
+          insertComments(db);
         }
       });
     });
   }
 
-  function insertComments() {
+  function insertComments(db) {
     // Insert demo comments
     const demoComments = [
       {

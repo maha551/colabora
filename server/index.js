@@ -19,6 +19,8 @@ const voteRoutes = require('./routes/votes');
 const commentRoutes = require('./routes/comments');
 const activityRoutes = require('./routes/activity');
 const pendingVotesRoutes = require('./routes/pending-votes');
+const debatedProposalsRoutes = require('./routes/debated-proposals');
+const agreedVersionsRoutes = require('./routes/agreed-versions');
 
 // Initialize Express app
 const app = express();
@@ -183,6 +185,8 @@ function startServer() {
   // Routes (moved here from global scope to ensure they're registered after DB init)
   app.use('/api/auth', authRoutes);
   app.use('/api/pending-votes', pendingVotesRoutes);
+  app.use('/api/debated-proposals', debatedProposalsRoutes);
+  app.use('/api/agreed-versions', agreedVersionsRoutes);
   app.use('/api/documents', documentRoutes);
   app.use('/api/documents/:documentId/activity', activityRoutes);
   app.use('/api/documents/:documentId/paragraphs', paragraphRoutes);

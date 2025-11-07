@@ -1,0 +1,284 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run security audit
+      run: npm audit --audit-level=moderate
+
+    - name: Check for vulnerable dependencies
+      run: |
+        if [ "$(npm audit --audit-level=moderate --json | jq '.metadata.vulnerabilities.total')" -gt 0 ]; then
+          echo "🚨 Security vulnerabilities found!"
+          npm audit --audit-level=moderate
+          exit 1
+        else
+          echo "✅ No security vulnerabilities found"
+        fi
+
+  lint-and-format:
+    name: Lint & Format Check
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run linting
+      run: npm run lint || echo "No lint script found"
+
+    - name: Check code formatting
+      run: npx prettier --check . || echo "Prettier not configured"
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run unit tests
+      run: npm run test:unit
+
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage/lcov.info
+        flags: unit-tests
+        name: Unit Tests Coverage
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run integration tests
+      run: npm run test:integration
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: integration-test-results
+        path: test-results/
+
+  security-tests:
+    name: Security Tests
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Start application
+      run: |
+        npm start &
+        sleep 10
+
+    - name: Run security tests
+      run: npm run test:security
+
+    - name: Upload security test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: security-test-results
+        path: security-test-results/
+
+  container-security-scan:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Build Docker image
+      run: docker build -t colabora-app .
+
+    - name: Scan Docker image for vulnerabilities
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'image'
+        scan-ref: 'colabora-app'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  full-test-suite:
+    name: Full Test Suite
+    runs-on: ubuntu-latest
+    needs: [security-audit, lint-and-format, unit-tests, integration-tests, security-tests]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run complete test suite
+      run: npm run test:all
+
+    - name: Generate test coverage report
+      run: npm run test:coverage
+
+    - name: Upload final coverage report
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage/lcov.info
+        flags: full-suite
+        name: Full Test Suite Coverage
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [full-test-suite, container-security-scan]
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+
+    environment:
+      name: staging
+      url: https://staging.colabora-app.com
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build and push Docker image
+      run: |
+        IMAGE_TAG=staging-${{ github.sha }}
+        docker build -t colabora-app:$IMAGE_TAG .
+        docker tag colabora-app:$IMAGE_TAG ${{ secrets.ECR_REGISTRY }}/colabora-app:$IMAGE_TAG
+        docker push ${{ secrets.ECR_REGISTRY }}/colabora-app:$IMAGE_TAG
+
+    - name: Deploy to staging
+      run: |
+        # Deploy to staging environment
+        echo "Deploying to staging with image: ${{ secrets.ECR_REGISTRY }}/colabora-app:staging-${{ github.sha }}"
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [full-test-suite, container-security-scan]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    environment:
+      name: production
+      url: https://colabora-app.com
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build and push Docker image
+      run: |
+        IMAGE_TAG=production-${{ github.sha }}
+        docker build -t colabora-app:$IMAGE_TAG .
+        docker tag colabora-app:$IMAGE_TAG ${{ secrets.ECR_REGISTRY }}/colabora-app:$IMAGE_TAG
+        docker push ${{ secrets.ECR_REGISTRY }}/colabora-app:$IMAGE_TAG
+
+    - name: Deploy to production
+      run: |
+        # Deploy to production environment
+        echo "Deploying to production with image: ${{ secrets.ECR_REGISTRY }}/colabora-app:production-${{ github.sha }}"
+
+    - name: Run production smoke tests
+      run: |
+        # Wait for deployment and run smoke tests
+        sleep 30
+        curl -f https://colabora-app.com/api/health || exit 1

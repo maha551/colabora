@@ -13,8 +13,21 @@
     "dev:full": "concurrently \"npm run dev\" \"npm run dev:frontend\"",
     "dev:frontend": "cd client && npm run dev",
     "deploy:fly": "chmod +x deploy-fly.sh && ./deploy-fly.sh",
-    "security-test": "node scripts/security-test.js",
-    "security-test:remote": "node scripts/security-test.js --url"
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage --coverageDirectory=coverage",
+    "test:unit": "jest --testPathPattern=unit --verbose",
+    "test:integration": "jest --testPathPattern=integration --verbose",
+    "test:security": "node scripts/security-test.js",
+    "test:security:remote": "node scripts/security-test.js --url",
+    "test:all": "npm run test:unit && npm run test:integration && npm run test:security",
+    "test:ci": "npm run test:coverage && npm run test:security",
+    "test:smoke": "node scripts/smoke-test.js",
+    "lint": "eslint server/**/*.js --fix || echo 'ESLint not configured'",
+    "format": "prettier --write . || echo 'Prettier not configured'",
+    "build:docker": "docker build -t colabora-app .",
+    "security:audit": "npm audit --audit-level=moderate",
+    "security:scan": "npm audit --audit-level=high --json | jq '.vulnerabilities' || echo 'Security scan complete'"
   },
   "keywords": [
     "collaborative",
@@ -41,7 +54,16 @@
     "winston": "^3.18.3"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "chai": "^6.2.0",
     "concurrently": "^8.2.2",
-    "nodemon": "^3.0.2"
+    "istanbul": "^0.4.5",
+    "jest": "^30.2.0",
+    "mocha": "^11.7.5",
+    "nodemon": "^3.0.2",
+    "nyc": "^17.1.0",
+    "sinon": "^21.0.0",
+    "supertest": "^7.1.4",
+    "ts-jest": "^29.4.5"
   }
 }

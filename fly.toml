@@ -1,13 +1,13 @@
-app = "colabora2"
+app = "colabora-fresh"
 
 [build]
   dockerfile = "Dockerfile"
 
 [env]
   NODE_ENV = "production"
-  DATABASE_URL = "/tmp/colabora.db"
+  DATABASE_URL = "/data/colabora.db"
 
-# Deploy to Germany regions (allow fallback if Frankfurt is full)
+# Deploy to EU regions (Frankfurt, Germany primary)
 primary_region = "fra"
 
 # Secure secrets (generate random values for production)
@@ -15,18 +15,20 @@ primary_region = "fra"
   SESSION_SECRET = "your-generated-session-secret-here"
   JWT_SECRET = "your-generated-jwt-secret-here"
 
-# Temporarily disabled volume for initial deployment
-# [mounts]
-#   source = "colabora_data"
-#   destination = "/data"
-#   initial_size = "1GB"
-#   auto_extend_size_threshold = 80
-#   auto_extend_size_increment = "1GB"
-#   auto_extend_size_limit = "10GB"
+# Persistent volume for database (1GB in EU)
+[mounts]
+  source = "colabora_data"
+  destination = "/data"
+  initial_size = "1GB"
+  auto_extend_size_threshold = 80
+  auto_extend_size_increment = "1GB"
+  auto_extend_size_limit = "10GB"
 
-#   # Ensure volume is in Frankfurt, Germany
-#   [mounts.regions]
-#     fra = { priority = 1 }
+  # Ensure volume is in EU regions
+  [mounts.regions]
+    fra = { priority = 1 }
+    ams = { priority = 2 }
+    cdg = { priority = 3 }
 
 # Deployment configuration
 [deploy]
@@ -34,12 +36,17 @@ primary_region = "fra"
   max_unavailable = 0.5
   release_command = ""
 
-# Instance configuration
+# Instance configuration - 2 machines
 [experimental]
   auto_rollback = true
 
 [processes]
   app = "npm start"
+
+# Scale to 2 machines
+[[vm]]
+  count = 2
+  size = "shared-cpu-1x"
 
 [[services]]
   internal_port = 3000

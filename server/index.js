@@ -100,8 +100,8 @@ app.use((req, res, next) => {
 });
 
 // Initialize database and start server only after initialization completes
-// Note: Using /tmp/ for Fly.io compatibility (database resets on redeploy)
-const db = new sqlite3.Database('/tmp/colabora.db', (err) => {
+// Note: Using /data/ for Fly.io persistent storage (survives redeploys)
+const db = new sqlite3.Database('/data/colabora.db', (err) => {
   if (err) {
     console.error('Error opening database:', err.message);
     process.exit(1);

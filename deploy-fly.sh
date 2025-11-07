@@ -28,6 +28,10 @@ echo "Generated SESSION_SECRET: $SESSION_SECRET"
 echo "📦 Launching app on Fly.io..."
 fly launch --name colabora-app --region lax
 
+# Create persistent volume for database
+echo "💾 Creating persistent volume for database..."
+fly volumes create colabora_data --size 1 --region lax
+
 # Set secrets
 echo "🔒 Setting environment secrets..."
 fly secrets set SESSION_SECRET="$SESSION_SECRET"

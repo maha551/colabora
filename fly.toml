@@ -8,6 +8,10 @@ app = "colabora-app"
   # Change this to a secure random secret before deploying!
   SESSION_SECRET = "colabora-secure-session-secret-change-this-in-production"
 
+[mounts]
+  source = "colabora_data"
+  destination = "/data"
+
 [processes]
   app = "npm start"
 

@@ -22,8 +22,9 @@ FROM node:18-alpine AS production
 # Install dumb-init for proper signal handling
 RUN apk add --no-cache dumb-init
 
-# Create app directory
+# Create app directory and data directory
 WORKDIR /app
+RUN mkdir -p /data
 
 # Copy package files
 COPY package*.json ./
@@ -35,8 +36,11 @@ RUN npm ci --only=production && npm cache clean --force
 COPY --from=builder /app/client/build ./client/build
 COPY --from=builder /app/server ./server
 
-# Create temp directory for SQLite
-RUN mkdir -p /tmp
+# Set proper permissions for data directory
+RUN chown -R node:node /data
+
+# Switch to non-root user
+USER node
 
 # Set environment variables
 ENV NODE_ENV=production

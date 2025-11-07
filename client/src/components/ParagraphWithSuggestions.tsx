@@ -606,6 +606,7 @@ export function ParagraphWithSuggestions({
                 onToggleSelect={suggestion.type === 'BODY' ? handleToggleSuggestion : undefined}
                 onVote={onVote}
                 onComment={onComment}
+                originalText={suggestion.type === 'BODY' ? acceptedBodyText : acceptedHeadingText}
               />
             ))
           )}

@@ -278,6 +278,7 @@ export function EnhancedDiffView({
                 allCollaborators={allCollaborators}
                 onVote={onVote}
                 onComment={onComment}
+                originalText={targetParagraph.text}
               />
             </div>
           </div>

@@ -27,6 +27,7 @@ interface SuggestionCardProps {
   onToggleSelect?: (suggestionId: string) => void;
   onVote: (suggestionId: string, voteType: 'PRO' | 'NEUTRAL' | 'CONTRA') => void;
   onComment: (suggestionId: string, text: string, parentId?: string) => void;
+  originalText?: string;
   key?: React.Key;
 }
 
@@ -53,10 +54,24 @@ export function SuggestionCard({
   onToggleSelect,
   onVote,
   onComment,
+  originalText,
 }: SuggestionCardProps) {
   const [commentText, setCommentText] = useState("");
   const [showVoteDetails, setShowVoteDetails] = useState(false);
-  const [isThreadExpanded, setIsThreadExpanded] = useState(false);
+  const [isThreadExpanded, setIsThreadExpanded] = useState(() => {
+    // Auto-expand comment thread for deletion suggestions
+    if (originalText && suggestion.text.trim()) {
+      const originalLength = originalText.trim().length;
+      const suggestionLength = suggestion.text.trim().length;
+      const originalWords = originalText.trim().split(/\s+/).length;
+      const suggestionWords = suggestion.text.trim().split(/\s+/).length;
+
+      // Consider it a deletion if significantly shorter (more than 20% shorter in length or words)
+      const isDeletion = suggestionLength < originalLength * 0.8 || suggestionWords < originalWords * 0.8;
+      return isDeletion;
+    }
+    return false;
+  });
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
 

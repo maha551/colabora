@@ -168,6 +168,7 @@ export function InlineExpandedView({
                   onComment={(suggestionId, text, parentId) => {
                     // Comments not supported in inline view
                   }}
+                  originalText={proposal.currentText}
                 />
               </div>
             </div>

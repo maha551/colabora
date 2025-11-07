@@ -1,0 +1,137 @@
+const express = require('express');
+const router = express.Router({ mergeParams: true });
+
+// Middleware to check authentication
+const requireAuth = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  next();
+};
+
+// GET /api/documents/:documentId/activity - Get recent activity for a document
+router.get('/', requireAuth, (req, res) => {
+  const db = req.app.locals.db;
+  const { documentId } = req.params;
+  const userId = req.user.id;
+
+  // First verify user has access to this document
+  const checkAccessQuery = `
+    SELECT d.id 
+    FROM documents d
+    LEFT JOIN document_collaborators dc ON d.id = dc.document_id
+    WHERE d.id = ? 
+      AND (d.owner_id = ? OR dc.user_id = ?)
+  `;
+
+  db.get(checkAccessQuery, [documentId, userId, userId], (err, doc) => {
+    if (err) {
+      console.error('Database error checking document access:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    if (!doc) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Get activities from multiple sources
+    const activitiesQuery = `
+      SELECT 
+        'proposal_created' as type,
+        p.id,
+        p.user_id as userId,
+        u.name as userName,
+        u.avatar as userAvatar,
+        pr.title as paragraphTitle,
+        p.text as proposalText,
+        p.created_at as timestamp
+      FROM proposals p
+      JOIN paragraphs pr ON p.paragraph_id = pr.id
+      JOIN users u ON p.user_id = u.id
+      WHERE pr.document_id = ?
+
+      UNION ALL
+
+      SELECT 
+        'proposal_accepted' as type,
+        h.id,
+        h.user_id as userId,
+        u.name as userName,
+        u.avatar as userAvatar,
+        pr.title as paragraphTitle,
+        h.new_text as proposalText,
+        h.created_at as timestamp
+      FROM history h
+      JOIN paragraphs pr ON h.paragraph_id = pr.id
+      JOIN users u ON h.user_id = u.id
+      WHERE pr.document_id = ? AND h.approval_percentage >= 75
+
+      UNION ALL
+
+      SELECT 
+        'vote_cast' as type,
+        v.id,
+        v.user_id as userId,
+        u.name as userName,
+        u.avatar as userAvatar,
+        pr.title as paragraphTitle,
+        v.vote as voteType,
+        v.created_at as timestamp
+      FROM votes v
+      JOIN proposals p ON v.proposal_id = p.id
+      JOIN paragraphs pr ON p.paragraph_id = pr.id
+      JOIN users u ON v.user_id = u.id
+      WHERE pr.document_id = ?
+
+      UNION ALL
+
+      SELECT 
+        'comment_added' as type,
+        c.id,
+        c.user_id as userId,
+        u.name as userName,
+        u.avatar as userAvatar,
+        pr.title as paragraphTitle,
+        c.text as commentText,
+        c.created_at as timestamp
+      FROM comments c
+      JOIN proposals p ON c.proposal_id = p.id
+      JOIN paragraphs pr ON p.paragraph_id = pr.id
+      JOIN users u ON c.user_id = u.id
+      WHERE pr.document_id = ?
+
+      ORDER BY timestamp DESC
+      LIMIT 50
+    `;
+
+    db.all(
+      activitiesQuery,
+      [documentId, documentId, documentId, documentId],
+      (err, activities) => {
+        if (err) {
+          console.error('Error fetching activities:', err);
+          return res.status(500).json({ error: 'Failed to fetch activities' });
+        }
+
+        // Transform the data to match frontend expectations
+        const formattedActivities = activities.map(activity => ({
+          id: activity.id,
+          type: activity.type,
+          userId: activity.userId,
+          userName: activity.userName,
+          userAvatar: activity.userAvatar,
+          paragraphTitle: activity.paragraphTitle,
+          proposalText: activity.proposalText,
+          voteType: activity.voteType,
+          commentText: activity.commentText,
+          timestamp: activity.timestamp,
+        }));
+
+        res.json({ activities: formattedActivities });
+      }
+    );
+  });
+});
+
+module.exports = router;
+

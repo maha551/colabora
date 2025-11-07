@@ -1,0 +1,32 @@
+{
+  "name": "colabora-app",
+  "version": "1.0.0",
+  "description": "Collaborative Drafting Software - Full Stack Application",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "nodemon server/index.js",
+    "build": "npm run install:frontend && npm run build:frontend && npm run build:backend",
+    "build:backend": "node --check server/index.js",
+    "build:frontend": "cd client && npm run build",
+    "install:frontend": "cd client && npm install",
+    "dev:full": "concurrently \"npm run dev\" \"npm run dev:frontend\"",
+    "dev:frontend": "cd client && npm run dev"
+  },
+  "keywords": ["collaborative", "drafting", "document", "editing"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "sqlite3": "^5.1.6",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "express-session": "^1.17.3",
+    "body-parser": "^1.20.2",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2",
+    "concurrently": "^8.2.2"
+  }
+}

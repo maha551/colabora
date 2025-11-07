@@ -1,6 +1,7 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { metricsCollector } = require('../middleware/monitoring');
+const { documentValidation } = require('../middleware/validation');
 
 const router = express.Router();
 

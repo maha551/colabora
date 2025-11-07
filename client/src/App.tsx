@@ -584,7 +584,6 @@ export default function App() {
               <TabsTrigger value="discussion" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm">
                 <Edit3 className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden xs:inline">Discussion</span>
-                <span className="xs:hidden">Disc</span>
                 {totalSuggestions > 0 && (
                   <Badge variant="secondary" className="ml-1 text-xs">
                     {totalSuggestions}
@@ -594,7 +593,6 @@ export default function App() {
               <TabsTrigger value="agreed" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm">
                 <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden xs:inline">Agreed</span>
-                <span className="xs:hidden">Done</span>
                 {acceptedSuggestions > 0 && (
                   <Badge variant="default" className="ml-1 bg-green-600 text-xs">
                     {acceptedSuggestions}

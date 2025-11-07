@@ -47,7 +47,7 @@ export function Login({ onLogin }: LoginProps) {
   const loginAsDemo = async (demoEmail: string) => {
     setLoading(true);
     try {
-      const response = await authApi.login(demoEmail, 'password');
+      const response = await authApi.login(demoEmail, 'SecurePass123!');
       // Store token in localStorage
       localStorage.setItem('authToken', response.token);
       onLogin(response.user);

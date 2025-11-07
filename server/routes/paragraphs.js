@@ -15,10 +15,17 @@ const requireAuth = (req, res, next) => {
 const requireDocumentAccess = (req, res, next) => {
   const db = req.app.locals.db;
   const documentId = req.params.documentId;
-  const userId = req.user.id;
+  const userId = req.user ? req.user.id : 'no-user';
+
+  console.log(`Access check for document ${documentId}, user ${userId}`);
+
+  if (!req.user) {
+    console.log('Access denied: No user authenticated');
+    return res.status(401).json({ error: 'Authentication required' });
+  }
 
   const query = `
-    SELECT d.id FROM documents d
+    SELECT d.id, d.owner_id FROM documents d
     LEFT JOIN document_collaborators dc ON d.id = dc.document_id
     WHERE d.id = ? AND (d.owner_id = ? OR dc.user_id = ?)
   `;
@@ -30,9 +37,23 @@ const requireDocumentAccess = (req, res, next) => {
     }
 
     if (!document) {
+      console.log(`Access denied for document ${documentId}: user ${userId} is not owner/collaborator`);
+
+      // Additional debug: check if document exists at all
+      db.get('SELECT id, owner_id FROM documents WHERE id = ?', [documentId], (docErr, docResult) => {
+        if (docErr) {
+          console.error('Error checking if document exists:', docErr);
+        } else if (docResult) {
+          console.log(`Document exists, owned by: ${docResult.owner_id}`);
+        } else {
+          console.log('Document does not exist');
+        }
+      });
+
       return res.status(403).json({ error: 'Access denied to this document' });
     }
 
+    console.log(`Access granted for document ${documentId} to user ${userId}`);
     next();
   });
 };
@@ -315,6 +336,9 @@ router.post('/', requireAuth, requireDocumentAccess, (req, res) => {
   const db = req.app.locals.db;
   const documentId = req.params.documentId;
   const { title, text, order, asSuggestion, headingLevel } = req.body;
+
+  console.log(`Creating paragraph in document ${documentId} for user ${req.user.id}`);
+  console.log('Request body:', { title, text, order, asSuggestion, headingLevel });
 
   const bodyText = (text || '').trim();
   const headingText = title && typeof title === 'string' ? title.trim() : null;

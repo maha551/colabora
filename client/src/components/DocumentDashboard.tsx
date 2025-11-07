@@ -418,7 +418,7 @@ export function DocumentDashboard({
               return (
                 <Card key={doc.id} className="hover:shadow-lg transition-shadow border border-gray-200">
                   <CardHeader className="pb-0">
-                    <CardTitle className="text-lg font-bold text-gray-900 mb-1">
+                    <CardTitle className="text-xl font-bold text-gray-900 mb-1">
                       {doc.title}
                     </CardTitle>
                   </CardHeader>

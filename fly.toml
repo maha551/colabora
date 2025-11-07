@@ -22,6 +22,10 @@ primary_region = "fra"
   auto_extend_size_increment = "1GB"
   auto_extend_size_limit = "10GB"
 
+  # Ensure volume is in Frankfurt, Germany
+  [mounts.regions]
+    fra = { priority = 1 }
+
 # Deployment configuration
 [deploy]
   strategy = "rolling"

@@ -839,27 +839,14 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
                         </div>
                       </div>
 
-                      {/* Proposed Content */}
+                      {/* Proposed Content - Diff View */}
                       <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                        <h4 className="text-sm font-medium text-gray-700 mb-2">Proposed Change</h4>
-                        <div className="space-y-2">
-                          {proposal.currentText && (
-                            <div className="flex items-start gap-2 p-2 bg-red-50 border border-red-200 rounded">
-                              <div className="w-1.5 h-1.5 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
-                              <div className="flex-1">
-                                <div className="text-xs text-red-600 mb-1">Current</div>
-                                <p className="text-sm text-gray-700 line-through">{proposal.currentText}</p>
-                              </div>
-                            </div>
-                          )}
-                          <div className="flex items-start gap-2 p-2 bg-purple-50 border border-purple-200 rounded">
-                            <div className="w-1.5 h-1.5 bg-purple-500 rounded-full mt-2 flex-shrink-0"></div>
-                            <div className="flex-1">
-                              <div className="text-xs text-purple-600 mb-1">Proposed</div>
-                              <p className="text-sm text-gray-900">{proposal.proposedText}</p>
-                            </div>
-                          </div>
-                        </div>
+                        <h4 className="text-sm font-medium text-gray-700 mb-3">Proposed Change</h4>
+                        <DiffViewer
+                          originalText={proposal.currentText || ''}
+                          suggestion1Text={proposal.proposedText}
+                          suggestion1Author={proposal.user.name}
+                        />
                       </div>
 
                       {/* Comments */}

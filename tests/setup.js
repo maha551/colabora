@@ -27,6 +27,16 @@ global.testConfig = {
 
 // Clean up after all tests
 afterAll(async () => {
+  // Shutdown metrics collector to clean up intervals
+  try {
+    const { metricsCollector } = require('../server/middleware/monitoring');
+    if (metricsCollector && typeof metricsCollector.shutdown === 'function') {
+      metricsCollector.shutdown();
+    }
+  } catch (error) {
+    // Ignore errors if metrics collector isn't available
+  }
+
   // Close any open database connections
   const fs = require('fs');
   const path = require('path');

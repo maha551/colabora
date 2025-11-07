@@ -42,7 +42,11 @@ const metrics = {
 class MetricsCollector {
   constructor() {
     this.startTime = Date.now();
-    this.interval = setInterval(() => this.collectSystemMetrics(), 60000); // Every minute
+
+    // Don't start interval in test mode to avoid Jest open handle errors
+    if (process.env.NODE_ENV !== 'test') {
+      this.interval = setInterval(() => this.collectSystemMetrics(), 60000); // Every minute
+    }
   }
 
   // Collect system performance metrics

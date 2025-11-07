@@ -181,6 +181,8 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
   const [loadingAgreed, setLoadingAgreed] = useState(false);
   const [debatedProposals, setDebatedProposals] = useState<any[]>([]);
   const [loadingDebated, setLoadingDebated] = useState(false);
+  const [pendingProposals, setPendingProposals] = useState<any[]>([]);
+  const [loadingPending, setLoadingPending] = useState(false);
   const [lastViewedTimestamps, setLastViewedTimestamps] = useState<Record<string, string>>({});
 
 
@@ -270,6 +272,30 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
     }
   };
 
+  const fetchPendingProposals = async () => {
+    setLoadingPending(true);
+    try {
+      const response = await fetch('/api/pending-votes', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setPendingProposals(data.proposals || []);
+      } else {
+        console.error('Failed to fetch pending proposals:', response.status);
+        setPendingProposals([]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch pending proposals:', error);
+      setPendingProposals([]);
+    } finally {
+      setLoadingPending(false);
+    }
+  };
+
   // Simple placeholder for voting - redirects to document
   const handleVote = async (proposalId: string, documentId: string, paragraphId: string, voteType: 'PRO' | 'NEUTRAL' | 'CONTRA') => {
     // For now, just navigate to the document for voting
@@ -305,6 +331,12 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
     }
   }, [activePanel]);
 
+  useEffect(() => {
+    if (activePanel === 'pending' && pendingProposals.length === 0) {
+      fetchPendingProposals();
+    }
+  }, [activePanel]);
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-4xl mx-auto px-4 py-8">
@@ -313,6 +345,7 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
           <h1 className="text-2xl font-bold text-gray-900">Activity Feed</h1>
           <Button
             onClick={() => {
+              if (activePanel === 'pending') fetchPendingProposals();
               if (activePanel === 'agreed') fetchAgreedVersions();
               if (activePanel === 'debated') fetchDebatedProposals();
             }}
@@ -320,7 +353,7 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
             size="sm"
             className="gap-2"
           >
-            <RefreshCw className={`h-4 w-4 ${(loadingAgreed || loadingDebated) ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-4 w-4 ${(loadingPending || loadingAgreed || loadingDebated) ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
         </div>
@@ -335,6 +368,11 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
           >
             <Clock className="h-4 w-4" />
             Pending Proposals
+            {pendingProposals.length > 0 && (
+              <Badge className="ml-2 bg-blue-600 text-xs">
+                {pendingProposals.length}
+              </Badge>
+            )}
           </Button>
           <Button
             variant={activePanel === 'agreed' ? 'default' : 'outline'}
@@ -368,19 +406,148 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
 
         {/* Content */}
         {activePanel === 'pending' && (
-          <Card className="p-6">
-            <div className="text-center text-gray-500">
-              <Clock className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-              <p className="text-lg font-medium mb-2">Pending Proposals</p>
-              <p className="text-sm">View pending proposals in the main dashboard.</p>
-              <Button
-                onClick={() => window.location.href = '/'}
-                className="mt-4"
-              >
-                Go to Dashboard
-              </Button>
-            </div>
-          </Card>
+          <>
+            {loadingPending ? (
+              <Card className="p-12">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <p className="text-gray-600">Loading pending proposals...</p>
+                </div>
+              </Card>
+            ) : pendingProposals.length === 0 ? (
+              <Card className="p-12">
+                <div className="text-center text-gray-500">
+                  <Clock className="h-12 w-12 mx-auto mb-4 text-blue-400" />
+                  <h3 className="text-lg font-medium mb-2">No Pending Proposals</h3>
+                  <p className="text-sm">
+                    All proposals in your documents have received your vote, or there are no active proposals.
+                  </p>
+                </div>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {pendingProposals.map((proposal) => (
+                  <Card key={proposal.id} className="overflow-hidden hover:shadow-md transition-shadow border-blue-200">
+                    <div className="p-4 space-y-4">
+                      {/* User and Document Info */}
+                      <div className="flex items-start gap-3">
+                        <Avatar className="h-9 w-9 flex-shrink-0 ring-2 ring-blue-100">
+                          <AvatarImage src={proposal.user.avatar} />
+                          <AvatarFallback className="text-xs bg-gradient-to-br from-blue-500 to-purple-600 text-white">
+                            {proposal.user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="text-sm font-medium text-gray-900">
+                              {proposal.user.name} proposed a change
+                            </span>
+                            <Badge
+                              variant={proposal.type === 'TITLE' ? 'default' : 'outline'}
+                              className="text-xs"
+                            >
+                              {proposal.type === 'TITLE' ? '📝 Title' : '📄 Body'}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-2 flex-wrap text-xs text-gray-600">
+                            <Badge
+                              variant="secondary"
+                              className="text-xs font-normal cursor-pointer hover:bg-blue-100 hover:text-blue-700 transition-colors"
+                              onClick={() => onNavigateToDocument(proposal.documentId)}
+                            >
+                              <FileText className="h-3 w-3 mr-1" />
+                              {proposal.documentTitle}
+                            </Badge>
+                            {proposal.paragraphTitle && (
+                              <>
+                                <span className="text-gray-400">•</span>
+                                <span className="font-medium">{proposal.paragraphTitle}</span>
+                              </>
+                            )}
+                            <span className="text-gray-400">•</span>
+                            <span className="text-gray-500">{formatTimestamp(proposal.createdAt)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Proposed Content */}
+                      <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                        <h4 className="text-sm font-medium text-gray-700 mb-2">Proposed Change</h4>
+                        <div className="space-y-2">
+                          {proposal.currentText && (
+                            <div className="flex items-start gap-2 p-2 bg-red-50 border border-red-200 rounded">
+                              <div className="w-1.5 h-1.5 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
+                              <div className="flex-1">
+                                <div className="text-xs text-red-600 mb-1">Current</div>
+                                <p className="text-sm text-gray-700 line-through">{proposal.currentText}</p>
+                              </div>
+                            </div>
+                          )}
+                          <div className="flex items-start gap-2 p-2 bg-blue-50 border border-blue-200 rounded">
+                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
+                            <div className="flex-1">
+                              <div className="text-xs text-blue-600 mb-1">Proposed</div>
+                              <p className="text-sm text-gray-900">{proposal.proposedText}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Voting Section */}
+                      <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                        <h4 className="text-sm font-medium text-gray-700 mb-3">Cast Your Vote</h4>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="flex-1 gap-2 border-green-200 hover:bg-green-50 hover:border-green-300"
+                            onClick={() => handleVote(proposal.id, proposal.documentId, proposal.paragraphId, 'PRO')}
+                          >
+                            <ThumbsUp className="h-4 w-4 text-green-600" />
+                            Support
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="flex-1 gap-2 border-yellow-200 hover:bg-yellow-50 hover:border-yellow-300"
+                            onClick={() => handleVote(proposal.id, proposal.documentId, proposal.paragraphId, 'NEUTRAL')}
+                          >
+                            <Minus className="h-4 w-4 text-yellow-600" />
+                            Neutral
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="flex-1 gap-2 border-red-200 hover:bg-red-50 hover:border-red-300"
+                            onClick={() => handleVote(proposal.id, proposal.documentId, proposal.paragraphId, 'CONTRA')}
+                          >
+                            <ThumbsDown className="h-4 w-4 text-red-600" />
+                            Oppose
+                          </Button>
+                        </div>
+                        <div className="mt-3 text-xs text-gray-600">
+                          Current votes: {proposal.votes.total} of {proposal.totalUsers} participants
+                        </div>
+                      </div>
+
+                      {/* Action Button */}
+                      <div className="flex justify-end">
+                        <Button
+                          size="sm"
+                          onClick={() => onNavigateToDocument(proposal.documentId)}
+                          className="gap-2"
+                        >
+                          <MessageSquare className="h-4 w-4" />
+                          View Full Discussion
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </>
         )}
 
         {activePanel === 'agreed' && (
@@ -630,6 +797,37 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
                           </div>
                         </div>
                       </div>
+
+                      {/* Comments */}
+                      {proposal.comments && proposal.comments.length > 0 && (
+                        <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                          <h4 className="text-sm font-medium text-gray-700 mb-3">Recent Comments</h4>
+                          <div className="space-y-3 max-h-48 overflow-y-auto">
+                            {proposal.comments.slice(0, 5).map((comment) => (
+                              <div key={comment.id} className="flex items-start gap-3 p-3 bg-white border border-gray-200 rounded-lg">
+                                <Avatar className="h-6 w-6 flex-shrink-0">
+                                  <AvatarImage src={comment.user.avatar} />
+                                  <AvatarFallback className="text-xs bg-blue-100 text-blue-700">
+                                    {comment.user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-xs font-medium text-gray-900">{comment.user.name}</span>
+                                    <span className="text-xs text-gray-500">{formatTimestamp(comment.createdAt)}</span>
+                                  </div>
+                                  <p className="text-sm text-gray-700 break-words">{comment.text}</p>
+                                </div>
+                              </div>
+                            ))}
+                            {proposal.comments.length > 5 && (
+                              <div className="text-center text-xs text-gray-500 py-2">
+                                And {proposal.comments.length - 5} more comments...
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Action Button */}
                       <div className="flex justify-end">

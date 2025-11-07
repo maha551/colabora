@@ -129,54 +129,99 @@ async function calculateDebatedProposals(db, documentIds, documents) {
         return reject(err);
       }
 
-      // Calculate debate scores and format results
-      const scoredProposals = rows.map(row => {
-        const debateScore = calculateDebateScore(row);
-        const document = documents.find(d => d.id === row.document_id);
+      if (rows.length === 0) {
+        resolve([]);
+        return;
+      }
 
-        return {
-          id: row.id,
-          debateScore: Math.round(debateScore * 100) / 100, // Round to 2 decimal places
-          commentCount: row.comment_count,
-          controversyScore: row.total_votes > 0 ?
-            Math.round((row.pro_votes / row.total_votes) * (row.contra_votes / row.total_votes) * 400) / 100 : 0,
-          engagement: {
-            comments: row.comment_count,
-            proPercentage: row.total_votes > 0 ? Math.round((row.pro_votes / row.total_votes) * 100) : 0,
-            contraPercentage: row.total_votes > 0 ? Math.round((row.contra_votes / row.total_votes) * 100) : 0,
-            neutralPercentage: row.total_votes > 0 ?
-              Math.round(((row.neutral_votes) / row.total_votes) * 100) : 0,
-          },
-          // Include all existing proposal fields
-          paragraphId: row.paragraph_id,
-          documentId: row.document_id,
-          documentTitle: row.document_title,
-          paragraphTitle: row.paragraph_title,
-          proposedText: row.proposed_text,
-          currentText: row.current_text,
-          type: row.type,
-          headingLevel: row.heading_level,
-          createdAt: row.created_at,
-          user: {
-            id: row.user_id,
-            name: row.user_name,
-            email: row.user_email,
-            avatar: row.user_avatar,
-          },
-          votes: {
-            total: row.total_votes,
-            pro: row.pro_votes,
-            contra: row.contra_votes,
-            neutral: row.neutral_votes,
-          },
-          totalUsers: document ? document.userCount : 1,
-        };
+      // Get proposal IDs for comments query
+      const proposalIds = rows.map(row => row.id);
+      const commentPlaceholders = proposalIds.map(() => '?').join(',');
+
+      // Query for comments
+      const commentsQuery = `
+        SELECT c.proposal_id, c.id, c.user_id, c.text, c.created_at,
+               u.name as user_name, u.avatar as user_avatar
+        FROM comments c
+        JOIN users u ON c.user_id = u.id
+        WHERE c.proposal_id IN (${commentPlaceholders})
+        ORDER BY c.created_at ASC
+      `;
+
+      db.all(commentsQuery, proposalIds, (commentErr, commentRows) => {
+        if (commentErr) {
+          console.error('Error querying comments:', commentErr);
+          return reject(commentErr);
+        }
+
+        // Group comments by proposal_id
+        const commentsByProposal = {};
+        commentRows.forEach(comment => {
+          if (!commentsByProposal[comment.proposal_id]) {
+            commentsByProposal[comment.proposal_id] = [];
+          }
+          commentsByProposal[comment.proposal_id].push({
+            id: comment.id,
+            text: comment.text,
+            createdAt: comment.created_at,
+            user: {
+              id: comment.user_id,
+              name: comment.user_name,
+              avatar: comment.user_avatar,
+            }
+          });
+        });
+
+        // Calculate debate scores and format results
+        const scoredProposals = rows.map(row => {
+          const debateScore = calculateDebateScore(row);
+          const document = documents.find(d => d.id === row.document_id);
+
+          return {
+            id: row.id,
+            debateScore: Math.round(debateScore * 100) / 100, // Round to 2 decimal places
+            commentCount: row.comment_count,
+            controversyScore: row.total_votes > 0 ?
+              Math.round((row.pro_votes / row.total_votes) * (row.contra_votes / row.total_votes) * 400) / 100 : 0,
+            engagement: {
+              comments: row.comment_count,
+              proPercentage: row.total_votes > 0 ? Math.round((row.pro_votes / row.total_votes) * 100) : 0,
+              contraPercentage: row.total_votes > 0 ? Math.round((row.contra_votes / row.total_votes) * 100) : 0,
+              neutralPercentage: row.total_votes > 0 ?
+                Math.round(((row.neutral_votes) / row.total_votes) * 100) : 0,
+            },
+            comments: commentsByProposal[row.id] || [],
+            // Include all existing proposal fields
+            paragraphId: row.paragraph_id,
+            documentId: row.document_id,
+            documentTitle: row.document_title,
+            paragraphTitle: row.paragraph_title,
+            proposedText: row.proposed_text,
+            currentText: row.current_text,
+            type: row.type,
+            headingLevel: row.heading_level,
+            createdAt: row.created_at,
+            user: {
+              id: row.user_id,
+              name: row.user_name,
+              email: row.user_email,
+              avatar: row.user_avatar,
+            },
+            votes: {
+              total: row.total_votes,
+              pro: row.pro_votes,
+              contra: row.contra_votes,
+              neutral: row.neutral_votes,
+            },
+            totalUsers: document ? document.userCount : 1,
+          };
+        });
+
+        // Sort by debate score descending
+        scoredProposals.sort((a, b) => b.debateScore - a.debateScore);
+
+        resolve(scoredProposals);
       });
-
-      // Sort by debate score descending
-      scoredProposals.sort((a, b) => b.debateScore - a.debateScore);
-
-      resolve(scoredProposals);
     });
   });
 }

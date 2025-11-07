@@ -101,13 +101,30 @@ app.use((req, res, next) => {
 
 // Initialize database and start server only after initialization completes
 // Note: Using /data/ for Fly.io persistent storage (survives redeploys)
-const db = new sqlite3.Database('/data/colabora.db', (err) => {
+const fs = require('fs');
+
+// Ensure data directory exists
+const dataDir = '/data';
+const dbPath = path.join(dataDir, 'colabora.db');
+
+try {
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+    console.log('Created data directory:', dataDir);
+  }
+} catch (dirErr) {
+  console.error('Error creating data directory:', dirErr.message);
+  // Continue anyway, might work with existing directory
+}
+
+const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error('Error opening database:', err.message);
+    console.error('Database path:', dbPath);
     process.exit(1);
   }
 
-  console.log('Connected to SQLite database.');
+  console.log('Connected to SQLite database at:', dbPath);
 
   // Make database available to routes
   app.locals.db = db;

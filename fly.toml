@@ -15,6 +15,12 @@ app = "colabora-app"
 [processes]
   app = "npm start"
 
+# Remove complex checks that might cause issues
+# [[services.http_checks]]
+#   interval = "10s"
+#   timeout = "5s"
+#   path = "/health"
+
 [[services]]
   internal_port = 3000
   processes = ["app"]

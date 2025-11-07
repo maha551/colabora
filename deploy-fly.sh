@@ -24,13 +24,22 @@ echo "🔑 Generating secure session secret..."
 SESSION_SECRET=$(openssl rand -base64 32)
 echo "Generated SESSION_SECRET: $SESSION_SECRET"
 
-# Launch app
-echo "📦 Launching app on Fly.io..."
-fly launch --name colabora-app --region lax
+# Check if app already exists
+if fly status &>/dev/null; then
+    echo "📦 App already exists, updating..."
+else
+    echo "📦 Launching new app on Fly.io..."
+    fly launch --name colabora-app --region lax --no-deploy
+fi
 
-# Create persistent volume for database
-echo "💾 Creating persistent volume for database..."
-fly volumes create colabora_data --size 1 --region lax
+# Create persistent volume for database (only if it doesn't exist)
+echo "💾 Checking/creating persistent volume for database..."
+if ! fly volumes list | grep -q colabora_data; then
+    fly volumes create colabora_data --size 1 --region lax
+    echo "✅ Created volume: colabora_data"
+else
+    echo "✅ Volume already exists: colabora_data"
+fi
 
 # Set secrets
 echo "🔒 Setting environment secrets..."

@@ -36,8 +36,11 @@ RUN npm ci --only=production && npm cache clean --force
 COPY --from=builder /app/client/build ./client/build
 COPY --from=builder /app/server ./server
 
-# Set proper permissions for data directory
-RUN chown -R node:node /data
+# Create a script to handle permissions and startup
+RUN echo '#!/bin/sh' > /start.sh && \
+    echo 'chown -R node:node /data 2>/dev/null || true' >> /start.sh && \
+    echo 'exec dumb-init -- "$@"' >> /start.sh && \
+    chmod +x /start.sh
 
 # Switch to non-root user
 USER node
@@ -49,8 +52,5 @@ ENV SESSION_SECRET=colabora-default-secret-change-in-production
 # Expose port
 EXPOSE 3000
 
-# Use dumb-init to handle signals properly
-ENTRYPOINT ["dumb-init", "--"]
-
-# Start the application
-CMD ["npm", "start"]
+# Use our custom start script
+CMD ["/start.sh", "npm", "start"]

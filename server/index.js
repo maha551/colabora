@@ -216,6 +216,46 @@ function initializeDatabaseAndStartServer(db) {
   }, 10000);
 }
 
+// Health check endpoint for Fly.io (always available, even during startup)
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
+
+// Health check endpoint (always available, even during startup)
+app.get('/api/health', (req, res) => {
+  const uptime = process.uptime();
+  const db = req.app.locals.db;
+
+  let status = 'healthy';
+  let dbStatus = 'not_initialized';
+
+  if (db) {
+    try {
+      // Simple synchronous check - don't wait for database
+      dbStatus = 'connected';
+    } catch (error) {
+      dbStatus = 'error';
+      status = 'degraded';
+    }
+  } else {
+    dbStatus = 'initializing';
+    status = 'starting';
+  }
+
+  res.json({
+    status: status,
+    timestamp: new Date().toISOString(),
+    uptime: `${Math.floor(uptime)}s`,
+    database: dbStatus,
+    environment: config.NODE_ENV,
+    version: '1.0.0'
+  });
+});
+
 function startServer() {
   if (serverStarted) {
     return;
@@ -326,45 +366,6 @@ app.get('/api/test', (req, res) => {
   });
 });
 
-// Health check endpoint for Fly.io
-app.get('/health', (req, res) => {
-  res.status(200).json({
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime()
-  });
-});
-
-// Health check endpoint (always available, even during startup)
-app.get('/api/health', (req, res) => {
-  const uptime = process.uptime();
-  const db = req.app.locals.db;
-
-  let status = 'healthy';
-  let dbStatus = 'not_initialized';
-
-  if (db) {
-    try {
-      // Simple synchronous check - don't wait for database
-      dbStatus = 'connected';
-    } catch (error) {
-      dbStatus = 'error';
-      status = 'degraded';
-    }
-  } else {
-    dbStatus = 'initializing';
-    status = 'starting';
-  }
-
-  res.json({
-    status: status,
-    timestamp: new Date().toISOString(),
-    uptime: `${Math.floor(uptime)}s`,
-    database: dbStatus,
-    environment: config.NODE_ENV,
-    version: '1.0.0'
-  });
-});
 
 // Metrics endpoint (admin only)
 app.get('/api/metrics', requireAuth, (req, res) => {

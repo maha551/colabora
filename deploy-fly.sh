@@ -19,10 +19,11 @@ if ! fly auth whoami &> /dev/null; then
     fly auth login
 fi
 
-# Generate secure session secret
-echo "🔑 Generating secure session secret..."
+# Generate secure secrets
+echo "🔑 Generating secure secrets..."
 SESSION_SECRET=$(openssl rand -base64 32)
-echo "Generated SESSION_SECRET: $SESSION_SECRET"
+JWT_SECRET=$(openssl rand -base64 32)
+echo "Generated SESSION_SECRET and JWT_SECRET"
 
 # Check if app already exists
 if fly status &>/dev/null; then
@@ -44,6 +45,7 @@ fi
 # Set secrets
 echo "🔒 Setting environment secrets..."
 fly secrets set SESSION_SECRET="$SESSION_SECRET"
+fly secrets set JWT_SECRET="$JWT_SECRET"
 
 # Deploy
 echo "🚀 Deploying application..."

@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { SuggestionCard } from './SuggestionCard';
 import { HistoryDisplay } from './HistoryDisplay';
+import { DiffViewer } from './DiffViewer';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
-import { FileText, History } from 'lucide-react';
+import { FileText, History, ChevronDown, ChevronUp } from 'lucide-react';
 import { Suggestion, User, VersionHistory } from '../types';
 import { DocumentContext } from '../utils/proposalAdapter';
 import { cn } from './ui/utils';
+import { Card } from './ui/card';
 
 interface ActivityFeedProposalCardProps {
   proposal: Suggestion;
@@ -36,6 +38,7 @@ export function ActivityFeedProposalCard({
   onNavigateToDocument,
 }: ActivityFeedProposalCardProps) {
   const [showHistory, setShowHistory] = useState(false);
+  const [showDiffExpanded, setShowDiffExpanded] = useState(tabType === 'pending'); // Auto-expand for pending
 
   const getTabBadge = () => {
     switch (tabType) {
@@ -103,6 +106,35 @@ export function ActivityFeedProposalCard({
         onComment={(proposalId, text, parentId) => onComment(proposalId, documentContext.documentId, documentContext.paragraphId, text, parentId)}
         originalText={originalText}
       />
+
+      {/* Expanded Diff View for Pending Tab */}
+      {tabType === 'pending' && (
+        <Card className="border border-gray-200 overflow-hidden">
+          <button
+            onClick={() => setShowDiffExpanded(!showDiffExpanded)}
+            className="w-full bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between hover:bg-gray-100 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <h4 className="text-sm font-semibold text-gray-700">Proposed Change</h4>
+              <span className="text-xs text-gray-500">by {proposal.user.name}</span>
+            </div>
+            {showDiffExpanded ? (
+              <ChevronUp className="h-4 w-4 text-gray-500 flex-shrink-0" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-gray-500 flex-shrink-0" />
+            )}
+          </button>
+          {showDiffExpanded && (
+            <div className="p-4 bg-white">
+              <DiffViewer
+                originalText={originalText}
+                suggestion1Text={proposal.text}
+                suggestion1Author={proposal.user.name}
+              />
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* History Display (for Accepted tab) */}
       {tabType === 'accepted' && showHistory && history.length > 0 && (

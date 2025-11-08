@@ -273,23 +273,17 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
         // Use a Set to track which paragraphs we're already fetching to avoid duplicates
         const fetchingHistory = new Set<string>();
         const historyPromises = versions.map(async (version: AgreedVersion) => {
-          // Skip if already fetching or already have history
+          // Check if we already have history (using current state)
+          if (paragraphHistories[version.paragraphId]) {
+            return; // Already have it
+          }
+          
+          // Skip if already fetching
           if (fetchingHistory.has(version.paragraphId)) {
             return;
           }
           
-          // Check if we already have history
-          setParagraphHistories(prev => {
-            if (prev[version.paragraphId]) {
-              return prev; // Already have it
-            }
-            fetchingHistory.add(version.paragraphId);
-            return prev;
-          });
-          
-          if (!fetchingHistory.has(version.paragraphId)) {
-            return; // Already had history
-          }
+          fetchingHistory.add(version.paragraphId);
           
           try {
             // Fetch document to get paragraph history
@@ -319,7 +313,13 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
                     email: h.userEmail || '',
                   },
                 }));
-                setParagraphHistories(prev => ({ ...prev, [version.paragraphId]: history }));
+                setParagraphHistories(prev => {
+                  // Double-check we don't overwrite existing history
+                  if (prev[version.paragraphId]) {
+                    return prev;
+                  }
+                  return { ...prev, [version.paragraphId]: history };
+                });
               }
             }
           } catch (err) {

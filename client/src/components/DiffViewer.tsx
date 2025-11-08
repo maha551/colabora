@@ -1,5 +1,6 @@
 import { Badge } from "./ui/badge";
 import { Card } from "./ui/card";
+import { cn } from "./ui/utils";
 
 interface DiffViewerProps {
   originalText: string;

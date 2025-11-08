@@ -270,7 +270,7 @@ export const authApi = {
     })
   },
 
-  // Register (disabled in demo)
+  // Register
   async register(name: string, email: string, password: string) {
     return unauthenticatedRequest('/api/auth/register', {
       method: 'POST',

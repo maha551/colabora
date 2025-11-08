@@ -138,3 +138,77 @@ export function getOriginalText(proposal: ActivityFeedProposal): string {
   return proposal.currentText || '';
 }
 
+/**
+ * Agreed Version structure from API (from history table)
+ */
+export interface AgreedVersion {
+  id: string;
+  documentId: string;
+  documentTitle: string;
+  paragraphId: string;
+  paragraphTitle?: string;
+  acceptedText: string;
+  previousText: string;
+  approvalPercentage: number;
+  acceptedAt: string;
+  userName: string;
+  userId: string;
+  userAvatar?: string;
+  totalVotes?: number;
+  proVotes?: number;
+  proposalId?: string;
+}
+
+/**
+ * Transforms Agreed Version to SuggestionCard-compatible format
+ * Note: This creates a synthetic proposal from history data
+ */
+export function adaptAgreedVersionToSuggestion(version: AgreedVersion): Suggestion {
+  // Create synthetic votes from vote counts
+  const votes: Vote[] = [];
+  let voteId = 1;
+  
+  if (version.proVotes) {
+    for (let i = 0; i < version.proVotes; i++) {
+      votes.push({
+        id: `agreed-pro-${voteId++}`,
+        proposalId: version.proposalId || version.id,
+        userId: `agreed-user-${voteId}`,
+        vote: 'PRO',
+        createdAt: version.acceptedAt,
+        user: { id: `agreed-user-${voteId}`, name: 'User' },
+      });
+    }
+  }
+
+  return {
+    id: version.proposalId || version.id,
+    paragraphId: version.paragraphId,
+    userId: version.userId,
+    text: version.acceptedText,
+    type: 'BODY', // Default, could be determined from paragraph
+    approved: true,
+    createdAt: version.acceptedAt,
+    updatedAt: version.acceptedAt,
+    user: {
+      id: version.userId,
+      name: version.userName,
+      email: '',
+    },
+    votes: votes,
+    comments: [], // Comments would need to be fetched separately
+  };
+}
+
+/**
+ * Extracts document context from Agreed Version
+ */
+export function extractDocumentContextFromVersion(version: AgreedVersion): DocumentContext {
+  return {
+    documentId: version.documentId,
+    documentTitle: version.documentTitle,
+    paragraphId: version.paragraphId,
+    paragraphTitle: version.paragraphTitle,
+  };
+}
+

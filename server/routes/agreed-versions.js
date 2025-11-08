@@ -92,6 +92,7 @@ router.get('/', requireAuth, async (req, res) => {
         id: `agreed-${row.id}`,
         documentId: row.document_id,
         documentTitle: row.document_title,
+        paragraphId: row.paragraph_id,
         paragraphTitle: row.paragraph_title,
         acceptedText: row.accepted_text,
         previousText: row.previous_text || 'Previous version not available',
@@ -100,6 +101,7 @@ router.get('/', requireAuth, async (req, res) => {
         userName: row.user_name,
         userId: row.user_id,
         userAvatar: row.user_avatar,
+        proposalId: row.proposal_id,
         // Additional metadata
         totalVotes: row.total_votes || 0,
         proVotes: row.pro_votes || 0,

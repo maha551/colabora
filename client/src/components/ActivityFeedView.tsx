@@ -44,7 +44,16 @@ import { DiffViewer } from "./DiffViewer";
 import { VoteProgressBar } from "./VoteProgressBar";
 import { InlineExpandedView } from "./InlineExpandedView";
 import { ActivityFeedProposalCard } from "./ActivityFeedProposalCard";
-import { adaptProposalToSuggestion, extractDocumentContext, getOriginalText, ActivityFeedProposal } from "../utils/proposalAdapter";
+import { 
+  adaptProposalToSuggestion, 
+  extractDocumentContext, 
+  getOriginalText, 
+  ActivityFeedProposal,
+  adaptAgreedVersionToSuggestion,
+  extractDocumentContextFromVersion,
+  AgreedVersion
+} from "../utils/proposalAdapter";
+import { VersionHistory } from "../types";
 
 interface DiffSegment {
   text: string;
@@ -189,8 +198,9 @@ interface ActivityFeedViewProps {
 
 export function ActivityFeedView({ documents, currentUser, onNavigateToDocument, onAddComment }: ActivityFeedViewProps) {
   const [activePanel, setActivePanel] = useState<'agreed' | 'pending' | 'debated'>('agreed');
-  const [agreedVersions, setAgreedVersions] = useState<any[]>([]);
+  const [agreedVersions, setAgreedVersions] = useState<AgreedVersion[]>([]);
   const [loadingAgreed, setLoadingAgreed] = useState(false);
+  const [paragraphHistories, setParagraphHistories] = useState<Record<string, VersionHistory[]>>({});
   const [debatedProposals, setDebatedProposals] = useState<any[]>([]);
   const [loadingDebated, setLoadingDebated] = useState(false);
   const [pendingProposals, setPendingProposals] = useState<any[]>([]);
@@ -201,6 +211,13 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
   const [replyingTo, setReplyingTo] = useState<Record<string, string | null>>({});
   const [replyTexts, setReplyTexts] = useState<Record<string, string>>({});
   const [commentTexts, setCommentTexts] = useState<Record<string, string>>({});
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string>('all');
+  const [pageSize] = useState(20);
+  const [displayedCounts, setDisplayedCounts] = useState({
+    agreed: 20,
+    debated: 20,
+    pending: 20,
+  });
 
 
   // Load last viewed timestamps from localStorage
@@ -252,7 +269,51 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
 
       if (response.ok) {
         const data = await response.json();
-        setAgreedVersions(data.versions || []);
+        const versions = data.versions || [];
+        setAgreedVersions(versions);
+        
+        // Fetch history for each paragraph (we'll optimize this later)
+        const historyPromises = versions.map(async (version: AgreedVersion) => {
+          if (!paragraphHistories[version.paragraphId]) {
+            try {
+              // Fetch document to get paragraph history
+              const docResponse = await fetch(`/api/documents/${version.documentId}`, {
+                headers: {
+                  'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                },
+              });
+              if (docResponse.ok) {
+                const docData = await docResponse.json();
+                const paragraph = docData.document?.paragraphs?.find((p: any) => p.id === version.paragraphId);
+                if (paragraph?.history) {
+                  const history: VersionHistory[] = paragraph.history.map((h: any) => ({
+                    id: h.id,
+                    paragraphId: h.paragraphId || version.paragraphId,
+                    userId: h.userId,
+                    text: h.newText || h.text,
+                    oldText: h.oldText,
+                    proposalId: h.proposalId,
+                    acceptedAt: new Date(h.acceptedAt || h.createdAt),
+                    approvalPercentage: h.approvalPercentage || 0,
+                    type: h.proposalType || h.type || 'BODY',
+                    headingLevel: h.headingLevel,
+                    user: {
+                      id: h.userId,
+                      name: h.userName || '',
+                      email: h.userEmail || '',
+                    },
+                  }));
+                  setParagraphHistories(prev => ({ ...prev, [version.paragraphId]: history }));
+                }
+              }
+            } catch (err) {
+              console.error(`Failed to fetch history for paragraph ${version.paragraphId}:`, err);
+            }
+          }
+        });
+        
+        // Don't await all - let them load in background
+        Promise.all(historyPromises).catch(console.error);
       } else {
         console.error('Failed to fetch agreed versions:', response.status);
         setAgreedVersions([]);
@@ -545,124 +606,47 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
                 </div>
               </Card>
             ) : (
-              <div className="space-y-3">
-                {agreedVersions.map((version) => (
-                  <Card key={version.id} className="overflow-hidden border-green-200 hover:shadow-md transition-all hover:border-green-300 shadow-sm">
-                    {/* Header */}
-                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-3.5 border-b border-green-200">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-green-100 rounded-full">
-                            <CheckCircle2 className="h-5 w-5 text-green-600" />
-                          </div>
-                          <div>
-                            <h3 className="text-lg font-semibold text-green-900">
-                              Proposal Accepted
-                            </h3>
-                            <p className="text-sm text-green-700">
-                              {version.approvalPercentage}% approval • {formatTimestamp(version.acceptedAt)}
-                            </p>
-                          </div>
-                        </div>
-                        <Badge className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 text-xs font-semibold">
-                          {version.approvalPercentage}% Approved
-                        </Badge>
-                      </div>
-                    </div>
+              <div className="space-y-4">
+                {getDisplayedItems(agreedVersions, 'agreed').map((version: AgreedVersion) => {
+                  const adaptedSuggestion = adaptAgreedVersionToSuggestion(version);
+                  const documentContext = extractDocumentContextFromVersion(version);
+                  const originalText = version.previousText;
+                  const allCollaborators = getAllCollaborators(version.documentId);
+                  const history = paragraphHistories[version.paragraphId] || [];
 
-                    {/* Content */}
-                    <div className="p-3.5 space-y-3">
-                      {/* Document and User Info */}
-                      <div className="flex items-center justify-between text-sm text-gray-600">
-                        <div className="flex items-center gap-4">
-                          <Badge
-                            variant="secondary"
-                            className="cursor-pointer hover:bg-blue-100 hover:text-blue-700 transition-colors px-2 py-0.5 text-xs font-medium"
-                            onClick={() => onNavigateToDocument(version.documentId)}
-                          >
-                            <FileText className="h-3 w-3 mr-1" />
-                            {version.documentTitle}
-                          </Badge>
-                          {version.paragraphTitle && (
-                            <>
-                              <span className="text-gray-400">•</span>
-                              <span className="font-medium">{version.paragraphTitle}</span>
-                            </>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span>by</span>
-                          <span className="font-medium">{version.userName}</span>
-                        </div>
-                      </div>
-
-                      {/* Diff Display */}
-                      <div className="border border-gray-200 rounded-lg overflow-hidden">
-                        <div className="bg-gray-50 px-3 py-2 border-b border-gray-200 flex items-center justify-between">
-                          <h4 className="text-sm font-medium text-gray-700">What Changed</h4>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleExpanded(`agreed-${version.id}`)}
-                            className="h-6 w-6 p-0"
-                          >
-                            {expandedItems.has(`agreed-${version.id}`) ? (
-                              <ChevronDown className="h-4 w-4" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </div>
-                        {expandedItems.has(`agreed-${version.id}`) ? (
-                          <div className="p-4 bg-white">
-                            {/* For agreed versions, show the full context in expanded view */}
-                            <div className="space-y-4">
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="p-3 bg-red-50 border border-red-200 rounded">
-                                  <div className="text-xs text-red-600 font-medium mb-2">Previous Version</div>
-                                  <div className="text-sm text-gray-700 whitespace-pre-wrap">{version.previousText}</div>
-                                </div>
-                                <div className="p-3 bg-green-50 border border-green-200 rounded">
-                                  <div className="text-xs text-green-600 font-medium mb-2">Accepted Version</div>
-                                  <div className="text-sm text-gray-900 whitespace-pre-wrap">{version.acceptedText}</div>
-                                </div>
-                              </div>
-                              <div className="text-center">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => toggleExpanded(`agreed-${version.id}`)}
-                                >
-                                  Show Compact Diff
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="p-4 bg-white">
-                            <DiffViewer
-                              originalText={version.previousText}
-                              suggestion1Text={version.acceptedText}
-                              suggestion1Author={version.userName}
-                            />
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Action Button */}
-                      <div className="flex justify-end pt-1">
-                        <Button
-                          size="sm"
-                          onClick={() => onNavigateToDocument(version.documentId)}
-                          className="gap-2 bg-black hover:bg-gray-800 text-white shadow-sm font-medium"
-                        >
-                          <FileText className="h-4 w-4" />
-                          View in Document
-                        </Button>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
+                  return (
+                    <ActivityFeedProposalCard
+                      key={version.id}
+                      proposal={adaptedSuggestion}
+                      documentContext={documentContext}
+                      currentUser={currentUser}
+                      totalUsers={allCollaborators.length}
+                      allCollaborators={allCollaborators}
+                      originalText={originalText}
+                      history={history}
+                      tabType="accepted"
+                      onVote={(proposalId, documentId, paragraphId, voteType) => {
+                        // Voting disabled for accepted proposals
+                        toast.info('This proposal has already been accepted');
+                      }}
+                      onComment={(proposalId, documentId, paragraphId, text, parentId) => 
+                        handleAddComment(proposalId, documentId, paragraphId, text, parentId)
+                      }
+                      onNavigateToDocument={onNavigateToDocument}
+                    />
+                  );
+                })}
+                {hasMore(agreedVersions, 'agreed') && (
+                  <div className="flex justify-center pt-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => loadMore('agreed')}
+                      className="w-full sm:w-auto"
+                    >
+                      Load More ({filterByDocument(agreedVersions).length - displayedCounts.agreed} more)
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </TabsContent>
@@ -686,345 +670,63 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
                 </div>
               </Card>
             ) : (
-              <div className="space-y-3">
-                {debatedProposals.map((proposal, index) => (
-                  <Card key={proposal.id} className="overflow-hidden hover:shadow-md transition-all hover:border-purple-300 border-purple-200 shadow-sm">
-                    {/* Compact Header - Single Line */}
-                    <div className="bg-gradient-to-r from-purple-50 to-violet-50 p-2.5 border-b border-purple-200">
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">#{index + 1}</span>
-                          <TrendingUp className="h-3 w-3 text-purple-600" />
-                          <h3 className="text-base font-semibold text-purple-900">
-                            Most Debated Proposal
-                          </h3>
-                          <span className="text-xs text-purple-700">•</span>
-                          <span className="text-xs text-purple-700">Score: {proposal.debateScore}</span>
-                          <span className="text-xs text-purple-700">•</span>
-                          <span className="text-xs text-purple-700">💬 {proposal.engagement.comments}</span>
-                          {proposal.engagement.proPercentage > 30 && proposal.engagement.contraPercentage > 30 && (
-                            <>
-                              <span className="text-xs text-purple-700">•</span>
-                              <Badge className="bg-orange-100 text-orange-700 border-orange-200 px-1.5 py-0.5 text-xs font-semibold">
-                                ⚖️ Controversial
-                              </Badge>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+              <div className="space-y-4">
+                {getDisplayedItems(debatedProposals, 'debated').map((proposal: any, index: number) => {
+                  // Adjust index for filtered results
+                  const filtered = filterByDocument(debatedProposals);
+                  const actualIndex = filtered.indexOf(proposal);
+                  const adaptedSuggestion = adaptProposalToSuggestion(proposal);
+                  const documentContext = extractDocumentContext(proposal);
+                  const originalText = getOriginalText(proposal);
+                  const allCollaborators = getAllCollaborators(proposal.documentId);
 
-                    {/* Content */}
-                    <div className="p-3 space-y-2.5">
-                      {/* Compact User and Document Info - Single Line */}
-                      <div className="flex items-center gap-2 text-xs text-gray-600 flex-wrap">
-                        <Avatar className="h-6 w-6 flex-shrink-0">
-                          <AvatarImage src={proposal.user.avatar} />
-                          <AvatarFallback className="text-[10px] bg-gradient-to-br from-blue-500 to-purple-600 text-white">
-                            {proposal.user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="font-medium text-gray-900">{proposal.user.name}</span>
-                        <span className="text-gray-400">in</span>
-                        <Badge
-                          variant="secondary"
-                          className="text-xs font-medium cursor-pointer hover:bg-blue-100 hover:text-blue-700 transition-colors px-1.5 py-0 h-5"
-                          onClick={() => onNavigateToDocument(proposal.documentId)}
-                        >
-                          <FileText className="h-3 w-3 mr-1" />
-                          {proposal.documentTitle}
-                        </Badge>
-                        {proposal.paragraphTitle && (
+                  return (
+                    <div key={proposal.id} className="space-y-2">
+                      {/* Debate Ranking Badge */}
+                      <div className="flex items-center gap-2 text-xs text-purple-700">
+                        <span className="font-bold bg-purple-100 px-1.5 py-0.5 rounded">#{actualIndex + 1}</span>
+                        <TrendingUp className="h-3 w-3" />
+                        <span>Score: {proposal.debateScore}</span>
+                        {proposal.engagement?.proPercentage > 30 && proposal.engagement?.contraPercentage > 30 && (
                           <>
-                            <span className="text-gray-400">•</span>
-                            <span className="font-medium">{proposal.paragraphTitle}</span>
+                            <span>•</span>
+                            <Badge className="bg-orange-100 text-orange-700 border-orange-200 px-1.5 py-0.5 text-xs font-semibold">
+                              ⚖️ Controversial
+                            </Badge>
                           </>
                         )}
-                        <span className="text-gray-400">•</span>
-                        <span className="text-gray-500">{formatTimestamp(proposal.createdAt)}</span>
-                        <Badge
-                          variant={proposal.type === 'TITLE' ? 'default' : 'outline'}
-                          className="text-xs h-5 ml-auto"
-                        >
-                          {proposal.type === 'TITLE' ? '📝 Title' : '📄 Body'}
-                        </Badge>
                       </div>
-
-                      {/* Proposed Change - Collapsible by Default */}
-                      <div className="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-                        <button
-                          onClick={() => toggleExpanded(`debated-${proposal.id}`)}
-                          className="w-full bg-gray-50 px-3 py-2 border-b border-gray-200 flex items-center justify-between hover:bg-gray-100 transition-colors"
-                        >
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <h4 className="text-sm font-semibold text-gray-700">Proposed Change</h4>
-                            <span className="text-xs text-gray-500">by {proposal.user.name}</span>
-                            {!expandedItems.has(`debated-${proposal.id}`) && (
-                              <span className="text-xs text-gray-500 truncate">
-                                • {getChangePreview(proposal.currentText || '', proposal.proposedText)}
-                              </span>
-                            )}
-                          </div>
-                          {expandedItems.has(`debated-${proposal.id}`) ? (
-                            <ChevronDown className="h-4 w-4 text-gray-500 flex-shrink-0" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4 text-gray-500 flex-shrink-0" />
-                          )}
-                        </button>
-                        {expandedItems.has(`debated-${proposal.id}`) && (
-                          <div className="p-0">
-                            <InlineExpandedView
-                              proposal={proposal}
-                              currentUser={currentUser}
-                              totalUsers={proposal.totalUsers || 0}
-                              onVote={handleVote}
-                              onClose={() => toggleExpanded(`debated-${proposal.id}`)}
-                            />
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Threaded Comments with Replies */}
-                      <div className="border-t border-gray-100 pt-2">
-                        <div className="flex items-center gap-2 mb-2">
-                          <MessageSquare className="h-3 w-3 text-gray-500" />
-                          <span className="text-xs font-medium text-gray-700">
-                            Discussion ({proposal.comments?.length || 0})
-                          </span>
-                        </div>
-                        
-                        {proposal.comments && proposal.comments.length > 0 ? (
-                          <div className="space-y-2">
-                            {(expandedComments.has(proposal.id) 
-                              ? getTopLevelComments(proposal.comments)
-                              : getTopLevelComments(proposal.comments).slice(0, 2)
-                            ).map((comment) => {
-                              const replies = getReplies(proposal.comments, comment.id);
-                              const isReplyingToComment = replyingTo[proposal.id] === comment.id;
-                              
-                              return (
-                                <div key={comment.id} className="space-y-1.5">
-                                  {/* Top-level Comment */}
-                                  <div className="flex gap-2 p-2 rounded bg-muted/30">
-                                    <Avatar className="h-6 w-6 flex-shrink-0">
-                                      <AvatarImage src={comment.user?.avatar} />
-                                      <AvatarFallback className="bg-primary/10 text-[10px]">
-                                        {comment.user?.name?.split(' ').map((n: string) => n[0]).join('') || 'U'}
-                                      </AvatarFallback>
-                                    </Avatar>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-1.5 mb-0.5">
-                                        <span className="text-xs font-medium text-foreground">{comment.user?.name || 'Unknown'}</span>
-                                        <span className="text-xs text-muted-foreground">• {formatTimestamp(comment.createdAt)}</span>
-                                      </div>
-                                      <p className="text-xs text-foreground leading-relaxed break-words">{comment.text}</p>
-                                      <button
-                                        onClick={() => startReply(proposal.id, comment.id)}
-                                        className="text-xs text-gray-600 hover:text-gray-900 transition-colors mt-1"
-                                      >
-                                        Reply
-                                      </button>
-                                    </div>
-                                  </div>
-
-                                  {/* Replies - Indented with visual hierarchy */}
-                                  {replies.length > 0 && (
-                                    <div className="ml-8 pl-3 border-l-2 border-gray-200 space-y-1.5">
-                                      {replies.map((reply) => {
-                                        const isReplyingToReply = replyingTo[proposal.id] === reply.id;
-                                        const nestedReplies = getReplies(proposal.comments, reply.id);
-                                        
-                                        return (
-                                          <div key={reply.id} className="space-y-1.5">
-                                            <div className="flex gap-2 p-1.5 rounded bg-background/50">
-                                              <Avatar className="h-5 w-5 flex-shrink-0">
-                                                <AvatarImage src={reply.user?.avatar} />
-                                                <AvatarFallback className="bg-primary/10 text-[9px]">
-                                                  {reply.user?.name?.split(' ').map((n: string) => n[0]).join('') || 'U'}
-                                                </AvatarFallback>
-                                              </Avatar>
-                                              <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-1.5 mb-0.5">
-                                                  <span className="text-xs font-medium text-foreground">{reply.user?.name || 'Unknown'}</span>
-                                                  <span className="text-xs text-muted-foreground">• {formatTimestamp(reply.createdAt)}</span>
-                                                </div>
-                                                <p className="text-xs text-muted-foreground leading-relaxed break-words">{reply.text}</p>
-                                                <button
-                                                  onClick={() => startReply(proposal.id, reply.id)}
-                                                  className="text-xs text-gray-500 hover:text-gray-700 transition-colors mt-0.5"
-                                                >
-                                                  Reply
-                                                </button>
-                                              </div>
-                                            </div>
-
-                                            {/* Nested Replies (replies to replies) */}
-                                            {nestedReplies.length > 0 && (
-                                              <div className="ml-6 pl-3 border-l-2 border-gray-300 space-y-1">
-                                                {nestedReplies.map((nestedReply) => (
-                                                  <div key={nestedReply.id} className="flex gap-2 p-1 rounded bg-background/30">
-                                                    <Avatar className="h-4 w-4 flex-shrink-0">
-                                                      <AvatarFallback className="bg-primary/10 text-[8px]">
-                                                        {nestedReply.user?.name?.split(' ').map((n: string) => n[0]).join('') || 'U'}
-                                                      </AvatarFallback>
-                                                    </Avatar>
-                                                    <div className="flex-1 min-w-0">
-                                                      <div className="flex items-center gap-1 mb-0.5">
-                                                        <span className="text-xs font-medium text-foreground">{nestedReply.user?.name || 'Unknown'}</span>
-                                                        <span className="text-xs text-muted-foreground">• {formatTimestamp(nestedReply.createdAt)}</span>
-                                                      </div>
-                                                      <p className="text-xs text-muted-foreground leading-relaxed break-words">{nestedReply.text}</p>
-                                                      <button
-                                                        onClick={() => startReply(proposal.id, nestedReply.id)}
-                                                        className="text-xs text-gray-400 hover:text-gray-600 transition-colors mt-0.5"
-                                                      >
-                                                        Reply
-                                                      </button>
-                                                    </div>
-                                                  </div>
-                                                ))}
-                                              </div>
-                                            )}
-
-                                            {/* Reply Form for this reply */}
-                                            {isReplyingToReply && (
-                                              <div className="ml-6 pl-3 border-l-2 border-gray-300 space-y-1.5 animate-in slide-in-from-top-2 duration-200">
-                                                <Textarea
-                                                  placeholder={`Reply to ${reply.user?.name || 'comment'}...`}
-                                                  value={replyTexts[proposal.id] || ''}
-                                                  onChange={(e) => setReplyTexts(prev => ({ ...prev, [proposal.id]: e.target.value }))}
-                                                  onKeyDown={(e) => {
-                                                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                                                      e.preventDefault();
-                                                      handleAddComment(proposal.id, proposal.documentId, proposal.paragraphId, replyTexts[proposal.id] || '', reply.id);
-                                                    }
-                                                    if (e.key === 'Escape') {
-                                                      cancelReply(proposal.id);
-                                                    }
-                                                  }}
-                                                  className="min-h-[50px] text-xs"
-                                                  autoFocus
-                                                />
-                                                <div className="flex gap-2 justify-end">
-                                                  <button
-                                                    onClick={() => cancelReply(proposal.id)}
-                                                    className="text-xs text-gray-600 hover:text-gray-900 transition-colors px-2 py-1"
-                                                  >
-                                                    Cancel
-                                                  </button>
-                                                  <button
-                                                    onClick={() => handleAddComment(proposal.id, proposal.documentId, proposal.paragraphId, replyTexts[proposal.id] || '', reply.id)}
-                                                    disabled={!replyTexts[proposal.id]?.trim()}
-                                                    className="text-xs bg-black text-white hover:bg-gray-800 transition-colors px-3 py-1 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                                                  >
-                                                    Send
-                                                  </button>
-                                                </div>
-                                              </div>
-                                            )}
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  )}
-
-                                  {/* Reply Form for top-level comment */}
-                                  {isReplyingToComment && (
-                                    <div className="ml-8 pl-3 border-l-2 border-gray-200 space-y-1.5 animate-in slide-in-from-top-2 duration-200">
-                                      <Textarea
-                                        placeholder={`Reply to ${comment.user?.name || 'comment'}...`}
-                                        value={replyTexts[proposal.id] || ''}
-                                        onChange={(e) => setReplyTexts(prev => ({ ...prev, [proposal.id]: e.target.value }))}
-                                        onKeyDown={(e) => {
-                                          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                                            e.preventDefault();
-                                            handleAddComment(proposal.id, proposal.documentId, proposal.paragraphId, replyTexts[proposal.id] || '', comment.id);
-                                          }
-                                          if (e.key === 'Escape') {
-                                            cancelReply(proposal.id);
-                                          }
-                                        }}
-                                        className="min-h-[60px] text-xs"
-                                        autoFocus
-                                      />
-                                      <div className="flex gap-2 justify-end">
-                                        <button
-                                          onClick={() => cancelReply(proposal.id)}
-                                          className="text-xs text-gray-600 hover:text-gray-900 transition-colors px-2 py-1"
-                                        >
-                                          Cancel
-                                        </button>
-                                        <button
-                                          onClick={() => handleAddComment(proposal.id, proposal.documentId, proposal.paragraphId, replyTexts[proposal.id] || '', comment.id)}
-                                          disabled={!replyTexts[proposal.id]?.trim()}
-                                          className="text-xs bg-black text-white hover:bg-gray-800 transition-colors px-3 py-1 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                          Send
-                                        </button>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                            
-                            {getTopLevelComments(proposal.comments).length > 2 && (
-                              <button
-                                onClick={() => toggleCommentsExpanded(proposal.id)}
-                                className="text-xs text-gray-600 hover:text-gray-900 transition-colors py-1"
-                              >
-                                {expandedComments.has(proposal.id) 
-                                  ? `Show less` 
-                                  : `Show ${getTopLevelComments(proposal.comments).length - 2} more comments`
-                                }
-                              </button>
-                            )}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-gray-500 italic py-2">No comments yet. Be the first to share your thoughts!</p>
-                        )}
-
-                        {/* New Comment Form */}
-                        <div className="mt-3 pt-2 border-t border-gray-100 space-y-1.5">
-                          <Textarea
-                            placeholder="Write a comment..."
-                            value={commentTexts[proposal.id] || ''}
-                            onChange={(e) => setCommentTexts(prev => ({ ...prev, [proposal.id]: e.target.value }))}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                                e.preventDefault();
-                                handleAddComment(proposal.id, proposal.documentId, proposal.paragraphId, commentTexts[proposal.id] || '');
-                              }
-                            }}
-                            className="min-h-[60px] text-xs"
-                          />
-                          <div className="flex justify-between items-center">
-                            <p className="text-xs text-gray-500">Tip: Press Cmd/Ctrl+Enter to post</p>
-                            <button
-                              onClick={() => handleAddComment(proposal.id, proposal.documentId, proposal.paragraphId, commentTexts[proposal.id] || '')}
-                              disabled={!commentTexts[proposal.id]?.trim()}
-                              className="text-xs bg-black text-white hover:bg-gray-800 transition-colors px-3 py-1 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              Post Comment
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Action Button */}
-                      <div className="flex justify-end pt-1 border-t border-gray-100">
-                        <Button
-                          size="sm"
-                          onClick={() => onNavigateToDocument(proposal.documentId)}
-                          className="gap-2 bg-black hover:bg-gray-800 text-white shadow-sm font-medium h-8 text-xs"
-                        >
-                          <MessageSquare className="h-3 w-3" />
-                          Join Discussion
-                        </Button>
-                      </div>
+                      
+                      <ActivityFeedProposalCard
+                        proposal={adaptedSuggestion}
+                        documentContext={documentContext}
+                        currentUser={currentUser}
+                        totalUsers={proposal.totalUsers || 1}
+                        allCollaborators={allCollaborators}
+                        originalText={originalText}
+                        tabType="debated"
+                        onVote={(proposalId, documentId, paragraphId, voteType) => 
+                          handleVote(proposalId, documentId, paragraphId, voteType)
+                        }
+                        onComment={(proposalId, documentId, paragraphId, text, parentId) => 
+                          handleAddComment(proposalId, documentId, paragraphId, text, parentId)
+                        }
+                        onNavigateToDocument={onNavigateToDocument}
+                      />
                     </div>
-                  </Card>
-                ))}
+                  );
+                })}
+                {hasMore(debatedProposals, 'debated') && (
+                  <div className="flex justify-center pt-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => loadMore('debated')}
+                      className="w-full sm:w-auto"
+                    >
+                      Load More ({filterByDocument(debatedProposals).length - displayedCounts.debated} more)
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </TabsContent>
@@ -1049,7 +751,7 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
               </Card>
             ) : (
               <div className="space-y-4">
-                {pendingProposals.map((proposal: any) => {
+                {getDisplayedItems(pendingProposals, 'pending').map((proposal: any) => {
                   const adaptedSuggestion = adaptProposalToSuggestion(proposal);
                   const documentContext = extractDocumentContext(proposal);
                   const originalText = getOriginalText(proposal);
@@ -1075,6 +777,17 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
                     />
                   );
                 })}
+                {hasMore(pendingProposals, 'pending') && (
+                  <div className="flex justify-center pt-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => loadMore('pending')}
+                      className="w-full sm:w-auto"
+                    >
+                      Load More ({filterByDocument(pendingProposals).length - displayedCounts.pending} more)
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </TabsContent>

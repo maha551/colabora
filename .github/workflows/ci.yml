@@ -138,17 +138,46 @@ jobs:
       run: npm ci
 
     - name: Start application
+      env:
+        NODE_ENV: test
+        DATABASE_URL: ./test-ci.db
+        SESSION_SECRET: test-session-secret-change-in-production
+        JWT_SECRET: test-jwt-secret-change-in-production
+        FRONTEND_URL: http://localhost:3001
+        LOG_LEVEL: debug
       run: |
+        echo "Starting application with environment variables..."
+        echo "NODE_ENV: $NODE_ENV"
+        echo "DATABASE_URL: $DATABASE_URL"
         npm start &
-        # Wait for app to be ready
-        for i in {1..30}; do
+        APP_PID=$!
+
+        # Wait for app to be ready (increased timeout)
+        for i in {1..60}; do
           if curl -f http://localhost:3000/api/health >/dev/null 2>&1; then
             echo "App is ready!"
             break
           fi
-          echo "Waiting for app to be ready... ($i/30)"
+          echo "Waiting for app to be ready... ($i/60)"
           sleep 2
         done
+
+        # Check if app is still running
+        if ! kill -0 $APP_PID 2>/dev/null; then
+          echo "Application failed to start. Checking logs..."
+          ps aux | grep node
+          exit 1
+        fi
+
+        # Final health check
+        if ! curl -f http://localhost:3000/api/health >/dev/null 2>&1; then
+          echo "Application health check failed after startup"
+          echo "Checking application logs..."
+          # Try to get some logs if available
+          tail -n 50 server.log 2>/dev/null || echo "No server.log found"
+          kill $APP_PID 2>/dev/null || true
+          exit 1
+        fi
 
     - name: Run security tests
       run: npm run test:security

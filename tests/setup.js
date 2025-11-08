@@ -37,16 +37,44 @@ afterAll(async () => {
     // Ignore errors if metrics collector isn't available
   }
 
-  // Close any open database connections
+  // Wait a bit for any pending operations
+  await new Promise(resolve => setTimeout(resolve, 100));
+
+  // Force close any remaining database connections
+  try {
+    const sqlite3 = require('sqlite3');
+    // This helps ensure SQLite connections are released
+    if (global.gc) {
+      global.gc();
+    }
+  } catch (error) {
+    // Ignore GC errors
+  }
+
+  // Close any open database connections and cleanup
   const fs = require('fs');
   const path = require('path');
   const dbPath = process.env.DATABASE_URL;
 
-  try {
-    if (fs.existsSync(dbPath)) {
-      fs.unlinkSync(dbPath);
+  // Try multiple times to delete the database file
+  let attempts = 0;
+  const maxAttempts = 5;
+
+  while (attempts < maxAttempts) {
+    try {
+      if (fs.existsSync(dbPath)) {
+        fs.unlinkSync(dbPath);
+        console.log('Successfully cleaned up test database');
+      }
+      break;
+    } catch (error) {
+      attempts++;
+      if (attempts >= maxAttempts) {
+        console.warn('Could not clean up test database after', maxAttempts, 'attempts:', error.message);
+      } else {
+        // Wait a bit and try again
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
     }
-  } catch (error) {
-    console.warn('Could not clean up test database:', error.message);
   }
 });

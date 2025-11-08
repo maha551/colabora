@@ -21,7 +21,9 @@ import {
   FileText,
   Expand,
   ArrowUpDown,
-  TrendingUp
+  TrendingUp,
+  ChevronDown,
+  ChevronRight
 } from "lucide-react";
 import { cn } from "./ui/utils";
 import {
@@ -34,6 +36,7 @@ import {
 import { toast } from "sonner";
 import { DiffViewer } from "./DiffViewer";
 import { VoteProgressBar } from "./VoteProgressBar";
+import { InlineExpandedView } from "./InlineExpandedView";
 
 interface DiffSegment {
   text: string;
@@ -184,6 +187,7 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
   const [pendingProposals, setPendingProposals] = useState<any[]>([]);
   const [loadingPending, setLoadingPending] = useState(false);
   const [lastViewedTimestamps, setLastViewedTimestamps] = useState<Record<string, string>>({});
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
 
   // Load last viewed timestamps from localStorage
@@ -294,6 +298,19 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
     } finally {
       setLoadingPending(false);
     }
+  };
+
+  // Toggle expanded state for diff views
+  const toggleExpanded = (itemId: string) => {
+    setExpandedItems(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(itemId)) {
+        newSet.delete(itemId);
+      } else {
+        newSet.add(itemId);
+      }
+      return newSet;
+    });
   };
 
   // Simple placeholder for voting - redirects to document
@@ -572,26 +589,41 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
                         </div>
 
                         {/* Proposed Content */}
-                        <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                          <h4 className="text-sm font-medium text-gray-700 mb-2">Proposed Change</h4>
-                          <div className="space-y-2">
-                            {proposal.currentText && (
-                              <div className="flex items-start gap-2 p-2 bg-red-50 border border-red-200 rounded">
-                                <div className="w-1.5 h-1.5 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
-                                <div className="flex-1">
-                                  <div className="text-xs text-red-600 mb-1">Current</div>
-                                  <p className="text-sm text-gray-700 line-through">{proposal.currentText}</p>
-                                </div>
-                              </div>
-                            )}
-                            <div className="flex items-start gap-2 p-2 bg-blue-50 border border-blue-200 rounded">
-                              <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
-                              <div className="flex-1">
-                                <div className="text-xs text-blue-600 mb-1">Proposed</div>
-                                <p className="text-sm text-gray-900">{proposal.proposedText}</p>
-                              </div>
-                            </div>
+                        <div className="border border-gray-200 rounded-lg overflow-hidden">
+                          <div className="bg-gray-50 px-3 py-2 border-b border-gray-200 flex items-center justify-between">
+                            <h4 className="text-sm font-medium text-gray-700">Proposed Change</h4>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => toggleExpanded(`pending-${proposal.id}`)}
+                              className="h-6 w-6 p-0"
+                            >
+                              {expandedItems.has(`pending-${proposal.id}`) ? (
+                                <ChevronDown className="h-4 w-4" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4" />
+                              )}
+                            </Button>
                           </div>
+                          {expandedItems.has(`pending-${proposal.id}`) ? (
+                            <div className="p-0">
+                              <InlineExpandedView
+                                proposal={proposal}
+                                currentUser={currentUser}
+                                totalUsers={proposal.totalUsers}
+                                onVote={handleVote}
+                                onClose={() => toggleExpanded(`pending-${proposal.id}`)}
+                              />
+                            </div>
+                          ) : (
+                            <div className="p-4 bg-white">
+                              <DiffViewer
+                                originalText={proposal.currentText || ''}
+                                suggestion1Text={proposal.proposedText}
+                                suggestion1Author={proposal.user.name}
+                              />
+                            </div>
+                          )}
                         </div>
 
                         {/* Action Button */}
@@ -687,34 +719,55 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
 
                       {/* Diff Display */}
                       <div className="border border-gray-200 rounded-lg overflow-hidden">
-                        <div className="bg-gray-50 px-3 py-2 border-b border-gray-200">
+                        <div className="bg-gray-50 px-3 py-2 border-b border-gray-200 flex items-center justify-between">
                           <h4 className="text-sm font-medium text-gray-700">What Changed</h4>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleExpanded(`agreed-${version.id}`)}
+                            className="h-6 w-6 p-0"
+                          >
+                            {expandedItems.has(`agreed-${version.id}`) ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )}
+                          </Button>
                         </div>
-                        <div className="p-4 bg-white">
-                          <div className="space-y-3">
-                            {/* Previous Version */}
-                            <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded">
-                              <div className="flex-shrink-0 mt-0.5">
-                                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                        {expandedItems.has(`agreed-${version.id}`) ? (
+                          <div className="p-4 bg-white">
+                            {/* For agreed versions, show the full context in expanded view */}
+                            <div className="space-y-4">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="p-3 bg-red-50 border border-red-200 rounded">
+                                  <div className="text-xs text-red-600 font-medium mb-2">Previous Version</div>
+                                  <div className="text-sm text-gray-700 whitespace-pre-wrap">{version.previousText}</div>
+                                </div>
+                                <div className="p-3 bg-green-50 border border-green-200 rounded">
+                                  <div className="text-xs text-green-600 font-medium mb-2">Accepted Version</div>
+                                  <div className="text-sm text-gray-900 whitespace-pre-wrap">{version.acceptedText}</div>
+                                </div>
                               </div>
-                              <div className="flex-1">
-                                <div className="text-xs text-red-600 font-medium mb-1">Previous Version</div>
-                                <p className="text-sm text-gray-700 line-through">{version.previousText}</p>
-                              </div>
-                            </div>
-
-                            {/* New Version */}
-                            <div className="flex items-start gap-3 p-3 bg-green-50 border border-green-200 rounded">
-                              <div className="flex-shrink-0 mt-0.5">
-                                <CheckCircle2 className="w-4 h-4 text-green-600" />
-                              </div>
-                              <div className="flex-1">
-                                <div className="text-xs text-green-600 font-medium mb-1">New Accepted Version</div>
-                                <p className="text-sm text-gray-900">{version.acceptedText}</p>
+                              <div className="text-center">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => toggleExpanded(`agreed-${version.id}`)}
+                                >
+                                  Show Compact Diff
+                                </Button>
                               </div>
                             </div>
                           </div>
-                        </div>
+                        ) : (
+                          <div className="p-4 bg-white">
+                            <DiffViewer
+                              originalText={version.previousText}
+                              suggestion1Text={version.acceptedText}
+                              suggestion1Author={version.userName}
+                            />
+                          </div>
+                        )}
                       </div>
 
                       {/* Action Button */}
@@ -840,13 +893,41 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
                       </div>
 
                       {/* Proposed Content - Diff View */}
-                      <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                        <h4 className="text-sm font-medium text-gray-700 mb-3">Proposed Change</h4>
-                        <DiffViewer
-                          originalText={proposal.currentText || ''}
-                          suggestion1Text={proposal.proposedText}
-                          suggestion1Author={proposal.user.name}
-                        />
+                      <div className="border border-gray-200 rounded-lg overflow-hidden">
+                        <div className="bg-gray-50 px-3 py-2 border-b border-gray-200 flex items-center justify-between">
+                          <h4 className="text-sm font-medium text-gray-700">Proposed Change</h4>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleExpanded(`debated-${proposal.id}`)}
+                            className="h-6 w-6 p-0"
+                          >
+                            {expandedItems.has(`debated-${proposal.id}`) ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                        {expandedItems.has(`debated-${proposal.id}`) ? (
+                          <div className="p-0">
+                            <InlineExpandedView
+                              proposal={proposal}
+                              currentUser={currentUser}
+                              totalUsers={proposal.totalUsers || 0}
+                              onVote={handleVote}
+                              onClose={() => toggleExpanded(`debated-${proposal.id}`)}
+                            />
+                          </div>
+                        ) : (
+                          <div className="p-4 bg-white">
+                            <DiffViewer
+                              originalText={proposal.currentText || ''}
+                              suggestion1Text={proposal.proposedText}
+                              suggestion1Author={proposal.user.name}
+                            />
+                          </div>
+                        )}
                       </div>
 
                       {/* Comments */}

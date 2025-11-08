@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState } from "react";
 import { User, Document } from "../types";
 import { Card } from "./ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
@@ -40,9 +40,6 @@ import {
   TabsTrigger,
 } from "./ui/tabs";
 import { toast } from "sonner";
-import { DiffViewer } from "./DiffViewer";
-import { VoteProgressBar } from "./VoteProgressBar";
-import { InlineExpandedView } from "./InlineExpandedView";
 import { ActivityFeedProposalCard } from "./ActivityFeedProposalCard";
 import { 
   adaptProposalToSuggestion, 
@@ -273,42 +270,62 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
         setAgreedVersions(versions);
         
         // Fetch history for each paragraph (we'll optimize this later)
+        // Use a Set to track which paragraphs we're already fetching to avoid duplicates
+        const fetchingHistory = new Set<string>();
         const historyPromises = versions.map(async (version: AgreedVersion) => {
-          if (!paragraphHistories[version.paragraphId]) {
-            try {
-              // Fetch document to get paragraph history
-              const docResponse = await fetch(`/api/documents/${version.documentId}`, {
-                headers: {
-                  'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-                },
-              });
-              if (docResponse.ok) {
-                const docData = await docResponse.json();
-                const paragraph = docData.document?.paragraphs?.find((p: any) => p.id === version.paragraphId);
-                if (paragraph?.history) {
-                  const history: VersionHistory[] = paragraph.history.map((h: any) => ({
-                    id: h.id,
-                    paragraphId: h.paragraphId || version.paragraphId,
-                    userId: h.userId,
-                    text: h.newText || h.text,
-                    oldText: h.oldText,
-                    proposalId: h.proposalId,
-                    acceptedAt: new Date(h.acceptedAt || h.createdAt),
-                    approvalPercentage: h.approvalPercentage || 0,
-                    type: h.proposalType || h.type || 'BODY',
-                    headingLevel: h.headingLevel,
-                    user: {
-                      id: h.userId,
-                      name: h.userName || '',
-                      email: h.userEmail || '',
-                    },
-                  }));
-                  setParagraphHistories(prev => ({ ...prev, [version.paragraphId]: history }));
-                }
-              }
-            } catch (err) {
-              console.error(`Failed to fetch history for paragraph ${version.paragraphId}:`, err);
+          // Skip if already fetching or already have history
+          if (fetchingHistory.has(version.paragraphId)) {
+            return;
+          }
+          
+          // Check if we already have history
+          setParagraphHistories(prev => {
+            if (prev[version.paragraphId]) {
+              return prev; // Already have it
             }
+            fetchingHistory.add(version.paragraphId);
+            return prev;
+          });
+          
+          if (!fetchingHistory.has(version.paragraphId)) {
+            return; // Already had history
+          }
+          
+          try {
+            // Fetch document to get paragraph history
+            const docResponse = await fetch(`/api/documents/${version.documentId}`, {
+              headers: {
+                'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+              },
+            });
+            if (docResponse.ok) {
+              const docData = await docResponse.json();
+              const paragraph = docData.document?.paragraphs?.find((p: any) => p.id === version.paragraphId);
+              if (paragraph?.history) {
+                const history: VersionHistory[] = paragraph.history.map((h: any) => ({
+                  id: h.id,
+                  paragraphId: h.paragraphId || version.paragraphId,
+                  userId: h.userId,
+                  text: h.newText || h.text,
+                  oldText: h.oldText,
+                  proposalId: h.proposalId,
+                  acceptedAt: new Date(h.acceptedAt || h.createdAt),
+                  approvalPercentage: h.approvalPercentage || 0,
+                  type: h.proposalType || h.type || 'BODY',
+                  headingLevel: h.headingLevel,
+                  user: {
+                    id: h.userId,
+                    name: h.userName || '',
+                    email: h.userEmail || '',
+                  },
+                }));
+                setParagraphHistories(prev => ({ ...prev, [version.paragraphId]: history }));
+              }
+            }
+          } catch (err) {
+            console.error(`Failed to fetch history for paragraph ${version.paragraphId}:`, err);
+          } finally {
+            fetchingHistory.delete(version.paragraphId);
           }
         });
         
@@ -568,8 +585,34 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-4xl mx-auto px-4 py-8">
+        {/* Document Filter */}
+        <div className="mb-4 flex items-center gap-3">
+          <Filter className="h-4 w-4 text-gray-500" />
+          <Select value={selectedDocumentId} onValueChange={setSelectedDocumentId}>
+            <SelectTrigger className="w-[200px] bg-white">
+              <SelectValue placeholder="Filter by document" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Documents</SelectItem>
+              {documents.map(doc => (
+                <SelectItem key={doc.id} value={doc.id}>
+                  {doc.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         {/* Navigation Tabs */}
-        <Tabs value={activePanel} onValueChange={(value) => setActivePanel(value as 'agreed' | 'pending' | 'debated')}>
+        <Tabs value={activePanel} onValueChange={(value) => {
+          setActivePanel(value as 'agreed' | 'pending' | 'debated');
+          // Reset displayed count when switching tabs
+          setDisplayedCounts({
+            agreed: pageSize,
+            debated: pageSize,
+            pending: pageSize,
+          });
+        }}>
           <div className="flex justify-center mb-6 px-4">
             <TabsList className="w-full sm:w-auto bg-white border border-gray-200 shadow-sm">
               <TabsTrigger 

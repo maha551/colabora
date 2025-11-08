@@ -366,30 +366,30 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
         {/* Navigation Tabs */}
         <Tabs value={activePanel} onValueChange={(value) => setActivePanel(value as 'agreed' | 'pending' | 'debated')}>
           <div className="flex justify-center mb-6 px-4">
-            <TabsList className="w-full sm:w-auto">
-              <TabsTrigger value="agreed" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm">
+            <TabsList className="w-full sm:w-auto bg-white border border-gray-200 shadow-sm">
+              <TabsTrigger value="agreed" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm data-[state=active]:bg-green-50 data-[state=active]:text-green-700 data-[state=active]:border-b-2 data-[state=active]:border-green-600 data-[state=active]:font-semibold transition-all">
                 <CheckCircle2 className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden xs:inline">Accepted</span>
                 {agreedVersions.length > 0 && (
-                  <Badge variant="default" className="ml-1 bg-green-600 text-xs">
+                  <Badge variant="default" className="ml-1 bg-green-600 text-white text-xs px-1.5 py-0.5 font-medium">
                     {agreedVersions.length}
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="debated" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm">
+              <TabsTrigger value="debated" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm data-[state=active]:bg-purple-50 data-[state=active]:text-purple-700 data-[state=active]:border-b-2 data-[state=active]:border-purple-600 data-[state=active]:font-semibold transition-all">
                 <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden xs:inline">Discussed</span>
                 {debatedProposals.length > 0 && (
-                  <Badge variant="secondary" className="ml-1 text-xs">
+                  <Badge variant="secondary" className="ml-1 bg-gray-100 text-gray-700 text-xs px-1.5 py-0.5 font-medium">
                     {debatedProposals.length}
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="pending" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm">
+              <TabsTrigger value="pending" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:font-semibold transition-all">
                 <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden xs:inline">Pending</span>
                 {pendingProposals.length > 0 && (
-                  <Badge variant="secondary" className="ml-1 text-xs">
+                  <Badge variant="secondary" className="ml-1 bg-gray-100 text-gray-700 text-xs px-1.5 py-0.5 font-medium">
                     {pendingProposals.length}
                   </Badge>
                 )}
@@ -418,11 +418,11 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
                 </div>
               </Card>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {agreedVersions.map((version) => (
-                  <Card key={version.id} className="overflow-hidden border-green-200 hover:shadow-md transition-shadow">
+                  <Card key={version.id} className="overflow-hidden border-green-200 hover:shadow-md transition-all hover:border-green-300 shadow-sm">
                     {/* Header */}
-                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 border-b border-green-200">
+                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-3.5 border-b border-green-200">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <div className="p-2 bg-green-100 rounded-full">
@@ -437,20 +437,20 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
                             </p>
                           </div>
                         </div>
-                        <Badge className="bg-green-600 hover:bg-green-700 text-white">
+                        <Badge className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 text-xs font-semibold">
                           {version.approvalPercentage}% Approved
                         </Badge>
                       </div>
                     </div>
 
                     {/* Content */}
-                    <div className="p-4 space-y-4">
+                    <div className="p-3.5 space-y-3">
                       {/* Document and User Info */}
                       <div className="flex items-center justify-between text-sm text-gray-600">
                         <div className="flex items-center gap-4">
                           <Badge
                             variant="secondary"
-                            className="cursor-pointer hover:bg-blue-100 hover:text-blue-700 transition-colors"
+                            className="cursor-pointer hover:bg-blue-100 hover:text-blue-700 transition-colors px-2 py-0.5 text-xs font-medium"
                             onClick={() => onNavigateToDocument(version.documentId)}
                           >
                             <FileText className="h-3 w-3 mr-1" />
@@ -523,12 +523,11 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
                       </div>
 
                       {/* Action Button */}
-                      <div className="flex justify-end">
+                      <div className="flex justify-end pt-1">
                         <Button
-                          variant="outline"
                           size="sm"
                           onClick={() => onNavigateToDocument(version.documentId)}
-                          className="gap-2"
+                          className="gap-2 bg-black hover:bg-gray-800 text-white shadow-sm font-medium"
                         >
                           <FileText className="h-4 w-4" />
                           View in Document
@@ -560,11 +559,11 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
                 </div>
               </Card>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {debatedProposals.map((proposal, index) => (
-                  <Card key={proposal.id} className="overflow-hidden hover:shadow-md transition-shadow border-purple-200">
+                  <Card key={proposal.id} className="overflow-hidden hover:shadow-md transition-all hover:border-purple-300 border-purple-200 shadow-sm">
                     {/* Header with ranking */}
-                    <div className="bg-gradient-to-r from-purple-50 to-violet-50 p-4 border-b border-purple-200">
+                    <div className="bg-gradient-to-r from-purple-50 to-violet-50 p-3.5 border-b border-purple-200">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <div className="flex items-center gap-2">
@@ -587,11 +586,11 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
                         </div>
                         <div className="flex items-center gap-2">
                           {proposal.engagement.proPercentage > 30 && proposal.engagement.contraPercentage > 30 && (
-                            <Badge className="bg-orange-100 text-orange-700 border-orange-200">
+                            <Badge className="bg-orange-100 text-orange-700 border-orange-200 px-2 py-1 text-xs font-semibold">
                               ⚖️ Controversial
                             </Badge>
                           )}
-                          <Badge className="bg-purple-100 text-purple-700">
+                          <Badge className="bg-purple-100 text-purple-700 px-2 py-1 text-xs font-semibold">
                             💬 {proposal.engagement.comments} comments
                           </Badge>
                         </div>
@@ -599,7 +598,7 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
                     </div>
 
                     {/* Content */}
-                    <div className="p-4 space-y-4">
+                    <div className="p-3.5 space-y-3">
                       {/* User and Document Info */}
                       <div className="flex items-start gap-3">
                         <Avatar className="h-9 w-9 flex-shrink-0 ring-2 ring-purple-100">
@@ -624,7 +623,7 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
                           <div className="flex items-center gap-2 flex-wrap text-xs text-gray-600">
                             <Badge
                               variant="secondary"
-                              className="text-xs font-normal cursor-pointer hover:bg-blue-100 hover:text-blue-700 transition-colors"
+                              className="text-xs font-medium cursor-pointer hover:bg-blue-100 hover:text-blue-700 transition-colors px-2 py-0.5"
                               onClick={() => onNavigateToDocument(proposal.documentId)}
                             >
                               <FileText className="h-3 w-3 mr-1" />
@@ -642,10 +641,10 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
                         </div>
                       </div>
 
-                      {/* Proposed Content - Diff View */}
-                      <div className="border border-gray-200 rounded-lg overflow-hidden">
+                        {/* Proposed Content - Diff View */}
+                      <div className="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
                         <div className="bg-gray-50 px-3 py-2 border-b border-gray-200 flex items-center justify-between">
-                          <h4 className="text-sm font-medium text-gray-700">Proposed Change</h4>
+                          <h4 className="text-sm font-semibold text-gray-700">Proposed Change</h4>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -729,11 +728,11 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
                       )}
 
                       {/* Action Button */}
-                      <div className="flex justify-end">
+                      <div className="flex justify-end pt-1">
                         <Button
                           size="sm"
                           onClick={() => onNavigateToDocument(proposal.documentId)}
-                          className="gap-2"
+                          className="gap-2 bg-black hover:bg-gray-800 text-white shadow-sm font-medium"
                         >
                           <MessageSquare className="h-4 w-4" />
                           Join Discussion
@@ -765,7 +764,7 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
                 </div>
               </Card>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {pendingProposals.map((proposal) => {
                   const proCount = proposal.votes.pro;
                   const neutralCount = proposal.votes.neutral;
@@ -779,7 +778,7 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
                   const notVotedPercentage = proposal.totalUsers > 0 ? (notVotedCount / proposal.totalUsers) * 100 : 0;
 
                   return (
-                    <Card key={proposal.id} className="overflow-hidden hover:shadow-md transition-shadow border-blue-200">
+                    <Card key={proposal.id} className="overflow-hidden hover:shadow-md transition-shadow border-blue-200 shadow-sm">
                       {/* Vote Status Bar at the very top */}
                       <div
                         className="flex h-3 w-full overflow-hidden cursor-pointer border-b"
@@ -836,7 +835,7 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
                         )}
                       </div>
 
-                      <div className="p-4 space-y-4">
+                      <div className="p-3.5 space-y-3">
                         {/* Compact Header with inline vote buttons */}
                         <div className="flex items-start justify-between gap-4 mb-3">
                           <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -954,7 +953,7 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
                           <Button
                             size="sm"
                             onClick={() => onNavigateToDocument(proposal.documentId)}
-                            className="gap-2"
+                            className="gap-2 bg-black hover:bg-gray-800 text-white shadow-sm font-medium"
                           >
                             <MessageSquare className="h-4 w-4" />
                             View Full Discussion

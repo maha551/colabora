@@ -225,9 +225,9 @@ export function DocumentDashboard({
           </div>
 
           {/* Filters and Sorting */}
-          <div className="flex items-center gap-3 mb-4">
-            <div className="flex items-center gap-2 flex-1">
-              <Filter className="h-4 w-4 text-gray-500" />
+          <div className="flex items-center gap-3 mb-4 bg-white rounded-lg px-3 py-2.5 border border-gray-200 shadow-sm">
+            <div className="flex items-center gap-3 flex-1">
+              <Filter className="h-4 w-4 text-gray-500 flex-shrink-0" />
               <Select value={roleFilter} onValueChange={setRoleFilter}>
                 <SelectTrigger className="w-[180px] h-9">
                   <SelectValue placeholder="Filter by role" />
@@ -239,7 +239,7 @@ export function DocumentDashboard({
                 </SelectContent>
               </Select>
 
-              <ArrowUpDown className="h-4 w-4 text-gray-500 ml-2" />
+              <ArrowUpDown className="h-4 w-4 text-gray-500 flex-shrink-0" />
               <Select value={sortBy} onValueChange={setSortBy}>
                 <SelectTrigger className="w-[180px] h-9">
                   <SelectValue placeholder="Sort by" />
@@ -256,7 +256,10 @@ export function DocumentDashboard({
 
           {/* Create Document Button or Form */}
           {!isCreateDialogOpen ? (
-            <div style={{ width: '100%', height: '48px', backgroundColor: '#000', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }} onClick={() => setIsCreateDialogOpen(true)}>
+            <div 
+              className="w-full h-12 bg-black text-white flex items-center justify-center gap-2 rounded-lg cursor-pointer font-medium hover:bg-gray-900 transition-colors shadow-sm hover:shadow-md"
+              onClick={() => setIsCreateDialogOpen(true)}
+            >
               <Plus className="h-4 w-4" />
               New Document
             </div>
@@ -418,21 +421,22 @@ export function DocumentDashboard({
               return (
                 <div
                   key={doc.id}
-                  className="bg-white border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-sm transition-all cursor-pointer group"
+                  className="bg-white border border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 hover:shadow-sm transition-all cursor-pointer group relative"
                   onClick={() => {
                     console.log('Button clicked for document:', doc.title);
                     onSelectDocument(doc);
                   }}
                 >
-                  <div className="flex items-center justify-between px-4 py-3 gap-4">
+                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-transparent group-hover:bg-gray-300 rounded-l-lg transition-colors"></div>
+                  <div className="flex items-center justify-between px-4 py-2.5 gap-4">
                     {/* Left side - Title and metadata */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-1">
-                        <h3 className="text-base font-semibold text-gray-900 truncate group-hover:text-black">
+                        <h3 className="text-base font-semibold text-gray-900 truncate group-hover:text-gray-950">
                           {doc.title}
                         </h3>
                       </div>
-                      <div className="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
+                      <div className="flex items-center gap-3 text-xs text-gray-500 flex-wrap leading-relaxed">
                         {/* Created By */}
                         <div className="flex items-center gap-1.5">
                           <Avatar className="h-4 w-4">
@@ -443,12 +447,18 @@ export function DocumentDashboard({
                           <span>{doc.owner.name}</span>
                         </div>
 
+                        {/* Separator */}
+                        <span className="text-gray-300">•</span>
+
                         {/* Collaborators */}
                         {totalCollaborators > 0 && (
-                          <div className="flex items-center gap-1.5">
-                            <Users className="h-3 w-3 text-gray-400" />
-                            <span>{totalCollaborators} collab{totalCollaborators !== 1 ? 's' : ''}</span>
-                          </div>
+                          <>
+                            <div className="flex items-center gap-1.5">
+                              <Users className="h-3 w-3 text-gray-400" />
+                              <span>{totalCollaborators} collab{totalCollaborators !== 1 ? 's' : ''}</span>
+                            </div>
+                            <span className="text-gray-300">•</span>
+                          </>
                         )}
 
                         {/* Modified Date */}
@@ -457,12 +467,17 @@ export function DocumentDashboard({
                           <span>Modified {formatDate(doc.updatedAt)}</span>
                         </div>
 
+                        <span className="text-gray-300">•</span>
+
                         {/* Sections and Suggestions */}
                         <div className="flex items-center gap-1.5">
                           <FileText className="h-3 w-3 text-gray-400" />
                           <span>{doc.paragraphs.length} sections</span>
                           {totalSuggestions > 0 && (
-                            <span className="text-gray-400">• {totalSuggestions} suggestions</span>
+                            <>
+                              <span className="text-gray-300">•</span>
+                              <span>{totalSuggestions} suggestions</span>
+                            </>
                           )}
                         </div>
                       </div>
@@ -471,7 +486,7 @@ export function DocumentDashboard({
                     {/* Right side - Action button */}
                     <div className="flex-shrink-0">
                       <div
-                        className="px-4 py-1.5 bg-black text-white text-sm font-medium rounded-md hover:bg-gray-800 transition-colors whitespace-nowrap"
+                        className="px-4 py-1.5 bg-black text-white text-sm font-medium rounded-md hover:bg-gray-800 transition-colors whitespace-nowrap shadow-sm"
                         onClick={(e) => {
                           e.stopPropagation();
                           onSelectDocument(doc);

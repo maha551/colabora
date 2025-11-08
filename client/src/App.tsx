@@ -26,6 +26,7 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [currentView, setCurrentView] = useState<'documents' | 'activity' | 'document' | 'profile'>('documents');
   const [documentLoadKey, setDocumentLoadKey] = useState<number>(Date.now());
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 
   // Helper function to map proposals to suggestions for backward compatibility
   const mapDocumentWithSuggestions = (document: any): Document | null => {
@@ -521,6 +522,8 @@ export default function App() {
           currentView === 'documents' ? 'Documents' :
           undefined
         }
+        showCreateButton={currentView === 'documents'}
+        onCreateDocument={() => setIsCreateDialogOpen(true)}
       />
 
       {/* Main Content */}
@@ -532,6 +535,8 @@ export default function App() {
           onCreateDocument={handleCreateDocument}
           onDeleteDocument={handleDeleteDocument}
           loading={loading}
+          isCreateDialogOpen={isCreateDialogOpen}
+          onSetCreateDialogOpen={setIsCreateDialogOpen}
         />
       )}
 

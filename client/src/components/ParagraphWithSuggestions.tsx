@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Paragraph, User, HeadingLevel, Document } from "../types";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
@@ -96,6 +96,22 @@ export function ParagraphWithSuggestions({
   const [showDiscussionArea, setShowDiscussionArea] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [selectedSuggestions, setSelectedSuggestions] = useState(() => [] as string[]);
+  const [isLandscape, setIsLandscape] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth > window.innerHeight;
+    }
+    return true;
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsLandscape(window.innerWidth > window.innerHeight);
+    };
+    
+    handleResize(); // Set initial value
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const historyEntries = paragraph.history || [];
   const historyCount = historyEntries.length;
@@ -400,7 +416,8 @@ export function ParagraphWithSuggestions({
             </div>
             <div
               className={cn(
-                "flex flex-col md:flex-row portrait:flex-col landscape:flex-row items-center gap-2 md:gap-1 transition-all duration-150",
+                "flex items-center transition-all duration-150",
+                isLandscape ? "flex-row gap-1" : "flex-col gap-2",
                 showDiscussionArea || showHistory || isHovered
                   ? "opacity-100 translate-y-0"
                   : "pointer-events-none opacity-0 -translate-y-0.5"

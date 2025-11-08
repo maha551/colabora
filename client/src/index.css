@@ -479,6 +479,20 @@
     }
   }
 
+  /* Aspect-ratio responsive flex direction */
+  .flex-responsive-aspect {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--spacing) * 2);
+  }
+
+  @media (orientation: landscape) {
+    .flex-responsive-aspect {
+      flex-direction: row;
+      gap: calc(var(--spacing) * 1);
+    }
+  }
+
   .-mx-1 {
     margin-inline: calc(var(--spacing) * -1);
   }

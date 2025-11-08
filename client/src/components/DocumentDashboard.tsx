@@ -206,7 +206,7 @@ export function DocumentDashboard({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="max-w-5xl mx-auto px-4 py-6">
         {/* Search and New Document Button */}
         <div className="mb-8">
           <div className="flex items-center justify-between gap-4 mb-4">
@@ -388,7 +388,7 @@ export function DocumentDashboard({
           )}
         </div>
 
-        {/* Documents Grid */}
+        {/* Documents List */}
         {filteredDocuments.length === 0 ? (
           <div className="text-center py-16">
             <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />
@@ -409,90 +409,79 @@ export function DocumentDashboard({
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="space-y-2">
             {console.log('Rendering documents:', filteredDocuments.length)}
             {filteredDocuments.map((doc) => {
               const totalCollaborators = doc.collaborators.length;
               const totalSuggestions = doc.paragraphs.reduce((acc, p) => acc + p.proposals.length, 0);
 
               return (
-                <Card key={doc.id} className="hover:shadow-lg transition-shadow border border-gray-200">
-                  <CardHeader className="pb-0">
-                    <CardTitle className="text-xl font-bold text-gray-900 mb-1">
-                      {doc.title}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3 pt-0">
-                    {/* Meta information - responsive layout */}
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm">
-                      {/* Creator and Collaborators */}
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <div
+                  key={doc.id}
+                  className="bg-white border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-sm transition-all cursor-pointer group"
+                  onClick={() => {
+                    console.log('Button clicked for document:', doc.title);
+                    onSelectDocument(doc);
+                  }}
+                >
+                  <div className="flex items-center justify-between px-4 py-3 gap-4">
+                    {/* Left side - Title and metadata */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-1">
+                        <h3 className="text-base font-semibold text-gray-900 truncate group-hover:text-black">
+                          {doc.title}
+                        </h3>
+                      </div>
+                      <div className="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
                         {/* Created By */}
-                        <div className="flex items-center gap-2">
-                          <span className="text-gray-500 text-xs sm:text-sm">Created by</span>
-                          <Avatar className="h-5 w-5 sm:h-6 sm:w-6">
-                            <AvatarFallback className="text-xs bg-gray-200 text-gray-700">
+                        <div className="flex items-center gap-1.5">
+                          <Avatar className="h-4 w-4">
+                            <AvatarFallback className="text-[10px] bg-gray-200 text-gray-700">
                               {doc.owner.name.split(' ').map(n => n[0]).join('')}
                             </AvatarFallback>
                           </Avatar>
-                          <span className="text-gray-900 text-xs sm:text-sm">{doc.owner.name}</span>
+                          <span>{doc.owner.name}</span>
                         </div>
 
                         {/* Collaborators */}
-                        <div className="flex items-center gap-2">
-                          <Users className="h-3 w-3 sm:h-4 sm:w-4 text-gray-500" />
-                          <div className="flex items-center -space-x-1 sm:-space-x-2">
-                            {doc.collaborators.slice(0, 2).map((collaborator) => (
-                              <Avatar key={collaborator.id} className="h-6 w-6 sm:h-8 sm:w-8 border-2 border-white">
-                                <AvatarFallback className="text-xs bg-gray-200 text-gray-700">
-                                  {collaborator.user.name.split(' ').map(n => n[0]).join('')}
-                                </AvatarFallback>
-                              </Avatar>
-                            ))}
-                            {totalCollaborators > 2 && (
-                              <Avatar className="h-6 w-6 sm:h-8 sm:w-8 border-2 border-white">
-                                <AvatarFallback className="text-xs bg-gray-200 text-gray-700">
-                                  +{totalCollaborators - 2}
-                                </AvatarFallback>
-                              </Avatar>
-                            )}
+                        {totalCollaborators > 0 && (
+                          <div className="flex items-center gap-1.5">
+                            <Users className="h-3 w-3 text-gray-400" />
+                            <span>{totalCollaborators} collab{totalCollaborators !== 1 ? 's' : ''}</span>
                           </div>
-                          <span className="text-gray-700 text-xs sm:text-sm">
-                            {totalCollaborators} collab{totalCollaborators !== 1 ? 's' : ''}
-                          </span>
-                        </div>
-                      </div>
+                        )}
 
-                      {/* Modified Date and Stats */}
-                      <div className="flex items-center gap-3 sm:gap-4">
                         {/* Modified Date */}
-                        <div className="flex items-center gap-2 text-gray-700">
-                          <Clock className="h-4 w-4 text-gray-500" />
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="h-3 w-3 text-gray-400" />
                           <span>Modified {formatDate(doc.updatedAt)}</span>
                         </div>
 
                         {/* Sections and Suggestions */}
-                        <div className="flex items-center gap-2 text-gray-700">
-                          <FileText className="h-4 w-4 text-gray-500" />
-                          <span>{doc.paragraphs.length} sections/{totalSuggestions} Suggestions</span>
+                        <div className="flex items-center gap-1.5">
+                          <FileText className="h-3 w-3 text-gray-400" />
+                          <span>{doc.paragraphs.length} sections</span>
+                          {totalSuggestions > 0 && (
+                            <span className="text-gray-400">• {totalSuggestions} suggestions</span>
+                          )}
                         </div>
                       </div>
                     </div>
-                  </CardContent>
 
-                  {/* Open Button - Outside CardContent */}
-                  <div className="px-6 pb-6">
-                    <div
-                      style={{ width: '100%', height: '48px', backgroundColor: '#000', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}
-                      onClick={() => {
-                        console.log('Button clicked for document:', doc.title);
-                        onSelectDocument(doc);
-                      }}
-                    >
-                      Open Document
+                    {/* Right side - Action button */}
+                    <div className="flex-shrink-0">
+                      <div
+                        className="px-4 py-1.5 bg-black text-white text-sm font-medium rounded-md hover:bg-gray-800 transition-colors whitespace-nowrap"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectDocument(doc);
+                        }}
+                      >
+                        Open
+                      </div>
                     </div>
                   </div>
-                </Card>
+                </div>
               );
             })}
           </div>

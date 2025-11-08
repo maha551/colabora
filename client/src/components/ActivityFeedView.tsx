@@ -363,11 +363,6 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Activity Feed</h1>
-        </div>
-
         {/* Navigation Tabs */}
         <Tabs value={activePanel} onValueChange={(value) => setActivePanel(value as 'agreed' | 'pending' | 'debated')}>
           <div className="flex justify-center mb-6 px-4">

@@ -7,6 +7,7 @@ import { Checkbox } from "./ui/checkbox";
 import { Progress } from "./ui/progress";
 import { ThumbsUp, ThumbsDown, MessageSquare, CheckCircle2, Users } from "lucide-react";
 import { Textarea } from "./ui/textarea";
+import { DiffViewer } from "./DiffViewer";
 import { useState } from "react";
 import { cn } from "./ui/utils";
 import {

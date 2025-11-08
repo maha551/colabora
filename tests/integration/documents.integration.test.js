@@ -227,10 +227,10 @@ describe('Documents API Integration Tests', () => {
         .set('Authorization', `Bearer ${authToken}`)
         .expect(200);
 
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBeGreaterThan(0);
+      expect(Array.isArray(response.body.proposals)).toBe(true);
+      expect(response.body.proposals.length).toBeGreaterThan(0);
 
-      const ourProposal = response.body.find(p => p.id === testProposalId);
+      const ourProposal = response.body.proposals.find(p => p.id === testProposalId);
       expect(ourProposal).toBeDefined();
     });
 
@@ -268,7 +268,7 @@ describe('Documents API Integration Tests', () => {
       };
 
       const response = await request(server)
-        .post(`/api/documents/${testDocumentId}/paragraphs/paragraphId/proposals/proposalId/comments`)
+        .post(`/api/documents/${testDocumentId}/paragraphs/${testParagraphId}/proposals/${testProposalId}/comments`)
         .set('Authorization', `Bearer ${authToken}`)
         .send(commentData)
         .expect(201);

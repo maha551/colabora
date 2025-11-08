@@ -30,7 +30,7 @@ const config = {
 
   // CORS Configuration
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:3001',
-  ALLOWED_ORIGINS: (process.env.ALLOWED_ORIGINS || 'http://localhost:3001').split(','),
+  ALLOWED_ORIGINS: (process.env.ALLOWED_ORIGINS || 'http://localhost:3001,https://colabora-fresh.fly.dev').split(','),
 
   // Logging
   LOG_LEVEL: process.env.LOG_LEVEL || 'info',

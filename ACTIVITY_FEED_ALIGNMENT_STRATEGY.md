@@ -144,23 +144,48 @@ interface ActivityFeedProposalCardProps {
 
 **Goal:** Customize SuggestionCard display per tab while reusing core component.
 
-**Accepted Tab:**
-- Show SuggestionCard with accepted badge
-- Highlight approved proposals
-- Show acceptance date and percentage
-- Link to document for full context
+**All three tabs will use `SuggestionCard` with tab-specific customizations:**
 
-**Discussed Tab:**
-- Show SuggestionCard with engagement metrics
-- Highlight controversial proposals (mixed votes)
-- Show comment count prominently
-- Emphasize discussion thread
+#### 1. **Accepted Tab** (Latest Agreed)
+- **Purpose:** Show proposals that have been accepted/approved
+- **Data Source:** Proposals with `approved: true` or `approvalPercentage >= 75%`
+- **Display:**
+  - Show SuggestionCard with green "Accepted" badge
+  - Highlight approved proposals with success styling
+  - Show acceptance date and approval percentage prominently
+  - Show who accepted and when
+  - Link to document for full context
+  - Voting disabled (already accepted)
+  - Comments enabled (for post-acceptance discussion)
 
-**Pending Tab:**
-- Show SuggestionCard with vote pending indicator
-- Highlight proposals needing user's vote
-- Show vote progress clearly
-- Make voting actions prominent
+#### 2. **Discussed Tab** (Most Discussed)
+- **Purpose:** Show proposals with active discussion/debate
+- **Data Source:** Proposals sorted by comment count + vote diversity
+- **Display:**
+  - Show SuggestionCard with "Hot Discussion" badge
+  - Highlight controversial proposals (mixed votes, high engagement)
+  - Show comment count prominently in header
+  - Show vote distribution (shows why it's debated)
+  - Emphasize discussion thread (auto-expand comments)
+  - Voting enabled (still open for debate)
+  - Comments enabled (active discussion)
+
+#### 3. **Pending Tab** (Vote Pending)
+- **Purpose:** Show proposals waiting for votes (especially user's vote)
+- **Data Source:** Proposals where user hasn't voted OR proposals needing more votes
+- **Display:**
+  - Show SuggestionCard with "Vote Pending" badge
+  - Highlight proposals needing user's vote (if applicable)
+  - Show vote progress clearly (how many have voted)
+  - Show "Your vote needed" indicator
+  - Make voting actions prominent (call-to-action styling)
+  - Comments enabled (can discuss before voting)
+
+**Key Point:** All three tabs reuse the same `SuggestionCard` component, just with different:
+- Badges and styling
+- Default expanded/collapsed states
+- Emphasis on different features (voting vs comments)
+- Sorting and filtering logic
 
 ### Phase 4: Unified Action Handlers
 
@@ -285,9 +310,18 @@ interface ActivityFeedProposalCardProps {
 
 ### Phase 4: Polish & Optimization (Week 2-3)
 1. ✅ Optimize data loading
-2. ✅ Add loading states
+2. ✅ Add loading states for infinite scroll
 3. ✅ Improve error handling
 4. ✅ Performance testing
+5. ✅ Add document filter UI
+6. ✅ Test filtering across all tabs
+
+### Phase 5: Real-time Updates (Future)
+1. ✅ Set up WebSocket connection
+2. ✅ Subscribe to proposal updates
+3. ✅ Update proposals in real-time
+4. ✅ Show notification badges
+5. ✅ Handle connection errors gracefully
 
 ---
 
@@ -459,10 +493,44 @@ API → ActivityFeedView → ProposalAdapter → ActivityFeedProposalCard → Su
 
 ---
 
+## Tab Structure Clarification
+
+### Current Tabs (All Will Use SuggestionCard)
+
+1. **"Accepted" Tab** (`agreed`)
+   - Shows proposals that have been accepted
+   - Sorted by acceptance date (newest first)
+   - Uses SuggestionCard with accepted styling
+   - Voting disabled, comments enabled
+
+2. **"Discussed" Tab** (`debated`)
+   - Shows proposals with active discussion
+   - Sorted by engagement (comments + vote diversity)
+   - Uses SuggestionCard with discussion emphasis
+   - Voting enabled, comments auto-expanded
+
+3. **"Pending" Tab** (`pending`)
+   - Shows proposals waiting for votes
+   - Prioritizes proposals user hasn't voted on
+   - Uses SuggestionCard with voting emphasis
+   - Voting enabled, prominent CTA
+
+**All tabs will:**
+- ✅ Use the same `SuggestionCard` component
+- ✅ Show document context (which document/paragraph)
+- ✅ Support threaded comments
+- ✅ Support voting (where applicable)
+- ✅ Link to full document view
+- ✅ Filter by document (new feature)
+- ✅ Infinite scroll loading
+- ✅ Real-time updates via WebSocket (future)
+
+---
+
 ## Next Steps
 
-1. **Review and approve this strategy**
-2. **Clarify open questions**
+1. ✅ **Review and approve this strategy** - DONE
+2. ✅ **Clarify open questions** - DONE
 3. **Create detailed implementation plan**
 4. **Start with Phase 1 (Foundation)**
 5. **Iterate based on feedback**

@@ -553,6 +553,16 @@ export default function App() {
               toast.error('Failed to load document');
             }
           }}
+          onAddComment={async (proposalId, documentId, paragraphId, text, parentId) => {
+            try {
+              await commentsApi.addComment(documentId, paragraphId, proposalId, { text, parentId });
+              toast.success(parentId ? 'Reply added' : 'Comment added');
+            } catch (error) {
+              console.error('Failed to add comment:', error);
+              toast.error(parentId ? 'Failed to add reply' : 'Failed to add comment');
+              throw error;
+            }
+          }}
         />
       )}
 

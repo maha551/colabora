@@ -182,9 +182,10 @@ interface ActivityFeedViewProps {
   documents: Document[];
   currentUser: User;
   onNavigateToDocument: (documentId: string) => void;
+  onAddComment?: (proposalId: string, documentId: string, paragraphId: string, text: string, parentId?: string) => Promise<void>;
 }
 
-export function ActivityFeedView({ documents, currentUser, onNavigateToDocument }: ActivityFeedViewProps) {
+export function ActivityFeedView({ documents, currentUser, onNavigateToDocument, onAddComment }: ActivityFeedViewProps) {
   const [activePanel, setActivePanel] = useState<'agreed' | 'pending' | 'debated'>('agreed');
   const [agreedVersions, setAgreedVersions] = useState<any[]>([]);
   const [loadingAgreed, setLoadingAgreed] = useState(false);
@@ -195,6 +196,9 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
   const [lastViewedTimestamps, setLastViewedTimestamps] = useState<Record<string, string>>({});
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
+  const [replyingTo, setReplyingTo] = useState<Record<string, string | null>>({});
+  const [replyTexts, setReplyTexts] = useState<Record<string, string>>({});
+  const [commentTexts, setCommentTexts] = useState<Record<string, string>>({});
 
 
   // Load last viewed timestamps from localStorage
@@ -338,6 +342,59 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
     if (!proposedText) return 'No preview available';
     if (proposedText.length <= maxLength) return proposedText;
     return proposedText.substring(0, maxLength).trim() + '...';
+  };
+
+  // Organize comments hierarchically
+  const getTopLevelComments = (comments: any[]) => {
+    return comments.filter(c => !c.parentId);
+  };
+
+  const getReplies = (comments: any[], commentId: string) => {
+    return comments.filter(c => c.parentId === commentId);
+  };
+
+  // Handle adding a comment/reply
+  const handleAddComment = async (proposalId: string, documentId: string, paragraphId: string, text: string, parentId?: string) => {
+    if (!onAddComment) {
+      // Fallback: navigate to document
+      onNavigateToDocument(documentId);
+      return;
+    }
+
+    try {
+      await onAddComment(proposalId, documentId, paragraphId, text, parentId);
+      // Clear reply form
+      setReplyingTo(prev => ({ ...prev, [proposalId]: null }));
+      setReplyTexts(prev => ({ ...prev, [proposalId]: '' }));
+      setCommentTexts(prev => ({ ...prev, [proposalId]: '' }));
+      // Refresh proposals to get updated comments
+      if (activePanel === 'debated') {
+        fetchDebatedProposals();
+      }
+    } catch (error) {
+      console.error('Failed to add comment:', error);
+      toast.error('Failed to add comment');
+    }
+  };
+
+  // Start replying to a comment
+  const startReply = (proposalId: string, commentId: string) => {
+    setReplyingTo(prev => ({ ...prev, [proposalId]: commentId }));
+    setReplyTexts(prev => ({ ...prev, [proposalId]: '' }));
+    // Expand comments if collapsed
+    if (!expandedComments.has(proposalId)) {
+      setExpandedComments(prev => {
+        const newSet = new Set(prev);
+        newSet.add(proposalId);
+        return newSet;
+      });
+    }
+  };
+
+  // Cancel reply
+  const cancelReply = (proposalId: string) => {
+    setReplyingTo(prev => ({ ...prev, [proposalId]: null }));
+    setReplyTexts(prev => ({ ...prev, [proposalId]: '' }));
   };
 
   // Simple placeholder for voting - redirects to document
@@ -687,52 +744,232 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
                         )}
                       </div>
 
-                      {/* Compact Comments - Show 2-3 by default */}
-                      {proposal.comments && proposal.comments.length > 0 && (
-                        <div className="border-t border-gray-100 pt-2">
-                          <div className="flex items-center gap-2 mb-2">
-                            <MessageSquare className="h-3 w-3 text-gray-500" />
-                            <span className="text-xs font-medium text-gray-700">
-                              Discussion ({proposal.comments.length})
-                            </span>
-                          </div>
-                          
+                      {/* Threaded Comments with Replies */}
+                      <div className="border-t border-gray-100 pt-2">
+                        <div className="flex items-center gap-2 mb-2">
+                          <MessageSquare className="h-3 w-3 text-gray-500" />
+                          <span className="text-xs font-medium text-gray-700">
+                            Discussion ({proposal.comments?.length || 0})
+                          </span>
+                        </div>
+                        
+                        {proposal.comments && proposal.comments.length > 0 ? (
                           <div className="space-y-2">
                             {(expandedComments.has(proposal.id) 
-                              ? proposal.comments 
-                              : proposal.comments.slice(0, 2)
-                            ).map((comment) => (
-                              <div key={comment.id} className="flex gap-2 p-2 rounded bg-muted/30">
-                                <Avatar className="h-6 w-6 flex-shrink-0">
-                                  <AvatarImage src={comment.user.avatar} />
-                                  <AvatarFallback className="bg-primary/10 text-[10px]">
-                                    {comment.user.name.split(' ').map(n => n[0]).join('') || 'U'}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-1.5 mb-0.5">
-                                    <span className="text-xs font-medium text-foreground">{comment.user.name}</span>
-                                    <span className="text-xs text-muted-foreground">• {formatTimestamp(comment.createdAt)}</span>
+                              ? getTopLevelComments(proposal.comments)
+                              : getTopLevelComments(proposal.comments).slice(0, 2)
+                            ).map((comment) => {
+                              const replies = getReplies(proposal.comments, comment.id);
+                              const isReplyingToComment = replyingTo[proposal.id] === comment.id;
+                              
+                              return (
+                                <div key={comment.id} className="space-y-1.5">
+                                  {/* Top-level Comment */}
+                                  <div className="flex gap-2 p-2 rounded bg-muted/30">
+                                    <Avatar className="h-6 w-6 flex-shrink-0">
+                                      <AvatarImage src={comment.user?.avatar} />
+                                      <AvatarFallback className="bg-primary/10 text-[10px]">
+                                        {comment.user?.name?.split(' ').map((n: string) => n[0]).join('') || 'U'}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-1.5 mb-0.5">
+                                        <span className="text-xs font-medium text-foreground">{comment.user?.name || 'Unknown'}</span>
+                                        <span className="text-xs text-muted-foreground">• {formatTimestamp(comment.createdAt)}</span>
+                                      </div>
+                                      <p className="text-xs text-foreground leading-relaxed break-words">{comment.text}</p>
+                                      <button
+                                        onClick={() => startReply(proposal.id, comment.id)}
+                                        className="text-xs text-gray-600 hover:text-gray-900 transition-colors mt-1"
+                                      >
+                                        Reply
+                                      </button>
+                                    </div>
                                   </div>
-                                  <p className="text-xs text-foreground leading-relaxed break-words">{comment.text}</p>
+
+                                  {/* Replies - Indented with visual hierarchy */}
+                                  {replies.length > 0 && (
+                                    <div className="ml-8 pl-3 border-l-2 border-gray-200 space-y-1.5">
+                                      {replies.map((reply) => {
+                                        const isReplyingToReply = replyingTo[proposal.id] === reply.id;
+                                        const nestedReplies = getReplies(proposal.comments, reply.id);
+                                        
+                                        return (
+                                          <div key={reply.id} className="space-y-1.5">
+                                            <div className="flex gap-2 p-1.5 rounded bg-background/50">
+                                              <Avatar className="h-5 w-5 flex-shrink-0">
+                                                <AvatarImage src={reply.user?.avatar} />
+                                                <AvatarFallback className="bg-primary/10 text-[9px]">
+                                                  {reply.user?.name?.split(' ').map((n: string) => n[0]).join('') || 'U'}
+                                                </AvatarFallback>
+                                              </Avatar>
+                                              <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-1.5 mb-0.5">
+                                                  <span className="text-xs font-medium text-foreground">{reply.user?.name || 'Unknown'}</span>
+                                                  <span className="text-xs text-muted-foreground">• {formatTimestamp(reply.createdAt)}</span>
+                                                </div>
+                                                <p className="text-xs text-muted-foreground leading-relaxed break-words">{reply.text}</p>
+                                                <button
+                                                  onClick={() => startReply(proposal.id, reply.id)}
+                                                  className="text-xs text-gray-500 hover:text-gray-700 transition-colors mt-0.5"
+                                                >
+                                                  Reply
+                                                </button>
+                                              </div>
+                                            </div>
+
+                                            {/* Nested Replies (replies to replies) */}
+                                            {nestedReplies.length > 0 && (
+                                              <div className="ml-6 pl-3 border-l-2 border-gray-300 space-y-1">
+                                                {nestedReplies.map((nestedReply) => (
+                                                  <div key={nestedReply.id} className="flex gap-2 p-1 rounded bg-background/30">
+                                                    <Avatar className="h-4 w-4 flex-shrink-0">
+                                                      <AvatarFallback className="bg-primary/10 text-[8px]">
+                                                        {nestedReply.user?.name?.split(' ').map((n: string) => n[0]).join('') || 'U'}
+                                                      </AvatarFallback>
+                                                    </Avatar>
+                                                    <div className="flex-1 min-w-0">
+                                                      <div className="flex items-center gap-1 mb-0.5">
+                                                        <span className="text-xs font-medium text-foreground">{nestedReply.user?.name || 'Unknown'}</span>
+                                                        <span className="text-xs text-muted-foreground">• {formatTimestamp(nestedReply.createdAt)}</span>
+                                                      </div>
+                                                      <p className="text-xs text-muted-foreground leading-relaxed break-words">{nestedReply.text}</p>
+                                                      <button
+                                                        onClick={() => startReply(proposal.id, nestedReply.id)}
+                                                        className="text-xs text-gray-400 hover:text-gray-600 transition-colors mt-0.5"
+                                                      >
+                                                        Reply
+                                                      </button>
+                                                    </div>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            )}
+
+                                            {/* Reply Form for this reply */}
+                                            {isReplyingToReply && (
+                                              <div className="ml-6 pl-3 border-l-2 border-gray-300 space-y-1.5 animate-in slide-in-from-top-2 duration-200">
+                                                <Textarea
+                                                  placeholder={`Reply to ${reply.user?.name || 'comment'}...`}
+                                                  value={replyTexts[proposal.id] || ''}
+                                                  onChange={(e) => setReplyTexts(prev => ({ ...prev, [proposal.id]: e.target.value }))}
+                                                  onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                                                      e.preventDefault();
+                                                      handleAddComment(proposal.id, proposal.documentId, proposal.paragraphId, replyTexts[proposal.id] || '', reply.id);
+                                                    }
+                                                    if (e.key === 'Escape') {
+                                                      cancelReply(proposal.id);
+                                                    }
+                                                  }}
+                                                  className="min-h-[50px] text-xs"
+                                                  autoFocus
+                                                />
+                                                <div className="flex gap-2 justify-end">
+                                                  <button
+                                                    onClick={() => cancelReply(proposal.id)}
+                                                    className="text-xs text-gray-600 hover:text-gray-900 transition-colors px-2 py-1"
+                                                  >
+                                                    Cancel
+                                                  </button>
+                                                  <button
+                                                    onClick={() => handleAddComment(proposal.id, proposal.documentId, proposal.paragraphId, replyTexts[proposal.id] || '', reply.id)}
+                                                    disabled={!replyTexts[proposal.id]?.trim()}
+                                                    className="text-xs bg-black text-white hover:bg-gray-800 transition-colors px-3 py-1 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                                                  >
+                                                    Send
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+
+                                  {/* Reply Form for top-level comment */}
+                                  {isReplyingToComment && (
+                                    <div className="ml-8 pl-3 border-l-2 border-gray-200 space-y-1.5 animate-in slide-in-from-top-2 duration-200">
+                                      <Textarea
+                                        placeholder={`Reply to ${comment.user?.name || 'comment'}...`}
+                                        value={replyTexts[proposal.id] || ''}
+                                        onChange={(e) => setReplyTexts(prev => ({ ...prev, [proposal.id]: e.target.value }))}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                                            e.preventDefault();
+                                            handleAddComment(proposal.id, proposal.documentId, proposal.paragraphId, replyTexts[proposal.id] || '', comment.id);
+                                          }
+                                          if (e.key === 'Escape') {
+                                            cancelReply(proposal.id);
+                                          }
+                                        }}
+                                        className="min-h-[60px] text-xs"
+                                        autoFocus
+                                      />
+                                      <div className="flex gap-2 justify-end">
+                                        <button
+                                          onClick={() => cancelReply(proposal.id)}
+                                          className="text-xs text-gray-600 hover:text-gray-900 transition-colors px-2 py-1"
+                                        >
+                                          Cancel
+                                        </button>
+                                        <button
+                                          onClick={() => handleAddComment(proposal.id, proposal.documentId, proposal.paragraphId, replyTexts[proposal.id] || '', comment.id)}
+                                          disabled={!replyTexts[proposal.id]?.trim()}
+                                          className="text-xs bg-black text-white hover:bg-gray-800 transition-colors px-3 py-1 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                          Send
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                             
-                            {proposal.comments.length > 2 && (
+                            {getTopLevelComments(proposal.comments).length > 2 && (
                               <button
                                 onClick={() => toggleCommentsExpanded(proposal.id)}
                                 className="text-xs text-gray-600 hover:text-gray-900 transition-colors py-1"
                               >
                                 {expandedComments.has(proposal.id) 
                                   ? `Show less` 
-                                  : `Show ${proposal.comments.length - 2} more comments`
+                                  : `Show ${getTopLevelComments(proposal.comments).length - 2} more comments`
                                 }
                               </button>
                             )}
                           </div>
+                        ) : (
+                          <p className="text-xs text-gray-500 italic py-2">No comments yet. Be the first to share your thoughts!</p>
+                        )}
+
+                        {/* New Comment Form */}
+                        <div className="mt-3 pt-2 border-t border-gray-100 space-y-1.5">
+                          <Textarea
+                            placeholder="Write a comment..."
+                            value={commentTexts[proposal.id] || ''}
+                            onChange={(e) => setCommentTexts(prev => ({ ...prev, [proposal.id]: e.target.value }))}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                                e.preventDefault();
+                                handleAddComment(proposal.id, proposal.documentId, proposal.paragraphId, commentTexts[proposal.id] || '');
+                              }
+                            }}
+                            className="min-h-[60px] text-xs"
+                          />
+                          <div className="flex justify-between items-center">
+                            <p className="text-xs text-gray-500">Tip: Press Cmd/Ctrl+Enter to post</p>
+                            <button
+                              onClick={() => handleAddComment(proposal.id, proposal.documentId, proposal.paragraphId, commentTexts[proposal.id] || '')}
+                              disabled={!commentTexts[proposal.id]?.trim()}
+                              className="text-xs bg-black text-white hover:bg-gray-800 transition-colors px-3 py-1 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              Post Comment
+                            </button>
+                          </div>
                         </div>
-                      )}
+                      </div>
 
                       {/* Action Button */}
                       <div className="flex justify-end pt-1 border-t border-gray-100">

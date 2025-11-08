@@ -1,6 +1,8 @@
 import React from 'react';
 import { User } from '../types';
 import { UserMenu } from './UserMenu';
+import { Button } from './ui/button';
+import { Plus } from 'lucide-react';
 
 interface AppHeaderProps {
   currentUser: User;
@@ -11,6 +13,8 @@ interface AppHeaderProps {
   showBackButton?: boolean;
   onBack?: () => void;
   title?: string;
+  onCreateDocument?: () => void;
+  showCreateButton?: boolean;
 }
 
 export function AppHeader({
@@ -22,6 +26,8 @@ export function AppHeader({
   showBackButton = false,
   onBack,
   title,
+  onCreateDocument,
+  showCreateButton = false,
 }: AppHeaderProps) {
   return (
     <div className="border-b border-gray-200 bg-white">
@@ -43,6 +49,15 @@ export function AppHeader({
           </div>
 
           <div className="flex items-center gap-4">
+            {showCreateButton && onCreateDocument && (
+              <Button
+                onClick={onCreateDocument}
+                className="gap-2 bg-black hover:bg-gray-900"
+              >
+                <Plus className="h-4 w-4" />
+                New Document
+              </Button>
+            )}
             <UserMenu
               currentUser={currentUser}
               onLogout={onLogout}

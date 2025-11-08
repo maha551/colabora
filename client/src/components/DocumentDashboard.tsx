@@ -57,6 +57,8 @@ interface DocumentDashboardProps {
   onCreateDocument: (title: string, description?: string, contributors?: string[]) => void;
   onDeleteDocument: (documentId: string) => void;
   loading?: boolean;
+  isCreateDialogOpen?: boolean;
+  onSetCreateDialogOpen?: (open: boolean) => void;
 }
 
 export function DocumentDashboard({
@@ -65,10 +67,16 @@ export function DocumentDashboard({
   onSelectDocument,
   onCreateDocument,
   onDeleteDocument,
-  loading = false
+  loading = false,
+  isCreateDialogOpen: externalIsCreateDialogOpen,
+  onSetCreateDialogOpen: externalSetCreateDialogOpen,
 }: DocumentDashboardProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [internalIsCreateDialogOpen, setInternalIsCreateDialogOpen] = useState(false);
+  
+  // Use external state if provided, otherwise use internal state
+  const isCreateDialogOpen = externalIsCreateDialogOpen !== undefined ? externalIsCreateDialogOpen : internalIsCreateDialogOpen;
+  const setIsCreateDialogOpen = externalSetCreateDialogOpen || setInternalIsCreateDialogOpen;
   const [newDocumentTitle, setNewDocumentTitle] = useState("");
   const [newDocumentDescription, setNewDocumentDescription] = useState("");
   const [selectedContributors, setSelectedContributors] = useState<string[]>([]);

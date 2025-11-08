@@ -49,3 +49,11 @@ Thumbs.db
 # Package manager lock files (optional - uncomment if you want to ignore)
 # package-lock.json
 # yarn.lock
+
+# Fly CLI installation files
+flyctl.exe
+install-fly.ps1
+test-health.ps1
+
+# Database backups
+*.db.backup

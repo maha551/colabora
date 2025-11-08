@@ -140,10 +140,11 @@ describe('Documents API Integration Tests', () => {
 
 
       // Try to access Bob's document with Alice's token
+      // Should return 404 (not found) for security - don't reveal document existence
       await request(server)
         .get(`/api/documents/${bobDoc.body.document.id}`)
         .set('Authorization', `Bearer ${authToken}`)
-        .expect(403);
+        .expect(404);
     });
   });
 

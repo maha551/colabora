@@ -150,12 +150,19 @@ export const DocumentEditor = React.memo(function DocumentEditor({
     setFormError(null);
     setNewParagraphBody("");
 
-    // Allow choice for all paragraphs, including first one
+    // Check if this will be the first content paragraph
     const isFirstParagraph = contentParagraphs.length === 0;
-    // Don't force heading for first paragraph - let user choose
-    setIncludeHeading(false); // Default to body text for consistency
-    setNewParagraphHeading("");
-    setNewParagraphHeadingLevel("h2");
+    if (isFirstParagraph) {
+      // First paragraph must always be a heading (H1)
+      setIncludeHeading(true);
+      setNewParagraphHeading("");
+      setNewParagraphHeadingLevel("h1");
+    } else {
+      // Subsequent paragraphs allow choice
+      setIncludeHeading(false); // Default to body text for consistency
+      setNewParagraphHeading("");
+      setNewParagraphHeadingLevel("h2");
+    }
 
     if (useInlineForm) {
       setIsInlineFormOpen(true);
@@ -291,23 +298,18 @@ export const DocumentEditor = React.memo(function DocumentEditor({
     try {
       const order = computeInsertOrder(insertContext);
 
-      // Check if this will be the first content paragraph in the document
-      const isFirstContentParagraph = contentParagraphs.length === 0 || order < Math.min(...contentParagraphs.map(p => p.order ?? 0));
-
       if (includeHeading) {
         // Create heading-only paragraph
-        // For the first paragraph, always use H1 regardless of user selection
         await onAddElement("paragraph", {
           text: "",
           title: heading,
-          headingLevel: isFirstContentParagraph ? 'h1' : newParagraphHeadingLevel,
+          headingLevel: newParagraphHeadingLevel,
           order,
         });
       } else {
         // Create body-only paragraph
         await onAddElement("paragraph", {
           text: body,
-          headingLevel: isFirstContentParagraph ? 'h1' : undefined,
           order,
         });
       }
@@ -382,7 +384,7 @@ export const DocumentEditor = React.memo(function DocumentEditor({
               <div className="flex items-center justify-center py-16">
                 <div className="text-center">
                   <p className="text-gray-600 mb-2">Start your collaborative document</p>
-                  <p className="text-sm text-muted-foreground mb-4">Add your first paragraph - choose between heading or body text</p>
+                  <p className="text-sm text-muted-foreground mb-4">Begin with an H1 heading for your document</p>
                   <Button
                     type="button"
                     size="lg"
@@ -390,7 +392,7 @@ export const DocumentEditor = React.memo(function DocumentEditor({
                     className="gap-2 touch-manipulation min-h-[48px] text-base"
                   >
                     <Plus className="h-5 w-5" />
-                    Add First Paragraph
+                    Add H1 Heading
                   </Button>
                 </div>
               </div>
@@ -625,9 +627,9 @@ export const DocumentEditor = React.memo(function DocumentEditor({
                 <div className="flex items-center justify-between gap-4 flex-wrap">
                   <div className="flex gap-2 flex-wrap">
                     {contentParagraphs.length === 0 ? (
-                      // First paragraph must be a heading
+                      // First paragraph is always a heading (H1)
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <span className="font-medium">First item must be a heading</span>
+                        <span className="font-medium">First item will be styled as H1</span>
                       </div>
                     ) : (
                       // Subsequent paragraphs allow choice
@@ -676,30 +678,46 @@ export const DocumentEditor = React.memo(function DocumentEditor({
                   </Button>
                 </div>
 
-                {includeHeading && (
+                {contentParagraphs.length === 0 ? (
+                  // First paragraph - always heading only
                   <div className="space-y-2">
-                    <Label htmlFor="inline-heading-text" className="text-sm">Heading text</Label>
+                    <Label htmlFor="inline-heading-text" className="text-sm">H1 Heading text</Label>
                     <Input
                       id="inline-heading-text"
                       value={newParagraphHeading}
                       onChange={(e) => setNewParagraphHeading(e.target.value)}
-                      placeholder="Enter heading"
+                      placeholder="Enter your document's main heading"
                     />
                   </div>
-                )}
+                ) : (
+                  // Subsequent paragraphs - heading + body or body only
+                  <>
+                    {includeHeading && (
+                      <div className="space-y-2">
+                        <Label htmlFor="inline-heading-text" className="text-sm">Heading text</Label>
+                        <Input
+                          id="inline-heading-text"
+                          value={newParagraphHeading}
+                          onChange={(e) => setNewParagraphHeading(e.target.value)}
+                          placeholder="Enter heading"
+                        />
+                      </div>
+                    )}
 
-                <div className="space-y-2">
-                  <Label htmlFor="inline-paragraph-body" className="text-sm">
-                    {includeHeading ? "Body text" : "Paragraph text"}
-                  </Label>
-                  <Textarea
-                    id="inline-paragraph-body"
-                    value={newParagraphBody}
-                    onChange={(e) => setNewParagraphBody(e.target.value)}
-                    className="min-h-[100px]"
-                    placeholder={includeHeading ? "Enter the body text..." : "Enter the paragraph text..."}
-                  />
-                </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="inline-paragraph-body" className="text-sm">
+                        {includeHeading ? "Body text" : "Paragraph text"}
+                      </Label>
+                      <Textarea
+                        id="inline-paragraph-body"
+                        value={newParagraphBody}
+                        onChange={(e) => setNewParagraphBody(e.target.value)}
+                        className="min-h-[100px]"
+                        placeholder={includeHeading ? "Enter the body text..." : "Enter the paragraph text..."}
+                      />
+                    </div>
+                  </>
+                )}
 
                 {formError && (
                   <div className="text-sm text-destructive">{formError}</div>

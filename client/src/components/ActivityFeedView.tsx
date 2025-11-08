@@ -43,6 +43,8 @@ import { toast } from "sonner";
 import { DiffViewer } from "./DiffViewer";
 import { VoteProgressBar } from "./VoteProgressBar";
 import { InlineExpandedView } from "./InlineExpandedView";
+import { ActivityFeedProposalCard } from "./ActivityFeedProposalCard";
+import { adaptProposalToSuggestion, extractDocumentContext, getOriginalText, ActivityFeedProposal } from "../utils/proposalAdapter";
 
 interface DiffSegment {
   text: string;
@@ -397,10 +399,48 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
     setReplyTexts(prev => ({ ...prev, [proposalId]: '' }));
   };
 
-  // Simple placeholder for voting - redirects to document
+  // Handle voting from Activity Feed
   const handleVote = async (proposalId: string, documentId: string, paragraphId: string, voteType: 'PRO' | 'NEUTRAL' | 'CONTRA') => {
-    // For now, just navigate to the document for voting
-    onNavigateToDocument(documentId);
+    try {
+      const response = await fetch(`/api/documents/${documentId}/paragraphs/${paragraphId}/proposals/${proposalId}/vote`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+        },
+        body: JSON.stringify({ vote: voteType }),
+      });
+
+      if (response.ok) {
+        toast.success('Vote recorded');
+        // Refresh the current tab
+        if (activePanel === 'pending') {
+          fetchPendingProposals();
+        } else if (activePanel === 'debated') {
+          fetchDebatedProposals();
+        }
+      } else {
+        const error = await response.json();
+        toast.error(error.error || 'Failed to record vote');
+      }
+    } catch (error) {
+      console.error('Failed to vote:', error);
+      toast.error('Failed to record vote');
+    }
+  };
+
+  // Get all collaborators for a document
+  const getAllCollaborators = (documentId: string): User[] => {
+    const doc = documents.find(d => d.id === documentId);
+    if (!doc) return [];
+    
+    const collaborators: User[] = [doc.owner];
+    doc.collaborators.forEach(c => {
+      if (!collaborators.find(u => u.id === c.user.id)) {
+        collaborators.push(c.user);
+      }
+    });
+    return collaborators;
   };
 
   const formatTimestamp = (timestamp: string): string => {
@@ -1008,203 +1048,31 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
                 </div>
               </Card>
             ) : (
-              <div className="space-y-3">
-                {pendingProposals.map((proposal) => {
-                  const proCount = proposal.votes.pro;
-                  const neutralCount = proposal.votes.neutral;
-                  const contraCount = proposal.votes.contra;
-                  const totalVotes = proposal.votes.total;
-                  const notVotedCount = Math.max(proposal.totalUsers - totalVotes, 0);
-
-                  const proPercentage = proposal.totalUsers > 0 ? (proCount / proposal.totalUsers) * 100 : 0;
-                  const neutralPercentage = proposal.totalUsers > 0 ? (neutralCount / proposal.totalUsers) * 100 : 0;
-                  const contraPercentage = proposal.totalUsers > 0 ? (contraCount / proposal.totalUsers) * 100 : 0;
-                  const notVotedPercentage = proposal.totalUsers > 0 ? (notVotedCount / proposal.totalUsers) * 100 : 0;
+              <div className="space-y-4">
+                {pendingProposals.map((proposal: any) => {
+                  const adaptedSuggestion = adaptProposalToSuggestion(proposal);
+                  const documentContext = extractDocumentContext(proposal);
+                  const originalText = getOriginalText(proposal);
+                  const allCollaborators = getAllCollaborators(proposal.documentId);
 
                   return (
-                    <Card key={proposal.id} className="overflow-hidden hover:shadow-md transition-shadow border-blue-200 shadow-sm">
-                      {/* Vote Status Bar at the very top */}
-                      <div
-                        className="flex h-3 w-full overflow-hidden cursor-pointer border-b"
-                        style={{ backgroundColor: '#e5e7eb', minHeight: '12px' }}
-                        title={`Click to view details - ${totalVotes} votes out of ${proposal.totalUsers} participants`}
-                      >
-                        {/* Not voted first (gray) */}
-                        {notVotedPercentage > 0 && (
-                          <div
-                            className="transition-all duration-300"
-                            style={{
-                              width: `${notVotedPercentage}%`,
-                              backgroundColor: '#9ca3af',
-                              flex: `0 0 ${notVotedPercentage}%`
-                            }}
-                            title={`Not voted: ${notVotedCount}`}
-                          />
-                        )}
-                        {/* Reject votes */}
-                        {contraPercentage > 0 && (
-                          <div
-                            className="transition-all duration-300"
-                            style={{
-                              width: `${contraPercentage}%`,
-                              backgroundColor: '#ef4444',
-                              flex: `0 0 ${contraPercentage}%`
-                            }}
-                            title={`Reject: ${contraCount}`}
-                          />
-                        )}
-                        {/* Neutral votes */}
-                        {neutralPercentage > 0 && (
-                          <div
-                            className="transition-all duration-300"
-                            style={{
-                              width: `${neutralPercentage}%`,
-                              backgroundColor: '#3b82f6',
-                              flex: `0 0 ${neutralPercentage}%`
-                            }}
-                            title={`Neutral: ${neutralCount}`}
-                          />
-                        )}
-                        {/* Approve votes */}
-                        {proPercentage > 0 && (
-                          <div
-                            className="transition-all duration-300"
-                            style={{
-                              width: `${proPercentage}%`,
-                              backgroundColor: '#22c55e',
-                              flex: `0 0 ${proPercentage}%`
-                            }}
-                            title={`Approve: ${proCount}`}
-                          />
-                        )}
-                      </div>
-
-                      <div className="p-3.5 space-y-3">
-                        {/* Compact Header with inline vote buttons */}
-                        <div className="flex items-start justify-between gap-4 mb-3">
-                          <div className="flex items-start gap-3 flex-1 min-w-0">
-                            <Avatar className="h-8 w-8 flex-shrink-0">
-                              <AvatarImage src={proposal.user.avatar} />
-                              <AvatarFallback className="text-xs bg-gradient-to-br from-blue-500 to-purple-600 text-white">
-                                {proposal.user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                <span className="text-sm font-normal text-muted-foreground">{proposal.user.name}</span>
-                                {proposal.type === 'TITLE' && (
-                                  <Badge variant="outline" className="text-xs">
-                                    Heading
-                                  </Badge>
-                                )}
-                              </div>
-                              <p className="text-sm text-gray-900 font-normal line-clamp-2">
-                                "{proposal.proposedText}"
-                              </p>
-                              <div className="flex items-center gap-2 flex-wrap text-xs text-gray-600 mt-1">
-                                <Badge
-                                  variant="secondary"
-                                  className="text-xs font-normal cursor-pointer hover:bg-blue-100 hover:text-blue-700 transition-colors"
-                                  onClick={() => onNavigateToDocument(proposal.documentId)}
-                                >
-                                  <FileText className="h-3 w-3 mr-1" />
-                                  {proposal.documentTitle}
-                                </Badge>
-                                {proposal.paragraphTitle && (
-                                  <>
-                                    <span className="text-gray-400">•</span>
-                                    <span className="font-medium">{proposal.paragraphTitle}</span>
-                                  </>
-                                )}
-                                <span className="text-gray-400">•</span>
-                                <span className="text-gray-500">{formatTimestamp(proposal.createdAt)}</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Inline Vote Buttons - Icon Only */}
-                          <div className="flex items-center gap-1 flex-shrink-0">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleVote(proposal.id, proposal.documentId, proposal.paragraphId, 'PRO')}
-                              className="h-8 w-8 p-0"
-                              title={`Approve (${proCount})`}
-                            >
-                              <ThumbsUp className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleVote(proposal.id, proposal.documentId, proposal.paragraphId, 'NEUTRAL')}
-                              className="h-8 w-8 p-0"
-                              title={`Neutral (${neutralCount})`}
-                            >
-                              <span className="text-lg leading-none">○</span>
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleVote(proposal.id, proposal.documentId, proposal.paragraphId, 'CONTRA')}
-                              className="h-8 w-8 p-0"
-                              title={`Reject (${contraCount})`}
-                            >
-                              <ThumbsDown className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-
-                        {/* Proposed Content */}
-                        <div className="border border-gray-200 rounded-lg overflow-hidden">
-                          <div className="bg-gray-50 px-3 py-2 border-b border-gray-200 flex items-center justify-between">
-                            <h4 className="text-sm font-medium text-gray-700">Proposed Change</h4>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => toggleExpanded(`pending-${proposal.id}`)}
-                              className="h-6 w-6 p-0"
-                            >
-                              {expandedItems.has(`pending-${proposal.id}`) ? (
-                                <ChevronDown className="h-4 w-4" />
-                              ) : (
-                                <ChevronRight className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </div>
-                          {expandedItems.has(`pending-${proposal.id}`) ? (
-                            <div className="p-0">
-                              <InlineExpandedView
-                                proposal={proposal}
-                                currentUser={currentUser}
-                                totalUsers={proposal.totalUsers}
-                                onVote={handleVote}
-                                onClose={() => toggleExpanded(`pending-${proposal.id}`)}
-                              />
-                            </div>
-                          ) : (
-                            <div className="p-4 bg-white">
-                              <DiffViewer
-                                originalText={proposal.currentText || ''}
-                                suggestion1Text={proposal.proposedText}
-                                suggestion1Author={proposal.user.name}
-                              />
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Action Button */}
-                        <div className="flex justify-end">
-                          <Button
-                            size="sm"
-                            onClick={() => onNavigateToDocument(proposal.documentId)}
-                            className="gap-2 bg-black hover:bg-gray-800 text-white shadow-sm font-medium"
-                          >
-                            <MessageSquare className="h-4 w-4" />
-                            View Full Discussion
-                          </Button>
-                        </div>
-                      </div>
-                    </Card>
+                    <ActivityFeedProposalCard
+                      key={proposal.id}
+                      proposal={adaptedSuggestion}
+                      documentContext={documentContext}
+                      currentUser={currentUser}
+                      totalUsers={proposal.totalUsers || 1}
+                      allCollaborators={allCollaborators}
+                      originalText={originalText}
+                      tabType="pending"
+                      onVote={(proposalId, voteType) => 
+                        handleVote(proposalId, proposal.documentId, proposal.paragraphId, voteType)
+                      }
+                      onComment={(proposalId, text, parentId) => 
+                        handleAddComment(proposalId, proposal.documentId, proposal.paragraphId, text, parentId)
+                      }
+                      onNavigateToDocument={onNavigateToDocument}
+                    />
                   );
                 })}
               </div>

@@ -343,19 +343,19 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
 
   // Load data when panels are activated
   useEffect(() => {
-    if (activePanel === 'agreed' && agreedVersions.length === 0) {
+    if (activePanel === 'agreed') {
       fetchAgreedVersions();
     }
   }, [activePanel]);
 
   useEffect(() => {
-    if (activePanel === 'debated' && debatedProposals.length === 0) {
+    if (activePanel === 'debated') {
       fetchDebatedProposals();
     }
   }, [activePanel]);
 
   useEffect(() => {
-    if (activePanel === 'pending' && pendingProposals.length === 0) {
+    if (activePanel === 'pending') {
       fetchPendingProposals();
     }
   }, [activePanel]);

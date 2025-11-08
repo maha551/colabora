@@ -520,6 +520,32 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
+  // Filter proposals by selected document
+  const filterByDocument = <T extends { documentId: string }>(items: T[]): T[] => {
+    if (selectedDocumentId === 'all') return items;
+    return items.filter(item => item.documentId === selectedDocumentId);
+  };
+
+  // Get displayed items (for infinite scroll)
+  const getDisplayedItems = <T,>(items: T[], tab: 'agreed' | 'debated' | 'pending'): T[] => {
+    const filtered = filterByDocument(items as any[]);
+    return filtered.slice(0, displayedCounts[tab]);
+  };
+
+  // Check if there are more items to load
+  const hasMore = (items: any[], tab: 'agreed' | 'debated' | 'pending'): boolean => {
+    const filtered = filterByDocument(items);
+    return filtered.length > displayedCounts[tab];
+  };
+
+  // Load more items
+  const loadMore = (tab: 'agreed' | 'debated' | 'pending') => {
+    setDisplayedCounts(prev => ({
+      ...prev,
+      [tab]: prev[tab] + pageSize,
+    }));
+  };
+
   // Load data when panels are activated
   useEffect(() => {
     if (activePanel === 'agreed') {

@@ -30,13 +30,13 @@ if fly status &>/dev/null; then
     echo "📦 App already exists, updating..."
 else
     echo "📦 Launching new app on Fly.io..."
-    fly launch --name colabora-app --region lax --no-deploy
+    fly launch --name colabora-fresh --region iad --no-deploy
 fi
 
 # Create persistent volume for database (only if it doesn't exist)
 echo "💾 Checking/creating persistent volume for database..."
 if ! fly volumes list | grep -q colabora_data; then
-    fly volumes create colabora_data --size 1 --region lax
+    fly volumes create colabora_data --size 1 --region iad
     echo "✅ Created volume: colabora_data"
 else
     echo "✅ Volume already exists: colabora_data"
@@ -46,6 +46,7 @@ fi
 echo "🔒 Setting environment secrets..."
 fly secrets set SESSION_SECRET="$SESSION_SECRET"
 fly secrets set JWT_SECRET="$JWT_SECRET"
+fly secrets set DATABASE_URL="/data/colabora.db"
 
 # Deploy
 echo "🚀 Deploying application..."

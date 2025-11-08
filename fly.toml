@@ -1,13 +1,12 @@
-# Minimal fly.toml for fresh EU deployment
+# Minimal fly.toml for Fly.io deployment
 app = "colabora-fresh"
 
 [env]
   NODE_ENV = "production"
-  DATABASE_URL = "/data/colabora.db"
 
-primary_region = "fra"
+primary_region = "iad"
 
-# Persistent volume for database (1GB in EU)
+# Persistent volume for database (1GB in US East)
 [mounts]
   source = "colabora_data"
   destination = "/data"

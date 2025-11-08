@@ -301,8 +301,12 @@ export const DocumentEditor = React.memo(function DocumentEditor({
         });
       } else {
         // Create body-only paragraph
+        // Check if this is the first content paragraph in the document
+        const isFirstContentParagraph = contentParagraphs.length === 0;
+
         await onAddElement("paragraph", {
           text: body,
+          headingLevel: isFirstContentParagraph ? 'h1' : undefined,
           order,
         });
       }

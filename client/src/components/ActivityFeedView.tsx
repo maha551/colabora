@@ -33,6 +33,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "./ui/tabs";
 import { toast } from "sonner";
 import { DiffViewer } from "./DiffViewer";
 import { VoteProgressBar } from "./VoteProgressBar";
@@ -358,72 +364,46 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-center mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Activity Feed</h1>
-          <Button
-            onClick={() => {
-              if (activePanel === 'pending') fetchPendingProposals();
-              if (activePanel === 'agreed') fetchAgreedVersions();
-              if (activePanel === 'debated') fetchDebatedProposals();
-            }}
-            variant="outline"
-            size="sm"
-            className="gap-2"
-          >
-            <RefreshCw className={`h-4 w-4 ${(loadingPending || loadingAgreed || loadingDebated) ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex gap-3 mb-6">
-          <Button
-            variant={activePanel === 'pending' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setActivePanel('pending')}
-            className="gap-2"
-          >
-            <Clock className="h-4 w-4" />
-            Pending Proposals
-            {pendingProposals.length > 0 && (
-              <Badge className="ml-2 bg-blue-600 text-xs">
-                {pendingProposals.length}
-              </Badge>
-            )}
-          </Button>
-          <Button
-            variant={activePanel === 'agreed' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setActivePanel('agreed')}
-            className="gap-2"
-          >
-            <CheckCircle2 className="h-4 w-4" />
-            Agreed Changes
-            {agreedVersions.length > 0 && (
-              <Badge className="ml-2 bg-green-600 text-xs">
-                {agreedVersions.length}
-              </Badge>
-            )}
-          </Button>
-          <Button
-            variant={activePanel === 'debated' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setActivePanel('debated')}
-            className="gap-2"
-          >
-            <TrendingUp className="h-4 w-4" />
-            Most Debated
-            {debatedProposals.length > 0 && (
-              <Badge className="ml-2 bg-purple-600 text-xs">
-                {debatedProposals.length}
-              </Badge>
-            )}
-          </Button>
-        </div>
+        <Tabs value={activePanel} onValueChange={(value) => setActivePanel(value as 'pending' | 'agreed' | 'debated')}>
+          <div className="flex justify-center mb-6 px-4">
+            <TabsList className="w-full sm:w-auto">
+              <TabsTrigger value="pending" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm">
+                <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden xs:inline">Pending</span>
+                {pendingProposals.length > 0 && (
+                  <Badge variant="secondary" className="ml-1 text-xs">
+                    {pendingProposals.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="agreed" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm">
+                <CheckCircle2 className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden xs:inline">Agreed</span>
+                {agreedVersions.length > 0 && (
+                  <Badge variant="default" className="ml-1 bg-green-600 text-xs">
+                    {agreedVersions.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="debated" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm">
+                <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden xs:inline">Debated</span>
+                {debatedProposals.length > 0 && (
+                  <Badge variant="secondary" className="ml-1 text-xs">
+                    {debatedProposals.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-        {/* Content */}
-        {activePanel === 'pending' && (
-          <>
+          {/* Content */}
+          <TabsContent value="pending" className="mt-0">
             {loadingPending ? (
               <Card className="p-12">
                 <div className="text-center">
@@ -643,11 +623,9 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
                 })}
               </div>
             )}
-          </>
-        )}
+          </TabsContent>
 
-        {activePanel === 'agreed' && (
-          <>
+          <TabsContent value="agreed" className="mt-0">
             {loadingAgreed ? (
               <Card className="p-12">
                 <div className="text-center">
@@ -787,11 +765,9 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
                 ))}
               </div>
             )}
-          </>
-        )}
+          </TabsContent>
 
-        {activePanel === 'debated' && (
-          <>
+          <TabsContent value="debated" className="mt-0">
             {loadingDebated ? (
               <Card className="p-12">
                 <div className="text-center">
@@ -957,7 +933,7 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
                                 <Avatar className="h-8 w-8 flex-shrink-0">
                                   <AvatarImage src={comment.user.avatar} />
                                   <AvatarFallback className="bg-primary/10 text-xs">
-                                    {comment.user.name.split(' ').map(n => n[0]).join('')}
+                                    {comment.user.name.split(' ').map(n => n[0]).join('') || 'U'}
                                   </AvatarFallback>
                                 </Avatar>
                                 <div className="flex-1 space-y-2 min-w-0">
@@ -994,8 +970,8 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
                 ))}
               </div>
             )}
-          </>
-        )}
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

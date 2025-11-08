@@ -585,24 +585,6 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* Document Filter */}
-        <div className="mb-4 flex items-center gap-3">
-          <Filter className="h-4 w-4 text-gray-500" />
-          <Select value={selectedDocumentId} onValueChange={setSelectedDocumentId}>
-            <SelectTrigger className="w-[200px] bg-white">
-              <SelectValue placeholder="Filter by document" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Documents</SelectItem>
-              {documents.map(doc => (
-                <SelectItem key={doc.id} value={doc.id}>
-                  {doc.title}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
         {/* Navigation Tabs */}
         <Tabs value={activePanel} onValueChange={(value) => {
           setActivePanel(value as 'agreed' | 'pending' | 'debated');
@@ -613,7 +595,7 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
             pending: pageSize,
           });
         }}>
-          <div className="flex justify-center mb-6 px-4">
+          <div className="flex justify-center mb-4 px-4">
             <TabsList className="w-full sm:w-auto">
               <TabsTrigger 
                 value="agreed" 
@@ -652,6 +634,24 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
                 )}
               </TabsTrigger>
             </TabsList>
+          </div>
+
+          {/* Document Filter */}
+          <div className="mb-6 flex items-center justify-center gap-3 px-4">
+            <Filter className="h-4 w-4 text-gray-500" />
+            <Select value={selectedDocumentId} onValueChange={setSelectedDocumentId}>
+              <SelectTrigger className="w-[200px] bg-white">
+                <SelectValue placeholder="Filter by document" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Documents</SelectItem>
+                {documents.map(doc => (
+                  <SelectItem key={doc.id} value={doc.id}>
+                    {doc.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Content */}

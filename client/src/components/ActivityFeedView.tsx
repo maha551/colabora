@@ -614,39 +614,39 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
           });
         }}>
           <div className="flex justify-center mb-6 px-4">
-            <TabsList className="w-full sm:w-auto bg-white border border-gray-200 shadow-sm">
+            <TabsList className="w-full sm:w-auto">
               <TabsTrigger 
                 value="agreed" 
-                className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm text-gray-500 data-[state=active]:bg-green-50 data-[state=active]:text-green-700 data-[state=active]:border-b-2 data-[state=active]:border-green-600 data-[state=active]:font-semibold data-[state=active]:shadow-sm transition-all"
+                className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm"
               >
                 <CheckCircle2 className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden xs:inline">Accepted</span>
                 {agreedVersions.length > 0 && (
-                  <Badge variant="default" className="ml-1 bg-green-600 text-white text-xs px-1.5 py-0.5 font-medium">
+                  <Badge variant="default" className="ml-1 bg-green-600 text-xs">
                     {agreedVersions.length}
                   </Badge>
                 )}
               </TabsTrigger>
               <TabsTrigger 
                 value="debated" 
-                className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm text-gray-500 data-[state=active]:bg-purple-50 data-[state=active]:text-purple-700 data-[state=active]:border-b-2 data-[state=active]:border-purple-600 data-[state=active]:font-semibold data-[state=active]:shadow-sm transition-all"
+                className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm"
               >
                 <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden xs:inline">Discussed</span>
                 {debatedProposals.length > 0 && (
-                  <Badge variant="secondary" className="ml-1 bg-gray-100 text-gray-700 text-xs px-1.5 py-0.5 font-medium">
+                  <Badge variant="secondary" className="ml-1 text-xs">
                     {debatedProposals.length}
                   </Badge>
                 )}
               </TabsTrigger>
               <TabsTrigger 
                 value="pending" 
-                className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm text-gray-500 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:font-semibold data-[state=active]:shadow-sm transition-all"
+                className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm"
               >
                 <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden xs:inline">Pending</span>
                 {pendingProposals.length > 0 && (
-                  <Badge variant="secondary" className="ml-1 bg-gray-100 text-gray-700 text-xs px-1.5 py-0.5 font-medium">
+                  <Badge variant="secondary" className="ml-1 text-xs">
                     {pendingProposals.length}
                   </Badge>
                 )}

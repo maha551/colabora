@@ -5,6 +5,7 @@ const { generateToken, hashPassword, verifyPassword } = require('../middleware/a
 const { securityLogger } = require('../middleware/logger');
 const { metricsCollector } = require('../middleware/monitoring');
 const config = require('../config');
+const demoUsers = require('../demoUsers');
 
 const router = express.Router();
 

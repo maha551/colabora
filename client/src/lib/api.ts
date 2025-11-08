@@ -227,11 +227,44 @@ export const commentsApi = {
   },
 }
 
+// Helper function to make unauthenticated requests (for login/register)
+async function unauthenticatedRequest(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<any> {
+  const headersFromOptions = (options.headers ?? {}) as Record<string, string>
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...headersFromOptions,
+  }
+
+  const config: RequestInit = {
+    ...options,
+    headers,
+    credentials: 'include',
+  }
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, config)
+
+  if (response.status === 204) {
+    return null
+  }
+
+  const rawData = await response.json().catch(() => ({}))
+
+  if (!response.ok) {
+    const errorMessage = (rawData && rawData.error) ? rawData.error : `API request failed: ${response.status} ${response.statusText}`
+    throw new Error(errorMessage)
+  }
+
+  return camelCaseKeys(rawData)
+}
+
 // Auth API functions
 export const authApi = {
   // Login
   async login(email: string, password: string) {
-    return apiRequest('/api/auth/login', {
+    return unauthenticatedRequest('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     })
@@ -239,7 +272,7 @@ export const authApi = {
 
   // Register (disabled in demo)
   async register(name: string, email: string, password: string) {
-    return apiRequest('/api/auth/register', {
+    return unauthenticatedRequest('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify({ name, email, password }),
     })

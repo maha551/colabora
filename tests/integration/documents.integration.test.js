@@ -202,7 +202,7 @@ describe('Documents API Integration Tests', () => {
   describe('Proposal and Voting System', () => {
     let testProposalId;
 
-    test.skip('should create a proposal - routes not implemented yet', async () => {
+    test('should create a proposal', async () => {
       const proposalData = {
         text: 'This is a proposed change to the paragraph.',
         type: 'BODY'
@@ -221,7 +221,7 @@ describe('Documents API Integration Tests', () => {
       testProposalId = response.body.proposal.id;
     });
 
-    test.skip('should retrieve paragraph proposals - routes not implemented yet', async () => {
+    test('should retrieve paragraph proposals', async () => {
       const response = await request(server)
         .get(`/api/documents/${testDocumentId}/paragraphs/${testParagraphId}/proposals`)
         .set('Authorization', `Bearer ${authToken}`)
@@ -234,7 +234,7 @@ describe('Documents API Integration Tests', () => {
       expect(ourProposal).toBeDefined();
     });
 
-    test.skip('should cast a vote on proposal - routes not implemented yet', async () => {
+    test('should cast a vote on proposal', async () => {
       const voteData = {
         vote: 'PRO'
       };
@@ -248,7 +248,7 @@ describe('Documents API Integration Tests', () => {
       expect(response.body.message).toContain('Vote cast successfully');
     });
 
-    test.skip('should prevent duplicate voting - routes not implemented yet', async () => {
+    test('should prevent duplicate voting', async () => {
       const voteData = {
         vote: 'CONTRA'
       };
@@ -262,7 +262,7 @@ describe('Documents API Integration Tests', () => {
   });
 
   describe('Comments System', () => {
-    test.skip('should add a comment to proposal - routes not implemented yet', async () => {
+    test('should add a comment to proposal', async () => {
       const commentData = {
         text: 'This is a test comment on the proposal.'
       };

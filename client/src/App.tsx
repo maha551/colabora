@@ -697,7 +697,6 @@ export default function App() {
             <AgreedDocument
               document={currentDocument}
               totalUsers={(currentDocument?.collaborators.length || 0) + 1} // Owner + collaborators
-              onAddElement={handleAddElement}
             />
           </TabsContent>
         </Tabs>

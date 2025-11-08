@@ -1,79 +1,15 @@
-import React, { useState } from "react";
+import React from "react";
 import { Document } from "../types";
 import { Card } from "./ui/card";
-import { CheckCircle2, FileText, Clock, Plus } from "lucide-react";
-import { Button } from "./ui/button";
-import { useIsMobile } from "./ui/use-mobile";
+import { CheckCircle2, FileText, Clock } from "lucide-react";
 
-function InlineAddButton({ onClick, floating = false, position = "top" }: {
-  onClick: () => void;
-  floating?: boolean;
-  position?: "top" | "bottom";
-}) {
-  if (!floating) {
-    return (
-      <div className="flex justify-center py-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-11 w-11 rounded-full shadow-sm bg-white/95 dark:bg-slate-900/80 border border-border touch-manipulation"
-          onClick={onClick}
-          aria-label="Add paragraph"
-        >
-          <Plus className="h-5 w-5" />
-        </Button>
-      </div>
-    );
-  }
-
-  const style: React.CSSProperties = {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    display: "flex",
-    justifyContent: "center",
-    pointerEvents: "none",
-    top: position === "top" ? 0 : undefined,
-    bottom: position === "bottom" ? 0 : undefined,
-    transform: position === "top" ? "translateY(-60%)" : "translateY(60%)",
-    zIndex: 10,
-  };
-
-  return (
-    <div style={style}>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="h-11 w-11 rounded-full shadow-sm bg-white/95 dark:bg-slate-900/80 border border-border touch-manipulation"
-        onClick={onClick}
-        style={{ pointerEvents: "auto" }}
-        aria-label="Add paragraph"
-      >
-        <Plus className="h-5 w-5" />
-      </Button>
-    </div>
-  );
-}
 
 interface AgreedDocumentProps {
   document: Document;
   totalUsers: number;
-  onAddElement?: (
-    elementType: 'paragraph',
-    options?: {
-      text?: string;
-      title?: string;
-      headingLevel?: any;
-      order?: number;
-    }
-  ) => Promise<void> | void;
 }
 
-export function AgreedDocument({ document, totalUsers, onAddElement }: AgreedDocumentProps) {
-  const isMobile = useIsMobile();
-  const [hoveredParagraphId, setHoveredParagraphId] = useState<string | null>(null);
+export function AgreedDocument({ document, totalUsers }: AgreedDocumentProps) {
 
   const sortedParagraphs = [...document.paragraphs].sort((a, b) => a.order - b.order);
 
@@ -181,14 +117,8 @@ export function AgreedDocument({ document, totalUsers, onAddElement }: AgreedDoc
               if (paragraph.title) {
                 // Heading
                 const headingLevel = Math.min(6, 2 + (paragraph.order || 0));
-                const isHovered = hoveredParagraphId === paragraph.id;
                 return (
-                  <div
-                    key={paragraph.id}
-                    className="relative"
-                    onMouseEnter={() => setHoveredParagraphId(paragraph.id)}
-                    onMouseLeave={() => setHoveredParagraphId(null)}
-                  >
+                  <div key={paragraph.id} className="relative">
                     <div className="flex flex-col sm:flex-row sm:items-start sm:gap-3 gap-2">
                       {React.createElement(
                         `h${headingLevel}`,
@@ -210,30 +140,13 @@ export function AgreedDocument({ document, totalUsers, onAddElement }: AgreedDoc
                         </div>
                       )}
                     </div>
-                    {(isHovered || isMobile) && onAddElement && (
-                      <InlineAddButton
-                        onClick={() => {
-                          const contentParagraphs = sortedParagraphs.filter(p => !p.isDocumentTitle && (p.title || p.text) && (p.title || p.text).trim() !== '');
-                          const maxOrder = contentParagraphs.length > 0 ? Math.max(...contentParagraphs.map(p => p.order || 0)) : 0;
-                          onAddElement('paragraph', { order: maxOrder + 1 });
-                        }}
-                        floating
-                        position="bottom"
-                      />
-                    )}
                   </div>
                 );
               }
 
               // Regular paragraph
-              const isHovered = hoveredParagraphId === paragraph.id;
               return (
-                <div
-                  key={paragraph.id}
-                  className="relative"
-                  onMouseEnter={() => setHoveredParagraphId(paragraph.id)}
-                  onMouseLeave={() => setHoveredParagraphId(null)}
-                >
+                <div key={paragraph.id} className="relative">
                   <div className="flex flex-col sm:flex-row sm:gap-4 gap-2">
                     <p className="flex-1 leading-relaxed text-gray-800 dark:text-gray-200 text-justify indent-8 first-line:font-medium">
                       {displayText}
@@ -253,17 +166,6 @@ export function AgreedDocument({ document, totalUsers, onAddElement }: AgreedDoc
                       </div>
                     )}
                   </div>
-                  {(isHovered || isMobile) && onAddElement && (
-                    <InlineAddButton
-                      onClick={() => {
-                        const contentParagraphs = sortedParagraphs.filter(p => !p.isDocumentTitle && (p.title || p.text) && (p.title || p.text).trim() !== '');
-                        const maxOrder = contentParagraphs.length > 0 ? Math.max(...contentParagraphs.map(p => p.order || 0)) : 0;
-                        onAddElement('paragraph', { order: maxOrder + 1 });
-                      }}
-                      floating
-                      position="bottom"
-                    />
-                  )}
                 </div>
               );
             })}

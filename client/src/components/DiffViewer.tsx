@@ -55,6 +55,15 @@ function highlightDifferences(
   modified: string,
   suggestionType: "suggestion1" | "suggestion2"
 ): DiffSegment[] {
+  // Handle empty original text - treat everything as new
+  if (!original || original.trim() === '') {
+    if (!modified || modified.trim() === '') {
+      return [{ text: '', type: "original" }];
+    }
+    // All text is new
+    return [{ text: modified, type: suggestionType }];
+  }
+
   const originalWords = original.split(/(\s+)/);
   const modifiedWords = modified.split(/(\s+)/);
   const segments: DiffSegment[] = [];
@@ -65,10 +74,13 @@ function highlightDifferences(
     const origWord = originalWords[i] || "";
     const modWord = modifiedWords[i] || "";
     
-    if (origWord === modWord) {
+    if (origWord === modWord && origWord) {
       segments.push({ text: origWord, type: "original" });
     } else if (modWord) {
       segments.push({ text: modWord, type: suggestionType });
+    } else if (origWord) {
+      // Word was deleted - show as original (deleted) or skip
+      segments.push({ text: origWord, type: "original" });
     }
   }
 
@@ -128,22 +140,21 @@ export function DiffViewer({
 
   return (
     <Card className="p-4 space-y-3 bg-muted/30">
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-sm">Comparing:</span>
-        <Badge variant="outline" className="bg-background">
-          Accepted Version
-        </Badge>
-        {suggestion1Text && (
+      {suggestion1Text && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge variant="outline" className="bg-background">
+            Accepted Version
+          </Badge>
           <Badge className="bg-amber-500 hover:bg-amber-600">
             {suggestion1Author || "Suggestion 1"}
           </Badge>
-        )}
-        {suggestion2Text && (
-          <Badge className="bg-blue-500 hover:bg-blue-600">
-            {suggestion2Author || "Suggestion 2"}
-          </Badge>
-        )}
-      </div>
+          {suggestion2Text && (
+            <Badge className="bg-blue-500 hover:bg-blue-600">
+              {suggestion2Author || "Suggestion 2"}
+            </Badge>
+          )}
+        </div>
+      )}
       
       <div className="p-4 bg-background rounded-md border leading-relaxed">
         {segments.map((segment, index) => {

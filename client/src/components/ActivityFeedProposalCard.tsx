@@ -65,41 +65,9 @@ export function ActivityFeedProposalCard({
 
   return (
     <div className="space-y-3">
-      {/* Document Context Header */}
-      <div className="flex items-center gap-2 text-sm text-gray-700 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
-        <FileText className="h-4 w-4 text-gray-500 flex-shrink-0" />
-        <button
-          onClick={() => onNavigateToDocument(documentContext.documentId)}
-          className="font-medium hover:text-gray-900 transition-colors text-left"
-        >
-          {documentContext.documentTitle}
-        </button>
-        {documentContext.paragraphTitle && (
-          <>
-            <span className="text-gray-400">•</span>
-            <span className="text-gray-600">{documentContext.paragraphTitle}</span>
-          </>
-        )}
-        <div className="ml-auto flex items-center gap-2">
-          {getTabBadge()}
-          {tabType === 'accepted' && history.length > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowHistory(!showHistory)}
-              className="h-7 text-xs gap-1.5"
-            >
-              <History className="h-3.5 w-3.5" />
-              History ({history.length})
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* SuggestionCard with inline diff for pending */}
+      {/* SuggestionCard with integrated document context and inline diff for pending */}
       {tabType === 'pending' ? (
         <Card className="p-0 overflow-hidden">
-          {/* Use SuggestionCard but pass a prop to show diff instead of text preview */}
           <SuggestionCard
             suggestion={proposal}
             totalUsers={totalUsers}
@@ -109,6 +77,12 @@ export function ActivityFeedProposalCard({
             onComment={(proposalId, text, parentId) => onComment(proposalId, documentContext.documentId, documentContext.paragraphId, text, parentId)}
             originalText={originalText}
             showDiffInline={true}
+            documentContext={documentContext}
+            onNavigateToDocument={onNavigateToDocument}
+            tabBadge={getTabBadge()}
+            showHistoryButton={tabType === 'accepted' && history.length > 0}
+            historyCount={history.length}
+            onToggleHistory={() => setShowHistory(!showHistory)}
           />
         </Card>
       ) : (
@@ -120,6 +94,12 @@ export function ActivityFeedProposalCard({
           onVote={(proposalId, voteType) => onVote(proposalId, documentContext.documentId, documentContext.paragraphId, voteType)}
           onComment={(proposalId, text, parentId) => onComment(proposalId, documentContext.documentId, documentContext.paragraphId, text, parentId)}
           originalText={originalText}
+          documentContext={documentContext}
+          onNavigateToDocument={onNavigateToDocument}
+          tabBadge={getTabBadge()}
+          showHistoryButton={tabType === 'accepted' && history.length > 0}
+          historyCount={history.length}
+          onToggleHistory={() => setShowHistory(!showHistory)}
         />
       )}
 

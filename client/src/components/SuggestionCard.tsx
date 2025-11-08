@@ -5,7 +5,7 @@ import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Badge } from "./ui/badge";
 import { Checkbox } from "./ui/checkbox";
 import { Progress } from "./ui/progress";
-import { ThumbsUp, ThumbsDown, MessageSquare, CheckCircle2, Users } from "lucide-react";
+import { ThumbsUp, ThumbsDown, MessageSquare, CheckCircle2, Users, FileText, History } from "lucide-react";
 import { Textarea } from "./ui/textarea";
 import { DiffViewer } from "./DiffViewer";
 import { useState } from "react";
@@ -30,6 +30,12 @@ interface SuggestionCardProps {
   onComment: (suggestionId: string, text: string, parentId?: string) => void;
   originalText?: string;
   showDiffInline?: boolean;
+  documentContext?: { documentId: string; documentTitle: string; paragraphTitle?: string };
+  onNavigateToDocument?: (documentId: string) => void;
+  tabBadge?: React.ReactNode;
+  showHistoryButton?: boolean;
+  historyCount?: number;
+  onToggleHistory?: () => void;
   key?: React.Key;
 }
 
@@ -58,6 +64,12 @@ export function SuggestionCard({
   onComment,
   originalText,
   showDiffInline = false,
+  documentContext,
+  onNavigateToDocument,
+  tabBadge,
+  showHistoryButton,
+  historyCount,
+  onToggleHistory,
 }: SuggestionCardProps) {
   const [commentText, setCommentText] = useState("");
   const [showVoteDetails, setShowVoteDetails] = useState(false);
@@ -198,6 +210,41 @@ export function SuggestionCard({
 
       {/* Compact Header with inline vote buttons */}
       <div className="p-4">
+        {/* Document Context - Integrated into header */}
+        {documentContext && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3 pb-2 border-b">
+            <FileText className="h-3 w-3 flex-shrink-0" />
+            <button
+              onClick={() => onNavigateToDocument?.(documentContext.documentId)}
+              className="font-medium hover:text-foreground transition-colors text-left"
+            >
+              {documentContext.documentTitle}
+            </button>
+            {documentContext.paragraphTitle && (
+              <>
+                <span className="text-muted-foreground/50">•</span>
+                <span className="text-muted-foreground">{documentContext.paragraphTitle}</span>
+              </>
+            )}
+            {tabBadge && (
+              <div className="ml-auto">
+                {tabBadge}
+              </div>
+            )}
+            {showHistoryButton && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onToggleHistory}
+                className="h-6 px-2 text-xs ml-auto"
+              >
+                <History className="h-3 w-3 mr-1" />
+                History ({historyCount})
+              </Button>
+            )}
+          </div>
+        )}
+        
         <div className="flex items-start justify-between gap-4 mb-3">
           <div className="flex items-start gap-3 flex-1 min-w-0">
             {onToggleSelect && (
@@ -240,10 +287,10 @@ export function SuggestionCard({
                   <Badge className="bg-blue-500 text-xs">Compare 2</Badge>
                 )}
               </div>
-              {showDiffInline && originalText ? (
+              {showDiffInline && originalText !== undefined ? (
                 <div className="mt-2">
                   <DiffViewer
-                    originalText={originalText}
+                    originalText={originalText || ''}
                     suggestion1Text={suggestion.text}
                     suggestion1Author={suggestion.user.name}
                   />

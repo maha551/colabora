@@ -140,7 +140,7 @@ describe('Documents API Integration Tests', () => {
 
       // Try to access Bob's document with Alice's token
       await request(server)
-        .get(`/api/documents/${bobDoc.body.document.id}`)
+        .get(`/api/documents/${bobDoc.body.id}`)
         .set('Authorization', `Bearer ${authToken}`)
         .expect(403);
     });

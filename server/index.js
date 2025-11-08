@@ -554,12 +554,40 @@ function initializeDatabase(db) {
       approval_percentage REAL,
       proposal_id TEXT,
       heading_level TEXT,
+      accepted_at TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (paragraph_id) REFERENCES paragraphs(id),
       FOREIGN KEY (user_id) REFERENCES users(id),
       FOREIGN KEY (proposal_id) REFERENCES proposals(id)
     )`
   ];
+
+  // Schema migration function to ensure history table has accepted_at column
+  function ensureHistoryAcceptedAt(db) {
+    return new Promise((resolve, reject) => {
+      db.all("PRAGMA table_info(history)", (err, cols) => {
+        if (err) {
+          console.error("Failed to inspect history table:", err);
+          return reject(err);
+        }
+
+        const hasAcceptedAt = cols && cols.some(c => c.name === 'accepted_at');
+        if (!hasAcceptedAt) {
+          console.log("Adding accepted_at column to history table...");
+          db.run("ALTER TABLE history ADD COLUMN accepted_at TEXT", (addErr) => {
+            if (addErr) {
+              console.error("Failed to add accepted_at to history:", addErr);
+              return reject(addErr);
+            }
+            console.log("✅ Added accepted_at column to history table");
+            resolve();
+          });
+        } else {
+          resolve();
+        }
+      });
+    });
+  }
 
   // Execute table creation sequentially to ensure proper initialization
   let tablesCreated = 0;
@@ -571,6 +599,11 @@ function initializeDatabase(db) {
       console.log('All tables created, ensuring new columns...');
       ensureColumn(db, 'users', 'avatar', 'TEXT');
       ensureColumn(db, 'users', 'bio', 'TEXT');
+
+      // Ensure history table has accepted_at column
+      ensureHistoryAcceptedAt(db).catch(err => {
+        console.error('Error ensuring history table schema:', err);
+      });
       
       // Wait a bit for column additions to complete, then insert demo data
       setTimeout(async () => {

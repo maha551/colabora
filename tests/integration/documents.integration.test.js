@@ -6,6 +6,7 @@ let app;
 let authToken;
 let testUserId;
 let testDocumentId;
+let testParagraphId;
 let testDbPath;
 
 describe('Documents API Integration Tests', () => {
@@ -149,7 +150,6 @@ describe('Documents API Integration Tests', () => {
   });
 
   describe('Paragraph Management', () => {
-    let testParagraphId;
 
     test('should create a new paragraph', async () => {
       const paragraphData = {

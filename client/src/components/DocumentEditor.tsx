@@ -291,19 +291,20 @@ export const DocumentEditor = React.memo(function DocumentEditor({
     try {
       const order = computeInsertOrder(insertContext);
 
+      // Check if this will be the first content paragraph in the document
+      const isFirstContentParagraph = contentParagraphs.length === 0 || order < Math.min(...contentParagraphs.map(p => p.order ?? 0));
+
       if (includeHeading) {
         // Create heading-only paragraph
+        // For the first paragraph, always use H1 regardless of user selection
         await onAddElement("paragraph", {
           text: "",
           title: heading,
-          headingLevel: newParagraphHeadingLevel,
+          headingLevel: isFirstContentParagraph ? 'h1' : newParagraphHeadingLevel,
           order,
         });
       } else {
         // Create body-only paragraph
-        // Check if this is the first content paragraph in the document
-        const isFirstContentParagraph = contentParagraphs.length === 0;
-
         await onAddElement("paragraph", {
           text: body,
           headingLevel: isFirstContentParagraph ? 'h1' : undefined,
@@ -440,8 +441,9 @@ export const DocumentEditor = React.memo(function DocumentEditor({
                       </Button>
                       {includeHeading && (
                         <Select
-                          value={newParagraphHeadingLevel}
+                          value={i === 0 ? 'h1' : newParagraphHeadingLevel}
                           onValueChange={(value: HeadingLevel) => setNewParagraphHeadingLevel(value)}
+                          disabled={i === 0}
                         >
                           <SelectTrigger className="w-[110px]">
                             <SelectValue placeholder="Heading level" />
@@ -650,8 +652,9 @@ export const DocumentEditor = React.memo(function DocumentEditor({
                     )}
                     {includeHeading && (
                       <Select
-                        value={newParagraphHeadingLevel}
+                        value={contentParagraphs.length === 0 ? 'h1' : newParagraphHeadingLevel}
                         onValueChange={(value: HeadingLevel) => setNewParagraphHeadingLevel(value)}
+                        disabled={contentParagraphs.length === 0}
                       >
                         <SelectTrigger className="w-[110px]">
                           <SelectValue placeholder="Heading level" />
@@ -764,8 +767,9 @@ export const DocumentEditor = React.memo(function DocumentEditor({
                 />
                 <Label htmlFor="heading-level" className="text-sm">Heading level</Label>
                 <Select
-                  value={newParagraphHeadingLevel}
+                  value={insertContext.position === 'end' && contentParagraphs.length === 0 ? 'h1' : newParagraphHeadingLevel}
                   onValueChange={(value: HeadingLevel) => setNewParagraphHeadingLevel(value)}
+                  disabled={insertContext.position === 'end' && contentParagraphs.length === 0}
                 >
                   <SelectTrigger id="heading-level" className="w-[110px]">
                     <SelectValue placeholder="Heading level" />

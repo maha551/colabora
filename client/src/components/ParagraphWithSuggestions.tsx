@@ -400,7 +400,7 @@ export function ParagraphWithSuggestions({
             </div>
             <div
               className={cn(
-                "flex flex-col md:flex-row items-center gap-2 md:gap-1 transition-all duration-150",
+                "flex flex-col md:flex-row portrait:flex-col landscape:flex-row items-center gap-2 md:gap-1 transition-all duration-150",
                 showDiscussionArea || showHistory || isHovered
                   ? "opacity-100 translate-y-0"
                   : "pointer-events-none opacity-0 -translate-y-0.5"

@@ -194,6 +194,7 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
   const [loadingPending, setLoadingPending] = useState(false);
   const [lastViewedTimestamps, setLastViewedTimestamps] = useState<Record<string, string>>({});
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
 
 
   // Load last viewed timestamps from localStorage
@@ -317,6 +318,26 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
       }
       return newSet;
     });
+  };
+
+  // Toggle comments expansion
+  const toggleCommentsExpanded = (proposalId: string) => {
+    setExpandedComments(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(proposalId)) {
+        newSet.delete(proposalId);
+      } else {
+        newSet.add(proposalId);
+      }
+      return newSet;
+    });
+  };
+
+  // Get preview text for proposed change
+  const getChangePreview = (currentText: string, proposedText: string, maxLength: number = 80): string => {
+    if (!proposedText) return 'No preview available';
+    if (proposedText.length <= maxLength) return proposedText;
+    return proposedText.substring(0, maxLength).trim() + '...';
   };
 
   // Simple placeholder for voting - redirects to document
@@ -571,103 +592,89 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
               <div className="space-y-3">
                 {debatedProposals.map((proposal, index) => (
                   <Card key={proposal.id} className="overflow-hidden hover:shadow-md transition-all hover:border-purple-300 border-purple-200 shadow-sm">
-                    {/* Header with ranking */}
-                    <div className="bg-gradient-to-r from-purple-50 to-violet-50 p-3.5 border-b border-purple-200">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                              <span className="text-sm font-bold text-purple-700">#{index + 1}</span>
-                            </div>
-                            <div className="p-2 bg-purple-100 rounded-full">
-                              <TrendingUp className="h-5 w-5 text-purple-600" />
-                            </div>
-                          </div>
-                          <div>
-                            <h3 className="text-lg font-semibold text-purple-900">
-                              Most Debated Proposal
-                            </h3>
-                            <p className="text-sm text-purple-700">
-                              Score: {proposal.debateScore} • {proposal.engagement.comments} comments
-                              {proposal.engagement.proPercentage > 30 && proposal.engagement.contraPercentage > 30 && " • Controversial"}
-                            </p>
-                          </div>
-                        </div>
+                    {/* Compact Header - Single Line */}
+                    <div className="bg-gradient-to-r from-purple-50 to-violet-50 p-2.5 border-b border-purple-200">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
                         <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">#{index + 1}</span>
+                          <TrendingUp className="h-3 w-3 text-purple-600" />
+                          <h3 className="text-base font-semibold text-purple-900">
+                            Most Debated Proposal
+                          </h3>
+                          <span className="text-xs text-purple-700">•</span>
+                          <span className="text-xs text-purple-700">Score: {proposal.debateScore}</span>
+                          <span className="text-xs text-purple-700">•</span>
+                          <span className="text-xs text-purple-700">💬 {proposal.engagement.comments}</span>
                           {proposal.engagement.proPercentage > 30 && proposal.engagement.contraPercentage > 30 && (
-                            <Badge className="bg-orange-100 text-orange-700 border-orange-200 px-2 py-1 text-xs font-semibold">
-                              ⚖️ Controversial
-                            </Badge>
+                            <>
+                              <span className="text-xs text-purple-700">•</span>
+                              <Badge className="bg-orange-100 text-orange-700 border-orange-200 px-1.5 py-0.5 text-xs font-semibold">
+                                ⚖️ Controversial
+                              </Badge>
+                            </>
                           )}
-                          <Badge className="bg-purple-100 text-purple-700 px-2 py-1 text-xs font-semibold">
-                            💬 {proposal.engagement.comments} comments
-                          </Badge>
                         </div>
                       </div>
                     </div>
 
                     {/* Content */}
-                    <div className="p-3.5 space-y-3">
-                      {/* User and Document Info */}
-                      <div className="flex items-start gap-3">
-                        <Avatar className="h-9 w-9 flex-shrink-0 ring-2 ring-purple-100">
+                    <div className="p-3 space-y-2.5">
+                      {/* Compact User and Document Info - Single Line */}
+                      <div className="flex items-center gap-2 text-xs text-gray-600 flex-wrap">
+                        <Avatar className="h-6 w-6 flex-shrink-0">
                           <AvatarImage src={proposal.user.avatar} />
-                          <AvatarFallback className="text-xs bg-gradient-to-br from-blue-500 to-purple-600 text-white">
+                          <AvatarFallback className="text-[10px] bg-gradient-to-br from-blue-500 to-purple-600 text-white">
                             {proposal.user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
-
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2 mb-1">
-                            <span className="text-sm font-medium text-gray-900">
-                              {proposal.user.name}
-                            </span>
-                            <Badge
-                              variant={proposal.type === 'TITLE' ? 'default' : 'outline'}
-                              className="text-xs"
-                            >
-                              {proposal.type === 'TITLE' ? '📝 Title' : '📄 Body'}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-2 flex-wrap text-xs text-gray-600">
-                            <Badge
-                              variant="secondary"
-                              className="text-xs font-medium cursor-pointer hover:bg-blue-100 hover:text-blue-700 transition-colors px-2 py-0.5"
-                              onClick={() => onNavigateToDocument(proposal.documentId)}
-                            >
-                              <FileText className="h-3 w-3 mr-1" />
-                              {proposal.documentTitle}
-                            </Badge>
-                            {proposal.paragraphTitle && (
-                              <>
-                                <span className="text-gray-400">•</span>
-                                <span className="font-medium">{proposal.paragraphTitle}</span>
-                              </>
-                            )}
+                        <span className="font-medium text-gray-900">{proposal.user.name}</span>
+                        <span className="text-gray-400">in</span>
+                        <Badge
+                          variant="secondary"
+                          className="text-xs font-medium cursor-pointer hover:bg-blue-100 hover:text-blue-700 transition-colors px-1.5 py-0 h-5"
+                          onClick={() => onNavigateToDocument(proposal.documentId)}
+                        >
+                          <FileText className="h-3 w-3 mr-1" />
+                          {proposal.documentTitle}
+                        </Badge>
+                        {proposal.paragraphTitle && (
+                          <>
                             <span className="text-gray-400">•</span>
-                            <span className="text-gray-500">{formatTimestamp(proposal.createdAt)}</span>
-                          </div>
-                        </div>
+                            <span className="font-medium">{proposal.paragraphTitle}</span>
+                          </>
+                        )}
+                        <span className="text-gray-400">•</span>
+                        <span className="text-gray-500">{formatTimestamp(proposal.createdAt)}</span>
+                        <Badge
+                          variant={proposal.type === 'TITLE' ? 'default' : 'outline'}
+                          className="text-xs h-5 ml-auto"
+                        >
+                          {proposal.type === 'TITLE' ? '📝 Title' : '📄 Body'}
+                        </Badge>
                       </div>
 
-                        {/* Proposed Content - Diff View */}
+                      {/* Proposed Change - Collapsible by Default */}
                       <div className="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-                        <div className="bg-gray-50 px-3 py-2 border-b border-gray-200 flex items-center justify-between">
-                          <h4 className="text-sm font-semibold text-gray-700">Proposed Change</h4>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleExpanded(`debated-${proposal.id}`)}
-                            className="h-6 w-6 p-0"
-                          >
-                            {expandedItems.has(`debated-${proposal.id}`) ? (
-                              <ChevronDown className="h-4 w-4" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4" />
+                        <button
+                          onClick={() => toggleExpanded(`debated-${proposal.id}`)}
+                          className="w-full bg-gray-50 px-3 py-2 border-b border-gray-200 flex items-center justify-between hover:bg-gray-100 transition-colors"
+                        >
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <h4 className="text-sm font-semibold text-gray-700">Proposed Change</h4>
+                            <span className="text-xs text-gray-500">by {proposal.user.name}</span>
+                            {!expandedItems.has(`debated-${proposal.id}`) && (
+                              <span className="text-xs text-gray-500 truncate">
+                                • {getChangePreview(proposal.currentText || '', proposal.proposedText)}
+                              </span>
                             )}
-                          </Button>
-                        </div>
-                        {expandedItems.has(`debated-${proposal.id}`) ? (
+                          </div>
+                          {expandedItems.has(`debated-${proposal.id}`) ? (
+                            <ChevronDown className="h-4 w-4 text-gray-500 flex-shrink-0" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 text-gray-500 flex-shrink-0" />
+                          )}
+                        </button>
+                        {expandedItems.has(`debated-${proposal.id}`) && (
                           <div className="p-0">
                             <InlineExpandedView
                               proposal={proposal}
@@ -677,73 +684,64 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
                               onClose={() => toggleExpanded(`debated-${proposal.id}`)}
                             />
                           </div>
-                        ) : (
-                          <div className="p-4 bg-white">
-                            <DiffViewer
-                              originalText={proposal.currentText || ''}
-                              suggestion1Text={proposal.proposedText}
-                              suggestion1Author={proposal.user.name}
-                            />
-                          </div>
                         )}
                       </div>
 
-                      {/* Comments */}
+                      {/* Compact Comments - Show 2-3 by default */}
                       {proposal.comments && proposal.comments.length > 0 && (
-                        <div className="border-t pt-3">
-                          <button
-                            onClick={() => {
-                              // For now, just show all comments since we're in a summary view
-                              // Could be made collapsible if needed
-                            }}
-                            className="flex items-center justify-between w-full text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-                          >
-                            <div className="flex items-center gap-2">
-                              <MessageSquare className="h-4 w-4" />
-                              <span>
-                                Discussion ({proposal.comments.length})
-                              </span>
-                              <Badge variant="secondary" className="h-5 text-xs">
-                                {proposal.comments.length}
-                              </Badge>
-                            </div>
-                          </button>
-
-                          <div className="mt-4 space-y-3 max-h-64 overflow-y-auto">
-                            {proposal.comments.slice(0, 10).map((comment) => (
-                              <div key={comment.id} className="flex gap-3 p-3 rounded-lg bg-muted/30">
-                                <Avatar className="h-8 w-8 flex-shrink-0">
+                        <div className="border-t border-gray-100 pt-2">
+                          <div className="flex items-center gap-2 mb-2">
+                            <MessageSquare className="h-3 w-3 text-gray-500" />
+                            <span className="text-xs font-medium text-gray-700">
+                              Discussion ({proposal.comments.length})
+                            </span>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            {(expandedComments.has(proposal.id) 
+                              ? proposal.comments 
+                              : proposal.comments.slice(0, 2)
+                            ).map((comment) => (
+                              <div key={comment.id} className="flex gap-2 p-2 rounded bg-muted/30">
+                                <Avatar className="h-6 w-6 flex-shrink-0">
                                   <AvatarImage src={comment.user.avatar} />
-                                  <AvatarFallback className="bg-primary/10 text-xs">
+                                  <AvatarFallback className="bg-primary/10 text-[10px]">
                                     {comment.user.name.split(' ').map(n => n[0]).join('') || 'U'}
                                   </AvatarFallback>
                                 </Avatar>
-                                <div className="flex-1 space-y-2 min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-sm font-medium text-foreground">{comment.user.name}</span>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1.5 mb-0.5">
+                                    <span className="text-xs font-medium text-foreground">{comment.user.name}</span>
                                     <span className="text-xs text-muted-foreground">• {formatTimestamp(comment.createdAt)}</span>
                                   </div>
-                                  <p className="text-sm text-foreground leading-relaxed break-words">{comment.text}</p>
+                                  <p className="text-xs text-foreground leading-relaxed break-words">{comment.text}</p>
                                 </div>
                               </div>
                             ))}
-                            {proposal.comments.length > 10 && (
-                              <div className="text-center text-xs text-muted-foreground py-2">
-                                And {proposal.comments.length - 10} more comments...
-                              </div>
+                            
+                            {proposal.comments.length > 2 && (
+                              <button
+                                onClick={() => toggleCommentsExpanded(proposal.id)}
+                                className="text-xs text-gray-600 hover:text-gray-900 transition-colors py-1"
+                              >
+                                {expandedComments.has(proposal.id) 
+                                  ? `Show less` 
+                                  : `Show ${proposal.comments.length - 2} more comments`
+                                }
+                              </button>
                             )}
                           </div>
                         </div>
                       )}
 
                       {/* Action Button */}
-                      <div className="flex justify-end pt-1">
+                      <div className="flex justify-end pt-1 border-t border-gray-100">
                         <Button
                           size="sm"
                           onClick={() => onNavigateToDocument(proposal.documentId)}
-                          className="gap-2 bg-black hover:bg-gray-800 text-white shadow-sm font-medium"
+                          className="gap-2 bg-black hover:bg-gray-800 text-white shadow-sm font-medium h-8 text-xs"
                         >
-                          <MessageSquare className="h-4 w-4" />
+                          <MessageSquare className="h-3 w-3" />
                           Join Discussion
                         </Button>
                       </div>

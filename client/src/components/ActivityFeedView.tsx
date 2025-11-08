@@ -367,7 +367,10 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
         <Tabs value={activePanel} onValueChange={(value) => setActivePanel(value as 'agreed' | 'pending' | 'debated')}>
           <div className="flex justify-center mb-6 px-4">
             <TabsList className="w-full sm:w-auto bg-white border border-gray-200 shadow-sm">
-              <TabsTrigger value="agreed" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm data-[state=active]:bg-green-50 data-[state=active]:text-green-700 data-[state=active]:border-b-2 data-[state=active]:border-green-600 data-[state=active]:font-semibold transition-all">
+              <TabsTrigger 
+                value="agreed" 
+                className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm text-gray-500 data-[state=active]:bg-green-50 data-[state=active]:text-green-700 data-[state=active]:border-b-2 data-[state=active]:border-green-600 data-[state=active]:font-semibold data-[state=active]:shadow-sm transition-all"
+              >
                 <CheckCircle2 className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden xs:inline">Accepted</span>
                 {agreedVersions.length > 0 && (
@@ -376,7 +379,10 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="debated" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm data-[state=active]:bg-purple-50 data-[state=active]:text-purple-700 data-[state=active]:border-b-2 data-[state=active]:border-purple-600 data-[state=active]:font-semibold transition-all">
+              <TabsTrigger 
+                value="debated" 
+                className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm text-gray-500 data-[state=active]:bg-purple-50 data-[state=active]:text-purple-700 data-[state=active]:border-b-2 data-[state=active]:border-purple-600 data-[state=active]:font-semibold data-[state=active]:shadow-sm transition-all"
+              >
                 <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden xs:inline">Discussed</span>
                 {debatedProposals.length > 0 && (
@@ -385,7 +391,10 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument 
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="pending" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:font-semibold transition-all">
+              <TabsTrigger 
+                value="pending" 
+                className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm text-gray-500 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:font-semibold data-[state=active]:shadow-sm transition-all"
+              >
                 <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden xs:inline">Pending</span>
                 {pendingProposals.length > 0 && (

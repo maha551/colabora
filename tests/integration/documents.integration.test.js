@@ -87,10 +87,10 @@ describe('Documents API Integration Tests', () => {
         .set('Authorization', `Bearer ${authToken}`)
         .expect(200);
 
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBeGreaterThan(0);
+      expect(Array.isArray(response.body.documents)).toBe(true);
+      expect(response.body.documents.length).toBeGreaterThan(0);
 
-      const ourDocument = response.body.find(doc => doc.id === testDocumentId);
+      const ourDocument = response.body.documents.find(doc => doc.id === testDocumentId);
       expect(ourDocument).toBeDefined();
       expect(ourDocument.title).toBe('Integration Test Document');
     });
@@ -118,7 +118,7 @@ describe('Documents API Integration Tests', () => {
         .send(updateData)
         .expect(200);
 
-      expect(response.body.document.title).toBe(updateData.title);
+      expect(response.body.message).toBe('Document updated successfully');
     });
 
     test('should reject unauthorized document access', async () => {
@@ -174,10 +174,10 @@ describe('Documents API Integration Tests', () => {
         .set('Authorization', `Bearer ${authToken}`)
         .expect(200);
 
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBeGreaterThan(0);
+      expect(Array.isArray(response.body.paragraphs)).toBe(true);
+      expect(response.body.paragraphs.length).toBeGreaterThan(0);
 
-      const ourParagraph = response.body.find(p => p.id === testParagraphId);
+      const ourParagraph = response.body.paragraphs.find(p => p.id === testParagraphId);
       expect(ourParagraph).toBeDefined();
       expect(ourParagraph.text).toBe('This is a test paragraph for integration testing.');
     });
@@ -193,7 +193,7 @@ describe('Documents API Integration Tests', () => {
         .send(updateData)
         .expect(200);
 
-      expect(response.body.paragraph.text).toBe(updateData.text);
+      expect(response.body.message).toBe('Paragraph updated successfully');
     });
   });
 

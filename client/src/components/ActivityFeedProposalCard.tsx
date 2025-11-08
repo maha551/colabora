@@ -96,44 +96,31 @@ export function ActivityFeedProposalCard({
         </div>
       </div>
 
-      {/* SuggestionCard */}
-      <SuggestionCard
-        suggestion={proposal}
-        totalUsers={totalUsers}
-        currentUser={currentUser}
-        allCollaborators={allCollaborators}
-        onVote={(proposalId, voteType) => onVote(proposalId, documentContext.documentId, documentContext.paragraphId, voteType)}
-        onComment={(proposalId, text, parentId) => onComment(proposalId, documentContext.documentId, documentContext.paragraphId, text, parentId)}
-        originalText={originalText}
-      />
-
-      {/* Expanded Diff View for Pending Tab */}
-      {tabType === 'pending' && (
-        <Card className="border border-gray-200 overflow-hidden">
-          <button
-            onClick={() => setShowDiffExpanded(!showDiffExpanded)}
-            className="w-full bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between hover:bg-gray-100 transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <h4 className="text-sm font-semibold text-gray-700">Proposed Change</h4>
-              <span className="text-xs text-gray-500">by {proposal.user.name}</span>
-            </div>
-            {showDiffExpanded ? (
-              <ChevronUp className="h-4 w-4 text-gray-500 flex-shrink-0" />
-            ) : (
-              <ChevronDown className="h-4 w-4 text-gray-500 flex-shrink-0" />
-            )}
-          </button>
-          {showDiffExpanded && (
-            <div className="p-4 bg-white">
-              <DiffViewer
-                originalText={originalText}
-                suggestion1Text={proposal.text}
-                suggestion1Author={proposal.user.name}
-              />
-            </div>
-          )}
+      {/* SuggestionCard with inline diff for pending */}
+      {tabType === 'pending' ? (
+        <Card className="p-0 overflow-hidden">
+          {/* Use SuggestionCard but pass a prop to show diff instead of text preview */}
+          <SuggestionCard
+            suggestion={proposal}
+            totalUsers={totalUsers}
+            currentUser={currentUser}
+            allCollaborators={allCollaborators}
+            onVote={(proposalId, voteType) => onVote(proposalId, documentContext.documentId, documentContext.paragraphId, voteType)}
+            onComment={(proposalId, text, parentId) => onComment(proposalId, documentContext.documentId, documentContext.paragraphId, text, parentId)}
+            originalText={originalText}
+            showDiffInline={true}
+          />
         </Card>
+      ) : (
+        <SuggestionCard
+          suggestion={proposal}
+          totalUsers={totalUsers}
+          currentUser={currentUser}
+          allCollaborators={allCollaborators}
+          onVote={(proposalId, voteType) => onVote(proposalId, documentContext.documentId, documentContext.paragraphId, voteType)}
+          onComment={(proposalId, text, parentId) => onComment(proposalId, documentContext.documentId, documentContext.paragraphId, text, parentId)}
+          originalText={originalText}
+        />
       )}
 
       {/* History Display (for Accepted tab) */}

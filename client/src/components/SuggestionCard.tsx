@@ -28,6 +28,7 @@ interface SuggestionCardProps {
   onVote: (suggestionId: string, voteType: 'PRO' | 'NEUTRAL' | 'CONTRA') => void;
   onComment: (suggestionId: string, text: string, parentId?: string) => void;
   originalText?: string;
+  showDiffInline?: boolean;
   key?: React.Key;
 }
 
@@ -55,6 +56,7 @@ export function SuggestionCard({
   onVote,
   onComment,
   originalText,
+  showDiffInline = false,
 }: SuggestionCardProps) {
   const [commentText, setCommentText] = useState("");
   const [showVoteDetails, setShowVoteDetails] = useState(false);
@@ -237,9 +239,19 @@ export function SuggestionCard({
                   <Badge className="bg-blue-500 text-xs">Compare 2</Badge>
                 )}
               </div>
-              <p className="text-sm text-gray-900 font-normal line-clamp-2">
-                "{suggestion.text}"
-              </p>
+              {showDiffInline && originalText ? (
+                <div className="mt-2">
+                  <DiffViewer
+                    originalText={originalText}
+                    suggestion1Text={suggestion.text}
+                    suggestion1Author={suggestion.user.name}
+                  />
+                </div>
+              ) : (
+                <p className="text-sm text-gray-900 font-normal line-clamp-2">
+                  "{suggestion.text}"
+                </p>
+              )}
             </div>
           </div>
 

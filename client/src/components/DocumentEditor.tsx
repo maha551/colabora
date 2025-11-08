@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "./ui/select";
 import { cn } from "./ui/utils";
+import { useIsMobile } from "./ui/use-mobile";
 
 interface DocumentEditorProps {
   document: Document;
@@ -67,11 +68,11 @@ function InlineAddButton({ onClick, floating = false, position = "top" }: Inline
           type="button"
           variant="ghost"
           size="icon"
-          className="h-10 w-10 sm:h-8 sm:w-8 rounded-full shadow-sm bg-white/95 dark:bg-slate-900/80 border border-border touch-manipulation"
+          className="h-11 w-11 rounded-full shadow-sm bg-white/95 dark:bg-slate-900/80 border border-border touch-manipulation"
           onClick={onClick}
           aria-label="Add paragraph"
         >
-          <Plus className="h-5 w-5 sm:h-4 sm:w-4" />
+          <Plus className="h-5 w-5" />
         </Button>
       </div>
     );
@@ -87,6 +88,7 @@ function InlineAddButton({ onClick, floating = false, position = "top" }: Inline
     top: position === "top" ? 0 : undefined,
     bottom: position === "bottom" ? 0 : undefined,
     transform: position === "top" ? "translateY(-60%)" : "translateY(60%)",
+    zIndex: 10,
   };
 
   return (
@@ -95,12 +97,12 @@ function InlineAddButton({ onClick, floating = false, position = "top" }: Inline
         type="button"
         variant="ghost"
         size="icon"
-        className="h-10 w-10 sm:h-8 sm:w-8 rounded-full shadow-sm bg-white/95 dark:bg-slate-900/80 border border-border touch-manipulation"
+        className="h-11 w-11 rounded-full shadow-sm bg-white/95 dark:bg-slate-900/80 border border-border touch-manipulation"
         onClick={onClick}
         style={{ pointerEvents: "auto" }}
         aria-label="Add paragraph"
       >
-        <Plus className="h-5 w-5 sm:h-4 sm:w-4" />
+        <Plus className="h-5 w-5" />
       </Button>
     </div>
   );
@@ -115,6 +117,8 @@ export const DocumentEditor = React.memo(function DocumentEditor({
   onComment,
   onAddElement,
 }: DocumentEditorProps) {
+  const isMobile = useIsMobile();
+
   const sortedParagraphs = useMemo(
     () => [...document.paragraphs].sort((a, b) => {
       const orderA = a.order ?? 0;
@@ -362,7 +366,7 @@ export const DocumentEditor = React.memo(function DocumentEditor({
           isHovered={isHovered}
           showContextButton={false}
         />
-        {isHovered && (
+        {(isHovered || isMobile) && (
           <InlineAddButton
             onClick={() => openNewParagraphDialog('after', paragraph.id, true)}
             floating

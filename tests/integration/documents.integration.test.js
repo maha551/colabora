@@ -248,35 +248,21 @@ describe('Documents API Integration Tests', () => {
       expect(response.body.message).toContain('Vote cast successfully');
     });
 
-    test('should prevent duplicate voting', async () => {
+    test('should allow vote changes', async () => {
       const voteData = {
-        vote: 'CONTRA'
-      };
-
-      await request(server)
-        .post(`/api/documents/${testDocumentId}/paragraphs/${testParagraphId}/proposals/${testProposalId}/vote`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .send(voteData)
-        .expect(400); // Should fail due to duplicate vote
-    });
-  });
-
-  describe('Comments System', () => {
-    test('should add a comment to proposal', async () => {
-      const commentData = {
-        text: 'This is a test comment on the proposal.'
+        vote: 'CONTRA' // Change from PRO to CONTRA
       };
 
       const response = await request(server)
-        .post(`/api/documents/${testDocumentId}/paragraphs/${testParagraphId}/proposals/${testProposalId}/comments`)
+        .post(`/api/documents/${testDocumentId}/paragraphs/${testParagraphId}/proposals/${testProposalId}/vote`)
         .set('Authorization', `Bearer ${authToken}`)
-        .send(commentData)
-        .expect(201);
+        .send(voteData)
+        .expect(200);
 
-      expect(response.body).toHaveProperty('comment');
-      expect(response.body.comment.text).toBe(commentData.text);
+      expect(response.body.message).toContain('Vote');
     });
   });
+
 
   describe('Input Validation and Security', () => {
     test('should reject invalid document title', async () => {

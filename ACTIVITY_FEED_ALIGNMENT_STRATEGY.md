@@ -157,6 +157,15 @@ interface ActivityFeedProposalCardProps {
   - Link to document for full context
   - Voting disabled (already accepted)
   - Comments enabled (for post-acceptance discussion)
+  - **History Access:** 
+    - Prominent "View History" button/icon in card header
+    - History section expands below SuggestionCard showing:
+      - All accepted changes for the paragraph (chronological)
+      - Each entry shows: user, date, approval percentage, old text → new text
+      - Diff visualization for each historical change
+      - Can collapse/expand history section
+    - History data comes from paragraph.history (not just the proposal)
+    - Makes it easy to see evolution of the paragraph over time
 
 #### 2. **Discussed Tab** (Most Discussed)
 - **Purpose:** Show proposals with active discussion/debate
@@ -250,6 +259,10 @@ interface ActivityFeedProposalCardProps {
 - Wraps SuggestionCard
 - Handles navigation
 - Manages compact display mode
+- **For Accepted tab:** Includes history display section
+  - Shows paragraph version history
+  - Expandable/collapsible history list
+  - Reuses history display component from ParagraphWithSuggestions
 
 🆕 **`ProposalList`** - New container
 - Manages list of proposals
@@ -302,6 +315,8 @@ interface ActivityFeedProposalCardProps {
 1. ✅ Replace custom cards with SuggestionCard in "Pending" tab
 2. ✅ Test voting and commenting
 3. ✅ Ensure navigation works
+4. ✅ Add history display component (reusable from ParagraphWithSuggestions)
+5. ✅ Integrate history in ActivityFeedProposalCard for Accepted tab
 
 ### Phase 3: Full Migration (Week 2)
 1. ✅ Migrate "Discussed" tab to SuggestionCard
@@ -524,6 +539,13 @@ API → ActivityFeedView → ProposalAdapter → ActivityFeedProposalCard → Su
 - ✅ Filter by document (new feature)
 - ✅ Infinite scroll loading
 - ✅ Real-time updates via WebSocket (future)
+
+**Accepted tab additionally:**
+- ✅ Easy access to paragraph history
+- ✅ History section shows all accepted changes chronologically
+- ✅ Each history entry shows: user, date, approval %, old → new text diff
+- ✅ Expandable/collapsible history view
+- ✅ History button prominently displayed in card header
 
 ---
 

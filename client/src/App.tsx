@@ -10,7 +10,7 @@ import { AppHeader } from "./components/AppHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { Avatar, AvatarFallback } from "./components/ui/avatar";
 import { CollaboratorManagement } from "./components/CollaboratorManagement";
-import { Users, FileText, Edit3 } from "lucide-react";
+import { Users, FileText, Edit3, Clock, CheckCircle2 } from "lucide-react";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
 import { documentsApi, authApi, proposalsApi, votesApi, commentsApi, paragraphsApi } from "./lib/api";
@@ -601,6 +601,22 @@ export default function App() {
               </TabsTrigger>
             </TabsList>
           </div>
+
+          {/* Document Status - Only show in agreed view */}
+          {activeTab === 'agreed' && (
+            <div className="text-center mb-6">
+              <div className="flex items-center justify-center gap-4 text-sm text-gray-500">
+                <span className="flex items-center gap-1">
+                  <Clock className="h-4 w-4" />
+                  Last updated: {new Date(currentDocument.updatedAt).toLocaleDateString()}
+                </span>
+                <span className="flex items-center gap-1">
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  {currentDocument.paragraphs.filter(p => !p.isDocumentTitle && (p.title || p.text) && (p.title || p.text).trim() !== '').length} sections agreed upon ({currentDocument.paragraphs.filter(p => p.history && p.history.length > 0).length} modified)
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Collaborators Display */}
           <div className="flex justify-center mb-8">

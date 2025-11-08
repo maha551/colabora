@@ -45,19 +45,6 @@ export function AgreedDocument({ document, totalUsers }: AgreedDocumentProps) {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="space-y-6">
-          {/* Document Status */}
-          <div className="text-center">
-          <div className="flex items-center justify-center gap-4 text-sm text-gray-500">
-            <span className="flex items-center gap-1">
-              <Clock className="h-4 w-4" />
-              Last updated: {new Date(document.updatedAt).toLocaleDateString()}
-            </span>
-            <span className="flex items-center gap-1">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              {paragraphsWithContent.length} sections agreed upon ({acceptedParagraphsCount} modified)
-            </span>
-          </div>
-        </div>
 
         {/* Empty State - No consensus reached */}
         {paragraphsWithContent.length === 0 && (
@@ -126,7 +113,7 @@ export function AgreedDocument({ document, totalUsers }: AgreedDocumentProps) {
                         displayText
                       )}
                       {hasChanges && highestApprovedChange && (
-                        <div className="hidden sm:flex flex-col items-end text-xs text-green-600 gap-1 shrink-0">
+                        <div className="hidden landscape:flex flex-col items-end text-xs text-green-600 gap-1 shrink-0">
                           <div className="flex items-center gap-1 bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded">
                             <CheckCircle2 className="h-3 w-3" />
                             <span className="font-medium">Accepted</span>
@@ -152,7 +139,7 @@ export function AgreedDocument({ document, totalUsers }: AgreedDocumentProps) {
                       {displayText}
                     </p>
                     {hasChanges && highestApprovedChange && (
-                      <div className="hidden sm:flex flex-col items-end text-xs text-green-600 gap-1 shrink-0">
+                      <div className="hidden landscape:flex flex-col items-end text-xs text-green-600 gap-1 shrink-0">
                         <div className="flex items-center gap-1 bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded">
                           <CheckCircle2 className="h-3 w-3" />
                           <span className="font-medium">Accepted</span>

@@ -7,6 +7,7 @@ interface DiffViewerProps {
   suggestion2Text?: string;
   suggestion1Author?: string;
   suggestion2Author?: string;
+  highlightColor?: 'yellow' | 'green'; // Color for suggestion1 highlighting
 }
 
 interface DiffSegment {
@@ -135,6 +136,7 @@ export function DiffViewer({
   suggestion2Text,
   suggestion1Author,
   suggestion2Author,
+  highlightColor = 'yellow',
 }: DiffViewerProps) {
   const segments = getDiffSegments(originalText, suggestion1Text, suggestion2Text);
 
@@ -165,10 +167,13 @@ export function DiffViewer({
               </span>
             );
           } else if (segment.type === "suggestion1") {
+            const bgClass = highlightColor === 'green' 
+              ? "bg-green-200 dark:bg-green-900/50"
+              : "bg-amber-200 dark:bg-amber-900/50";
             return (
               <span
                 key={index}
-                className="bg-amber-200 dark:bg-amber-900/50 text-foreground px-0.5 rounded"
+                className={cn(bgClass, "text-foreground px-0.5 rounded")}
               >
                 {segment.text}
               </span>
@@ -184,10 +189,13 @@ export function DiffViewer({
             );
           } else {
             // both
+            const gradientClass = highlightColor === 'green'
+              ? "bg-gradient-to-r from-green-200 to-blue-200 dark:from-green-900/50 dark:to-blue-900/50"
+              : "bg-gradient-to-r from-amber-200 to-blue-200 dark:from-amber-900/50 dark:to-blue-900/50";
             return (
               <span
                 key={index}
-                className="bg-gradient-to-r from-amber-200 to-blue-200 dark:from-amber-900/50 dark:to-blue-900/50 text-foreground px-0.5 rounded"
+                className={cn(gradientClass, "text-foreground px-0.5 rounded")}
               >
                 {segment.text}
               </span>

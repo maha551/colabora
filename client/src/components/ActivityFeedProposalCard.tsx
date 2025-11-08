@@ -83,6 +83,7 @@ export function ActivityFeedProposalCard({
             showHistoryButton={tabType === 'accepted' && history.length > 0}
             historyCount={history.length}
             onToggleHistory={() => setShowHistory(!showHistory)}
+            diffHighlightColor="yellow"
           />
         </Card>
       ) : (
@@ -100,6 +101,7 @@ export function ActivityFeedProposalCard({
           showHistoryButton={tabType === 'accepted' && history.length > 0}
           historyCount={history.length}
           onToggleHistory={() => setShowHistory(!showHistory)}
+          diffHighlightColor={tabType === 'accepted' ? 'green' : 'yellow'}
         />
       )}
 

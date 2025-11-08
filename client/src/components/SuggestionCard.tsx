@@ -36,6 +36,7 @@ interface SuggestionCardProps {
   showHistoryButton?: boolean;
   historyCount?: number;
   onToggleHistory?: () => void;
+  diffHighlightColor?: 'yellow' | 'green';
   key?: React.Key;
 }
 
@@ -70,6 +71,7 @@ export function SuggestionCard({
   showHistoryButton,
   historyCount,
   onToggleHistory,
+  diffHighlightColor = 'yellow',
 }: SuggestionCardProps) {
   const [commentText, setCommentText] = useState("");
   const [showVoteDetails, setShowVoteDetails] = useState(false);
@@ -293,6 +295,7 @@ export function SuggestionCard({
                     originalText={originalText || ''}
                     suggestion1Text={suggestion.text}
                     suggestion1Author={suggestion.user.name}
+                    highlightColor={diffHighlightColor}
                   />
                 </div>
               ) : (

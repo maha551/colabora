@@ -24,6 +24,7 @@ const proposalRoutes = require('./routes/proposals');
 const voteRoutes = require('./routes/votes');
 const commentRoutes = require('./routes/comments');
 const activityRoutes = require('./routes/activity');
+const structureProposalRoutes = require('./routes/structure-proposals');
 const pendingVotesRoutes = require('./routes/pending-votes');
 const debatedProposalsRoutes = require('./routes/debated-proposals');
 const agreedVersionsRoutes = require('./routes/agreed-versions');
@@ -188,9 +189,16 @@ const db = new sqlite3.Database(dbPath, (err) => {
 
 function initializeDatabaseAndStartServer(db) {
   console.log('🚀 Starting database initialization...');
+  
+  // Start server immediately so health checks can respond
+  // Database initialization will happen in the background
+  if (process.env.NODE_ENV !== 'test') {
+    startServer();
+  }
+  
   initializeDatabase(db);
 
-  console.log('⏳ Waiting for database initialization...');
+  console.log('⏳ Database initialization running in background...');
   let checkCount = 0;
   const checkInterval = setInterval(() => {
     checkCount++;
@@ -204,26 +212,17 @@ function initializeDatabaseAndStartServer(db) {
 
       console.log(`✅ Database check: found ${row.count} paragraphs for demo-doc-1`);
       if (row && row.count > 0) {
-      console.log('🎉 Database initialization complete!');
-      clearInterval(checkInterval);
-      // Only start server in non-test mode
-      if (process.env.NODE_ENV !== 'test') {
-        startServer();
-      }
+        console.log('🎉 Database initialization complete!');
+        clearInterval(checkInterval);
       }
     });
   }, 2000);
 
-  serverStartTimeout = setTimeout(() => {
+  // Clear interval after reasonable timeout
+  setTimeout(() => {
     clearInterval(checkInterval);
-    if (!serverStarted) {
-      console.log('Database initialization timeout, starting server anyway for debugging...');
-      // Only start server in non-test mode
-      if (process.env.NODE_ENV !== 'test') {
-        startServer();
-      }
-    }
-  }, 10000);
+    console.log('✅ Database initialization check completed');
+  }, 30000);
 }
 
 // Health check endpoint for Fly.io (always available, even during startup)
@@ -280,6 +279,7 @@ function registerRoutes() {
   app.use('/api/agreed-versions', agreedVersionsRoutes);
   app.use('/api/documents', documentRoutes);
   app.use('/api/documents/:documentId/activity', activityRoutes);
+  app.use('/api/documents/:documentId/structure-proposals', structureProposalRoutes);
   app.use('/api/documents/:documentId/paragraphs', paragraphRoutes);
   app.use('/api/documents/:documentId/paragraphs/:paragraphId/proposals', proposalRoutes);
   app.use('/api/documents/:documentId/paragraphs/:paragraphId/proposals/:proposalId/vote', voteRoutes);
@@ -519,6 +519,7 @@ function initializeDatabase(db) {
       type TEXT CHECK(type IN ('BODY', 'TITLE')) DEFAULT 'BODY',
       heading_level TEXT,
       approved BOOLEAN DEFAULT FALSE,
+      invalidated BOOLEAN DEFAULT FALSE,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (paragraph_id) REFERENCES paragraphs(id),
@@ -563,6 +564,61 @@ function initializeDatabase(db) {
       FOREIGN KEY (paragraph_id) REFERENCES paragraphs(id),
       FOREIGN KEY (user_id) REFERENCES users(id),
       FOREIGN KEY (proposal_id) REFERENCES proposals(id)
+    )`,
+
+    `CREATE TABLE IF NOT EXISTS structure_proposals (
+      id TEXT PRIMARY KEY,
+      document_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      approved BOOLEAN DEFAULT FALSE,
+      applied BOOLEAN DEFAULT FALSE,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (document_id) REFERENCES documents(id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )`,
+
+    `CREATE TABLE IF NOT EXISTS structure_operations (
+      id TEXT PRIMARY KEY,
+      structure_proposal_id TEXT NOT NULL,
+      operation_type TEXT CHECK(operation_type IN ('MOVE', 'MERGE', 'SPLIT', 'DELETE', 'RENAME_HEADING', 'CHANGE_HEADING_LEVEL', 'INSERT_NEW')) NOT NULL,
+      source_paragraph_ids TEXT, -- JSON array for merge operations
+      target_paragraph_id TEXT,
+      new_position_index INTEGER,
+      new_parent_id TEXT, -- For nesting under headings
+      new_text TEXT,
+      new_heading_level TEXT,
+      operation_data TEXT, -- JSON for complex operations like splits
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (structure_proposal_id) REFERENCES structure_proposals(id),
+      FOREIGN KEY (target_paragraph_id) REFERENCES paragraphs(id),
+      FOREIGN KEY (new_parent_id) REFERENCES paragraphs(id)
+    )`,
+
+    `CREATE TABLE IF NOT EXISTS structure_proposal_votes (
+      id TEXT PRIMARY KEY,
+      structure_proposal_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      vote TEXT CHECK(vote IN ('PRO', 'NEUTRAL', 'CONTRA')) NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (structure_proposal_id) REFERENCES structure_proposals(id),
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      UNIQUE(structure_proposal_id, user_id)
+    )`,
+
+    `CREATE TABLE IF NOT EXISTS structure_proposal_comments (
+      id TEXT PRIMARY KEY,
+      structure_proposal_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      text TEXT NOT NULL,
+      parent_id TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (structure_proposal_id) REFERENCES structure_proposals(id),
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (parent_id) REFERENCES structure_proposal_comments(id)
     )`
   ];
 
@@ -862,11 +918,124 @@ async function insertDemoData(db) {
         }
         commentsInserted++;
         if (commentsInserted === demoComments.length) {
-          console.log('Demo data insertion complete!');
-          console.log('Database initialized with demo data including headings.');
+          console.log('Comments inserted, inserting structure proposals...');
+          insertStructureProposals(db);
         }
       });
     });
+  }
+
+  function insertStructureProposals(db) {
+    // Insert demo structure proposals
+    const demoStructureProposals = [
+      {
+        id: 'struct-proposal-1',
+        document_id: 'demo-doc-1',
+        user_id: 'cmgxlfj9z0000orjgnfy3revt',
+        title: 'Restructure Introduction Section',
+        description: 'Reorganize the introduction section to flow better and add a new subsection about methodology overview.',
+        approved: false,
+        applied: false
+      }
+    ];
+
+    const demoStructureOperations = [
+      // Move the "Getting Started" section to come before "Making Changes"
+      {
+        id: 'struct-op-1',
+        structure_proposal_id: 'struct-proposal-1',
+        operation_type: 'MOVE',
+        target_paragraph_id: 'para-h2-1',
+        new_position_index: 2
+      },
+      // Rename "Making Changes" to "Collaborative Editing Process"
+      {
+        id: 'struct-op-2',
+        structure_proposal_id: 'struct-proposal-1',
+        operation_type: 'RENAME_HEADING',
+        target_paragraph_id: 'para-h2-2',
+        new_text: 'Collaborative Editing Process'
+      },
+      // Insert new section about methodology
+      {
+        id: 'struct-op-3',
+        structure_proposal_id: 'struct-proposal-1',
+        operation_type: 'INSERT_NEW',
+        new_text: 'This platform uses a consensus-based approach where changes require approval from multiple collaborators.',
+        new_position_index: 3,
+        new_heading_level: 'h3'
+      }
+    ];
+
+    const demoStructureVotes = [
+      { id: 'struct-vote-1', structure_proposal_id: 'struct-proposal-1', user_id: 'cmgxlfj9z0000orjgnfy3revt', vote: 'PRO' },
+      { id: 'struct-vote-2', structure_proposal_id: 'struct-proposal-1', user_id: 'cmgxlfj9z0000orjgnfy3revu', vote: 'PRO' }
+    ];
+
+    let proposalsInserted = 0;
+    demoStructureProposals.forEach(proposal => {
+      db.run(`
+        INSERT OR IGNORE INTO structure_proposals (id, document_id, user_id, title, description, approved, applied)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `, [proposal.id, proposal.document_id, proposal.user_id, proposal.title, proposal.description, proposal.approved ? 1 : 0, proposal.applied ? 1 : 0], (err) => {
+        if (err) {
+          console.error('Error inserting structure proposal:', err);
+        }
+        proposalsInserted++;
+        if (proposalsInserted === demoStructureProposals.length) {
+          console.log('Structure proposals inserted, inserting operations...');
+          insertStructureOperations(db);
+        }
+      });
+    });
+
+    function insertStructureOperations(db) {
+      let operationsInserted = 0;
+      demoStructureOperations.forEach(operation => {
+        db.run(`
+          INSERT OR IGNORE INTO structure_operations (
+            id, structure_proposal_id, operation_type, target_paragraph_id,
+            new_position_index, new_text, new_heading_level
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        `, [
+          operation.id,
+          operation.structure_proposal_id,
+          operation.operation_type,
+          operation.target_paragraph_id || null,
+          operation.new_position_index || null,
+          operation.new_text || null,
+          operation.new_heading_level || null
+        ], (err) => {
+          if (err) {
+            console.error('Error inserting structure operation:', err);
+          }
+          operationsInserted++;
+          if (operationsInserted === demoStructureOperations.length) {
+            console.log('Structure operations inserted, inserting votes...');
+            insertStructureVotes(db);
+          }
+        });
+      });
+    }
+
+    function insertStructureVotes(db) {
+      let votesInserted = 0;
+      demoStructureVotes.forEach(vote => {
+        db.run(`
+          INSERT OR IGNORE INTO structure_proposal_votes (id, structure_proposal_id, user_id, vote)
+          VALUES (?, ?, ?, ?)
+        `, [vote.id, vote.structure_proposal_id, vote.user_id, vote.vote], (err) => {
+          if (err) {
+            console.error('Error inserting structure vote:', err);
+          }
+          votesInserted++;
+          if (votesInserted === demoStructureVotes.length) {
+            console.log('Structure votes inserted, demo data insertion complete!');
+            console.log('Database initialized with demo data including structure proposals.');
+          }
+        });
+      });
+    }
   }
 }
 

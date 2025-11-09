@@ -91,10 +91,24 @@ export const documentsApi = {
   },
 
   // Create a new document
-  async createDocument(title: string) {
+  async createDocument(
+    title: string, 
+    description?: string, 
+    contributors?: string[],
+    options?: {
+      acceptanceThreshold?: number;
+      votingAnonymous?: boolean;
+      votingAnonymityLocked?: boolean;
+      voteChangeAllowed?: boolean;
+    }
+  ) {
     return apiRequest('/api/documents', {
       method: 'POST',
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({ 
+        title, 
+        description,
+        options 
+      }),
     })
   },
 

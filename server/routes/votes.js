@@ -78,19 +78,35 @@ router.post('/', requireAuth, requireDocumentAccess, (req, res) => {
       }
 
       if (existingVote) {
-        // Update existing vote
-        db.run(`
-          UPDATE votes SET vote = ? WHERE proposal_id = ? AND user_id = ?
-        `, [vote, proposalId, userId], function(err) {
-          if (err) {
-            console.error('Error updating vote:', err);
-            return res.status(500).json({ error: 'Failed to update vote' });
+        // Check if vote changes are allowed for this document
+        db.get(`
+          SELECT vote_change_allowed FROM documents WHERE id = ?
+        `, [documentId], (docErr, doc) => {
+          if (docErr) {
+            console.error('Error checking document options:', docErr);
+            return res.status(500).json({ error: 'Failed to check document options' });
           }
 
-          // Check if proposal should be approved (75% PRO votes)
-          checkAndUpdateProposalApproval(db, proposalId, documentId);
+          if (!doc || doc.vote_change_allowed === 0) {
+            return res.status(403).json({ 
+              error: 'Votes are locked for this document. You cannot change your vote.' 
+            });
+          }
 
-          res.json({ message: 'Vote updated successfully' });
+          // Update existing vote
+          db.run(`
+            UPDATE votes SET vote = ? WHERE proposal_id = ? AND user_id = ?
+          `, [vote, proposalId, userId], function(err) {
+            if (err) {
+              console.error('Error updating vote:', err);
+              return res.status(500).json({ error: 'Failed to update vote' });
+            }
+
+            // Check if proposal should be approved (using document threshold)
+            checkAndUpdateProposalApproval(db, proposalId, documentId);
+
+            res.json({ message: 'Vote updated successfully' });
+          });
         });
       } else {
         // Insert new vote
@@ -127,36 +143,45 @@ router.post('/', requireAuth, requireDocumentAccess, (req, res) => {
 
 // Helper function to check and update proposal approval status
 function checkAndUpdateProposalApproval(db, proposalId, documentId) {
-  // Get total collaborators for the document
-  const collabQuery = `
-    SELECT COUNT(*) as total_users
-    FROM (
-      SELECT owner_id as user_id FROM documents WHERE id = ?
-      UNION
-      SELECT user_id FROM document_collaborators WHERE document_id = ?
-    )
-  `;
-
-  db.get(collabQuery, [documentId, documentId], (err, result) => {
-    if (err) {
-      console.error('Error getting user count:', err);
+  // Get document acceptance threshold
+  db.get(`SELECT acceptance_threshold FROM documents WHERE id = ?`, [documentId], (docErr, doc) => {
+    if (docErr) {
+      console.error('Error getting document threshold:', docErr);
       return;
     }
 
-    const totalUsers = result.total_users;
+    const acceptanceThreshold = doc?.acceptance_threshold || 75.0;
 
-    // Get PRO vote count for this proposal
-    db.get(`
-      SELECT COUNT(*) as pro_votes FROM votes WHERE proposal_id = ? AND vote = 'PRO'
-    `, [proposalId], (err, voteResult) => {
+    // Get total collaborators for the document
+    const collabQuery = `
+      SELECT COUNT(*) as total_users
+      FROM (
+        SELECT owner_id as user_id FROM documents WHERE id = ?
+        UNION
+        SELECT user_id FROM document_collaborators WHERE document_id = ?
+      )
+    `;
+
+    db.get(collabQuery, [documentId, documentId], (err, result) => {
       if (err) {
-        console.error('Error getting vote count:', err);
+        console.error('Error getting user count:', err);
         return;
       }
 
-      const proVotes = voteResult.pro_votes;
-      const approvalPercentage = totalUsers > 0 ? (proVotes / totalUsers) * 100 : 0;
-      const shouldApprove = approvalPercentage >= 75;
+      const totalUsers = result.total_users;
+
+      // Get PRO vote count for this proposal
+      db.get(`
+        SELECT COUNT(*) as pro_votes FROM votes WHERE proposal_id = ? AND vote = 'PRO'
+      `, [proposalId], (err, voteResult) => {
+        if (err) {
+          console.error('Error getting vote count:', err);
+          return;
+        }
+
+        const proVotes = voteResult.pro_votes;
+        const approvalPercentage = totalUsers > 0 ? (proVotes / totalUsers) * 100 : 0;
+        const shouldApprove = approvalPercentage >= acceptanceThreshold;
 
       // Update proposal approval status
       db.run(`
@@ -244,90 +269,187 @@ function updateAgreedViewForParagraph(db, proposalId, documentId) {
         return;
       }
 
-      // Get total collaborators count
-      const collabQuery = `
-        SELECT COUNT(*) as total_users
-        FROM (
-          SELECT owner_id as user_id FROM documents WHERE id = ?
-          UNION
-          SELECT user_id FROM document_collaborators WHERE document_id = ?
-        )
-      `;
-
-      db.get(collabQuery, [documentId, documentId], (err, result) => {
-        if (err) {
-          console.error('Error getting user count:', err);
+      // Get document acceptance threshold and total collaborators count
+      db.get(`SELECT acceptance_threshold FROM documents WHERE id = ?`, [documentId], (docErr, doc) => {
+        if (docErr) {
+          console.error('Error getting document threshold:', docErr);
           return;
         }
 
-        const totalUsers = result.total_users;
+        const acceptanceThreshold = doc?.acceptance_threshold || 75.0;
 
-        // Find the proposal with the highest approval percentage that meets the 75% threshold
-        let bestProposal = null;
-        let bestApprovalPercentage = 0;
+        const collabQuery = `
+          SELECT COUNT(*) as total_users
+          FROM (
+            SELECT owner_id as user_id FROM documents WHERE id = ?
+            UNION
+            SELECT user_id FROM document_collaborators WHERE document_id = ?
+          )
+        `;
 
-        for (const proposal of allProposals) {
-          const approvalPercentage = totalUsers > 0 ? (proposal.pro_votes / totalUsers) * 100 : 0;
-          if (approvalPercentage >= 75 && approvalPercentage > bestApprovalPercentage) {
-            bestProposal = proposal;
-            bestApprovalPercentage = approvalPercentage;
-          }
-        }
-
-        // Get current paragraph data
-        db.get(`
-          SELECT
-            p.id as paragraph_id,
-            p.text as current_text,
-            p.title as current_title,
-            p.heading_level as current_heading_level,
-            p.order_index,
-            p.document_id
-          FROM paragraphs p
-          WHERE p.id = ?
-        `, [paragraphId], (err, paragraphData) => {
-          if (err || !paragraphData) {
-            console.error('Error getting paragraph data:', err);
+        db.get(collabQuery, [documentId, documentId], (err, result) => {
+          if (err) {
+            console.error('Error getting user count:', err);
             return;
           }
 
-          const isDocumentTitle = paragraphData.order_index !== null && paragraphData.order_index < 0;
+          const totalUsers = result.total_users;
 
-          if (!bestProposal) {
-            // No proposal meets the 75% threshold - revert paragraph to empty state
-            console.log(`No approved proposals for paragraph ${paragraphId} - reverting to empty state`);
+          // Find the proposal with the highest approval percentage that meets the threshold
+          let bestProposal = null;
+          let bestApprovalPercentage = 0;
 
-            if (isDocumentTitle) {
-              // For document title paragraph, don't empty it - keep the current title
-              // This ensures the document title remains visible in the header
+          for (const proposal of allProposals) {
+            const approvalPercentage = totalUsers > 0 ? (proposal.pro_votes / totalUsers) * 100 : 0;
+            if (approvalPercentage >= acceptanceThreshold && approvalPercentage > bestApprovalPercentage) {
+              bestProposal = proposal;
+              bestApprovalPercentage = approvalPercentage;
+            }
+          }
+
+          // Get current paragraph data
+          db.get(`
+            SELECT
+              p.id as paragraph_id,
+              p.text as current_text,
+              p.title as current_title,
+              p.heading_level as current_heading_level,
+              p.order_index,
+              p.document_id
+            FROM paragraphs p
+            WHERE p.id = ?
+          `, [paragraphId], (err, paragraphData) => {
+            if (err || !paragraphData) {
+              console.error('Error getting paragraph data:', err);
               return;
             }
 
-            // For non-title paragraphs, set to empty (they will be hidden in the UI)
-            if (paragraphData.current_title) {
-              // This is a heading paragraph - set to empty
+            const isDocumentTitle = paragraphData.order_index !== null && paragraphData.order_index < 0;
+
+            if (!bestProposal) {
+              // No proposal meets the threshold - revert paragraph to empty state
+              console.log(`No approved proposals for paragraph ${paragraphId} - reverting to empty state`);
+
+              if (isDocumentTitle) {
+                // For document title paragraph, don't empty it - keep the current title
+                // This ensures the document title remains visible in the header
+                return;
+              }
+
+              // For non-title paragraphs, set to empty (they will be hidden in the UI)
+              if (paragraphData.current_title) {
+                // This is a heading paragraph - set to empty
+                db.run(`
+                  UPDATE paragraphs
+                  SET title = '',
+                      heading_level = ?,
+                      updated_at = CURRENT_TIMESTAMP
+                  WHERE id = ?
+                `, [paragraphData.current_heading_level, paragraphId], (updateErr) => {
+                  if (updateErr) {
+                    console.error('Error clearing paragraph title:', updateErr);
+                  }
+                });
+              } else {
+                // This is a body paragraph - set to empty
+                db.run(`
+                  UPDATE paragraphs SET text = '', updated_at = CURRENT_TIMESTAMP
+                  WHERE id = ?
+                `, [paragraphId], (updateErr) => {
+                  if (updateErr) {
+                    console.error('Error clearing paragraph text:', updateErr);
+                  }
+                });
+              }
+
+              // Update document timestamp
+              db.run(`
+                UPDATE documents SET updated_at = CURRENT_TIMESTAMP WHERE id = ?
+              `, [documentId], (timestampErr) => {
+                if (timestampErr) {
+                  console.error('Error updating document timestamp:', timestampErr);
+                }
+              });
+
+              return;
+            }
+
+            // We have a best proposal - update the paragraph with it
+            const proposalType = bestProposal.type || 'BODY';
+            const isTitleChange = proposalType === 'TITLE';
+            const oldValue = isTitleChange ? (paragraphData.current_title || '') : (paragraphData.current_text || '');
+            const newValue = bestProposal.text;
+            const newHeadingLevel = isTitleChange ? (bestProposal.heading_level || paragraphData.current_heading_level || (isDocumentTitle ? 'h1' : 'h2')) : null;
+
+            if (isTitleChange) {
               db.run(`
                 UPDATE paragraphs
-                SET title = '',
+                SET title = ?,
                     heading_level = ?,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
-              `, [paragraphData.current_heading_level, paragraphId], (updateErr) => {
+              `, [newValue, newHeadingLevel, paragraphId], (updateErr) => {
                 if (updateErr) {
-                  console.error('Error clearing paragraph title:', updateErr);
+                  console.error('Error updating paragraph title:', updateErr);
                 }
               });
+
+              if (isDocumentTitle) {
+                db.run(`
+                  UPDATE paragraphs
+                  SET text = ?, heading_level = ?, updated_at = CURRENT_TIMESTAMP
+                  WHERE id = ?
+                `, [newValue, newHeadingLevel, paragraphId], (docTitleErr) => {
+                  if (docTitleErr) {
+                    console.error('Error syncing document title paragraph text:', docTitleErr);
+                  }
+                });
+
+                db.run(`
+                  UPDATE documents SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+                `, [newValue, documentId], (docErr) => {
+                  if (docErr) {
+                    console.error('Error updating document title:', docErr);
+                  }
+                });
+              }
             } else {
-              // This is a body paragraph - set to empty
               db.run(`
-                UPDATE paragraphs SET text = '', updated_at = CURRENT_TIMESTAMP
+                UPDATE paragraphs SET text = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
-              `, [paragraphId], (updateErr) => {
+              `, [newValue, paragraphId], (updateErr) => {
                 if (updateErr) {
-                  console.error('Error clearing paragraph text:', updateErr);
+                  console.error('Error updating paragraph text:', updateErr);
                 }
               });
             }
+
+            // Update proposal approval status if it's not already approved
+            if (!bestProposal.approved) {
+              db.run(`UPDATE proposals SET approved = 1 WHERE id = ?`, [bestProposal.id]);
+            }
+
+            // Check if we already have a history entry for this proposal
+            db.get(`SELECT id FROM history WHERE proposal_id = ?`, [bestProposal.id], (err, existingHistory) => {
+              if (err) {
+                console.error('Error checking existing history:', err);
+                return;
+              }
+
+              if (!existingHistory) {
+                // Create history entry only if it doesn't exist
+                const { v4: uuidv4 } = require('uuid');
+                const historyId = uuidv4();
+                db.run(`
+                  INSERT INTO history (id, paragraph_id, user_id, old_text, new_text, approval_percentage, proposal_id, heading_level)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                `, [historyId, paragraphId, bestProposal.user_id, oldValue, newValue, bestApprovalPercentage, bestProposal.id, newHeadingLevel], (historyErr) => {
+                  if (historyErr) {
+                    console.error('Error recording history entry:', historyErr);
+                  }
+                });
+              }
+            });
 
             // Update document timestamp
             db.run(`
@@ -337,94 +459,6 @@ function updateAgreedViewForParagraph(db, proposalId, documentId) {
                 console.error('Error updating document timestamp:', timestampErr);
               }
             });
-
-            return;
-          }
-
-          // We have a best proposal - update the paragraph with it
-          const proposalType = bestProposal.type || 'BODY';
-          const isTitleChange = proposalType === 'TITLE';
-          const oldValue = isTitleChange ? (paragraphData.current_title || '') : (paragraphData.current_text || '');
-          const newValue = bestProposal.text;
-          const newHeadingLevel = isTitleChange ? (bestProposal.heading_level || paragraphData.current_heading_level || (isDocumentTitle ? 'h1' : 'h2')) : null;
-
-          if (isTitleChange) {
-            db.run(`
-              UPDATE paragraphs
-              SET title = ?,
-                  heading_level = ?,
-                  updated_at = CURRENT_TIMESTAMP
-              WHERE id = ?
-            `, [newValue, newHeadingLevel, paragraphId], (updateErr) => {
-              if (updateErr) {
-                console.error('Error updating paragraph title:', updateErr);
-              }
-            });
-
-            if (isDocumentTitle) {
-              db.run(`
-                UPDATE paragraphs
-                SET text = ?, heading_level = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-              `, [newValue, newHeadingLevel, paragraphId], (docTitleErr) => {
-                if (docTitleErr) {
-                  console.error('Error syncing document title paragraph text:', docTitleErr);
-                }
-              });
-
-              db.run(`
-                UPDATE documents SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
-              `, [newValue, documentId], (docErr) => {
-                if (docErr) {
-                  console.error('Error updating document title:', docErr);
-                }
-              });
-            }
-          } else {
-            db.run(`
-              UPDATE paragraphs SET text = ?, updated_at = CURRENT_TIMESTAMP
-              WHERE id = ?
-            `, [newValue, paragraphId], (updateErr) => {
-              if (updateErr) {
-                console.error('Error updating paragraph text:', updateErr);
-              }
-            });
-          }
-
-          // Update proposal approval status if it's not already approved
-          if (!bestProposal.approved) {
-            db.run(`UPDATE proposals SET approved = 1 WHERE id = ?`, [bestProposal.id]);
-          }
-
-          // Check if we already have a history entry for this proposal
-          db.get(`SELECT id FROM history WHERE proposal_id = ?`, [bestProposal.id], (err, existingHistory) => {
-            if (err) {
-              console.error('Error checking existing history:', err);
-              return;
-            }
-
-            if (!existingHistory) {
-              // Create history entry only if it doesn't exist
-              const { v4: uuidv4 } = require('uuid');
-              const historyId = uuidv4();
-              db.run(`
-                INSERT INTO history (id, paragraph_id, user_id, old_text, new_text, approval_percentage, proposal_id, heading_level)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-              `, [historyId, paragraphId, bestProposal.user_id, oldValue, newValue, bestApprovalPercentage, bestProposal.id, newHeadingLevel], (historyErr) => {
-                if (historyErr) {
-                  console.error('Error recording history entry:', historyErr);
-                }
-              });
-            }
-          });
-
-          // Update document timestamp
-          db.run(`
-            UPDATE documents SET updated_at = CURRENT_TIMESTAMP WHERE id = ?
-          `, [documentId], (timestampErr) => {
-            if (timestampErr) {
-              console.error('Error updating document timestamp:', timestampErr);
-            }
           });
         });
       });

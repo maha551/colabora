@@ -265,10 +265,20 @@ export default function App() {
     }
   };
 
-  const handleCreateDocument = async (title: string, _description?: string, contributors?: string[]) => {
+  const handleCreateDocument = async (
+    title: string, 
+    _description?: string, 
+    contributors?: string[],
+    options?: {
+      acceptanceThreshold?: number;
+      votingAnonymous?: boolean;
+      votingAnonymityLocked?: boolean;
+      voteChangeAllowed?: boolean;
+    }
+  ) => {
     try {
-      console.log('Creating document:', title, 'with contributors:', contributors);
-      const response = await documentsApi.createDocument(title);
+      console.log('Creating document:', title, 'with contributors:', contributors, 'with options:', options);
+      const response = await documentsApi.createDocument(title, _description, contributors, options);
       console.log('Document creation response:', response);
 
       // Add collaborators if specified

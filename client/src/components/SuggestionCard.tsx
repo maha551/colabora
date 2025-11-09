@@ -1,4 +1,4 @@
-import { Suggestion, User, HeadingLevel } from "../types";
+import { Suggestion, User, HeadingLevel, DocumentOptions } from "../types";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback } from "./ui/avatar";
@@ -38,6 +38,7 @@ interface SuggestionCardProps {
   onToggleHistory?: () => void;
   diffHighlightColor?: 'yellow' | 'green';
   key?: React.Key;
+  documentOptions?: DocumentOptions;
 }
 
 // Helper function to get relative time
@@ -59,6 +60,7 @@ export function SuggestionCard({
   currentUser,
   allCollaborators = [],
   isSelected = false,
+  documentOptions,
   selectionIndex = -1,
   onToggleSelect,
   onVote,
@@ -102,7 +104,8 @@ export function SuggestionCard({
   const contraCount = contraVotes.length;
   
   const approvalPercentage = totalUsers > 0 ? (proCount / totalUsers) * 100 : 0;
-  const isAccepted = approvalPercentage >= 75;
+  const acceptanceThreshold = documentOptions?.acceptanceThreshold || 75;
+  const isAccepted = approvalPercentage >= acceptanceThreshold;
   const totalVotes = proCount + neutralCount + contraCount;
   const notVotedCount = Math.max(totalUsers - totalVotes, 0);
 
@@ -112,6 +115,14 @@ export function SuggestionCard({
   const notVotedPercentage = totalUsers > 0 ? (notVotedCount / totalUsers) * 100 : 0;
 
   const currentUserVote = suggestion.votes.find((v) => v.userId === currentUser.id);
+  const hasVoted = !!currentUserVote;
+  
+  // Check if vote changes are allowed
+  const voteChangeAllowed = documentOptions?.voteChangeAllowed !== false; // Default to true
+  const isVoteLocked = hasVoted && !voteChangeAllowed;
+  
+  // Check if voting is anonymous
+  const isAnonymous = documentOptions?.votingAnonymous === true;
   
   // Get users who haven't voted yet
   const votedUserIds = new Set(suggestion.votes.map(v => v.userId));
@@ -169,7 +180,9 @@ export function SuggestionCard({
               backgroundColor: '#9ca3af',
               flex: `0 0 ${notVotedPercentage}%`
             }}
-            title={`Not voted: ${notVotedCount} - ${usersWhoHaventVoted.map(u => u.name).join(', ')}`}
+            title={isAnonymous 
+              ? `Not voted: ${notVotedCount}` 
+              : `Not voted: ${notVotedCount} - ${usersWhoHaventVoted.map(u => u.name).join(', ')}`}
           />
         )}
         {/* Reject votes */}
@@ -181,7 +194,9 @@ export function SuggestionCard({
               backgroundColor: '#ef4444',
               flex: `0 0 ${contraPercentage}%`
             }}
-            title={`Reject: ${contraCount} - ${contraVotes.map(v => v.user?.name || 'Unknown').join(', ')}`}
+            title={isAnonymous 
+              ? `Reject: ${contraCount}` 
+              : `Reject: ${contraCount} - ${contraVotes.map(v => v.user?.name || 'Unknown').join(', ')}`}
           />
         )}
         {/* Neutral votes */}
@@ -193,7 +208,9 @@ export function SuggestionCard({
               backgroundColor: '#3b82f6',
               flex: `0 0 ${neutralPercentage}%`
             }}
-            title={`Neutral: ${neutralCount} - ${neutralVotes.map(v => v.user?.name || 'Unknown').join(', ')}`}
+            title={isAnonymous 
+              ? `Neutral: ${neutralCount}` 
+              : `Neutral: ${neutralCount} - ${neutralVotes.map(v => v.user?.name || 'Unknown').join(', ')}`}
           />
         )}
         {/* Approve votes */}
@@ -205,7 +222,9 @@ export function SuggestionCard({
               backgroundColor: '#22c55e',
               flex: `0 0 ${proPercentage}%`
             }}
-            title={`Approve: ${proCount} - ${proVotes.map(v => v.user?.name || 'Unknown').join(', ')}`}
+            title={isAnonymous 
+              ? `Approve: ${proCount}` 
+              : `Approve: ${proCount} - ${proVotes.map(v => v.user?.name || 'Unknown').join(', ')}`}
           />
         )}
       </div>
@@ -279,7 +298,7 @@ export function SuggestionCard({
                 )}
                 {isAccepted && (
                   <Badge variant="default" className="bg-green-600 text-xs">
-                    Accepted
+                    Accepted ({acceptanceThreshold}%)
                   </Badge>
                 )}
                 {isSelected && selectionIndex === 0 && (
@@ -308,36 +327,54 @@ export function SuggestionCard({
 
           {/* Inline Vote Buttons - Icon Only */}
           <div className="flex items-center gap-1 flex-shrink-0">
-            <Button
-              size="sm"
-              variant={currentUserVote?.vote === 'PRO' ? "default" : "ghost"}
-              onClick={() => onVote(suggestion.id, 'PRO')}
-              className={cn(
-                "h-8 w-8 p-0",
-                currentUserVote?.vote === 'PRO' && "bg-green-600 hover:bg-green-700 text-white"
-              )}
-              title={`Approve (${proCount})`}
-            >
-              <ThumbsUp className="h-4 w-4" />
-            </Button>
-            <Button
-              size="sm"
-              variant={currentUserVote?.vote === 'NEUTRAL' ? "secondary" : "ghost"}
-              onClick={() => onVote(suggestion.id, 'NEUTRAL')}
-              className="h-8 w-8 p-0"
-              title={`Neutral (${neutralCount})`}
-            >
-              <span className="text-lg leading-none">○</span>
-            </Button>
-            <Button
-              size="sm"
-              variant={currentUserVote?.vote === 'CONTRA' ? "destructive" : "ghost"}
-              onClick={() => onVote(suggestion.id, 'CONTRA')}
-              className="h-8 w-8 p-0"
-              title={`Reject (${contraCount})`}
-            >
-              <ThumbsDown className="h-4 w-4" />
-            </Button>
+            {isVoteLocked ? (
+              <div className="text-xs text-muted-foreground px-2 whitespace-nowrap">
+                Vote locked
+              </div>
+            ) : (
+              <>
+                <Button
+                  size="sm"
+                  variant={currentUserVote?.vote === 'PRO' ? "default" : "ghost"}
+                  onClick={() => onVote(suggestion.id, 'PRO')}
+                  disabled={isVoteLocked}
+                  className={cn(
+                    "h-8 w-8 p-0",
+                    currentUserVote?.vote === 'PRO' && "bg-green-600 hover:bg-green-700 text-white",
+                    isVoteLocked && "opacity-50 cursor-not-allowed"
+                  )}
+                  title={`Approve (${proCount})`}
+                >
+                  <ThumbsUp className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant={currentUserVote?.vote === 'NEUTRAL' ? "secondary" : "ghost"}
+                  onClick={() => onVote(suggestion.id, 'NEUTRAL')}
+                  disabled={isVoteLocked}
+                  className={cn(
+                    "h-8 w-8 p-0",
+                    isVoteLocked && "opacity-50 cursor-not-allowed"
+                  )}
+                  title={`Neutral (${neutralCount})`}
+                >
+                  <span className="text-lg leading-none">○</span>
+                </Button>
+                <Button
+                  size="sm"
+                  variant={currentUserVote?.vote === 'CONTRA' ? "destructive" : "ghost"}
+                  onClick={() => onVote(suggestion.id, 'CONTRA')}
+                  disabled={isVoteLocked}
+                  className={cn(
+                    "h-8 w-8 p-0",
+                    isVoteLocked && "opacity-50 cursor-not-allowed"
+                  )}
+                  title={`Reject (${contraCount})`}
+                >
+                  <ThumbsDown className="h-4 w-4" />
+                </Button>
+              </>
+            )}
             <div className="h-4 w-px bg-border mx-1" />
             <Button
               variant="ghost"
@@ -355,6 +392,9 @@ export function SuggestionCard({
         {showVoteDetails && (
           <div className="space-y-2 pb-3 border-b animate-in slide-in-from-top-2 duration-200">
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-muted-foreground">Requires {acceptanceThreshold}% approval</span>
+            </div>
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-1">
                 <span className="inline-block h-2 w-2 rounded-full bg-green-500"></span>
@@ -379,38 +419,50 @@ export function SuggestionCard({
             <div className="space-y-2 p-3 bg-muted/30 rounded-lg text-xs">
               {proVotes.length > 0 && (
                 <div>
-                  <p className="font-medium text-green-600 dark:text-green-400 mb-1">Approved by:</p>
-                  <div className="flex flex-wrap gap-1">
-                    {proVotes.map(vote => (
-                      <Badge key={vote.id} variant="outline" className="bg-green-50 dark:bg-green-900/20 border-green-200">
-                        {vote.user?.name || 'Unknown'}
-                      </Badge>
-                    ))}
-                  </div>
+                  <p className="font-medium text-green-600 dark:text-green-400 mb-1">
+                    {isAnonymous ? `Approved: ${proCount}` : `Approved by:`}
+                  </p>
+                  {!isAnonymous && (
+                    <div className="flex flex-wrap gap-1">
+                      {proVotes.map(vote => (
+                        <Badge key={vote.id} variant="outline" className="bg-green-50 dark:bg-green-900/20 border-green-200">
+                          {vote.user?.name || 'Unknown'}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
               {neutralVotes.length > 0 && (
                 <div>
-                  <p className="font-medium text-blue-600 dark:text-blue-400 mb-1">Neutral:</p>
-                  <div className="flex flex-wrap gap-1">
-                    {neutralVotes.map(vote => (
-                      <Badge key={vote.id} variant="outline" className="bg-blue-50 dark:bg-blue-900/20 border-blue-200">
-                        {vote.user?.name || 'Unknown'}
-                      </Badge>
-                    ))}
-                  </div>
+                  <p className="font-medium text-blue-600 dark:text-blue-400 mb-1">
+                    {isAnonymous ? `Neutral: ${neutralCount}` : `Neutral:`}
+                  </p>
+                  {!isAnonymous && (
+                    <div className="flex flex-wrap gap-1">
+                      {neutralVotes.map(vote => (
+                        <Badge key={vote.id} variant="outline" className="bg-blue-50 dark:bg-blue-900/20 border-blue-200">
+                          {vote.user?.name || 'Unknown'}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
               {contraVotes.length > 0 && (
                 <div>
-                  <p className="font-medium text-red-600 dark:text-red-400 mb-1">Rejected by:</p>
-                  <div className="flex flex-wrap gap-1">
-                    {contraVotes.map(vote => (
-                      <Badge key={vote.id} variant="outline" className="bg-red-50 dark:bg-red-900/20 border-red-200">
-                        {vote.user?.name || 'Unknown'}
-                      </Badge>
-                    ))}
-                  </div>
+                  <p className="font-medium text-red-600 dark:text-red-400 mb-1">
+                    {isAnonymous ? `Rejected: ${contraCount}` : `Rejected by:`}
+                  </p>
+                  {!isAnonymous && (
+                    <div className="flex flex-wrap gap-1">
+                      {contraVotes.map(vote => (
+                        <Badge key={vote.id} variant="outline" className="bg-red-50 dark:bg-red-900/20 border-red-200">
+                          {vote.user?.name || 'Unknown'}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
               {usersWhoHaventVoted.length > 0 && (
@@ -460,7 +512,7 @@ export function SuggestionCard({
             <MessageSquare className="h-4 w-4" />
             <span>
               {suggestion.comments.length === 0 
-                ? "No comments yet" 
+                ? "No comments yet. Be the first to share your thoughts!" 
                 : `Discussion (${suggestion.comments.length})`}
             </span>
             {suggestion.comments.length > 0 && (
@@ -477,11 +529,7 @@ export function SuggestionCard({
         {/* Expanded Discussion Thread */}
         {isThreadExpanded && (
           <div className="mt-4 space-y-4 animate-in slide-in-from-top-2 duration-200">
-            {suggestion.comments.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4 italic">
-                No comments yet. Be the first to share your thoughts!
-              </p>
-            ) : (
+            {suggestion.comments.length > 0 && (
               <div className="space-y-3">
                 {topLevelComments.map((comment) => {
                   const commentDate = new Date(comment.createdAt);

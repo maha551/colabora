@@ -14,7 +14,7 @@ export interface Vote {
   userId: string;
   vote: 'PRO' | 'NEUTRAL' | 'CONTRA';
   createdAt: string;
-  user: {
+  user?: {
     id: string;
     name: string;
   };
@@ -113,6 +113,13 @@ export interface DocumentCollaborator {
   };
 }
 
+export interface DocumentOptions {
+  acceptanceThreshold: number;        // 1-100 (one-time choice)
+  votingAnonymous: boolean;            // true = anonymous (closed), false = public (open)
+  votingAnonymityLocked: boolean;     // if true, anonymity cannot be changed
+  voteChangeAllowed: boolean;         // true = flexible, false = locked
+}
+
 export interface Document {
   id: string;
   title: string;
@@ -127,6 +134,7 @@ export interface Document {
   };
   collaborators: DocumentCollaborator[];
   paragraphs: Paragraph[];
+  options?: DocumentOptions;
 }
 
 // Alias types for backward compatibility with existing components

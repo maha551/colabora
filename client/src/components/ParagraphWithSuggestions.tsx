@@ -618,6 +618,7 @@ export function ParagraphWithSuggestions({
                 totalUsers={totalUsers}
                 currentUser={currentUser}
                 allCollaborators={allCollaborators}
+                documentOptions={document.options}
                 isSelected={selectedSuggestions.includes(suggestion.id)}
                 selectionIndex={selectedSuggestions.indexOf(suggestion.id)}
                 onToggleSelect={suggestion.type === 'BODY' ? handleToggleSuggestion : undefined}

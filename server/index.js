@@ -480,6 +480,10 @@ function initializeDatabase(db) {
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
       owner_id TEXT NOT NULL,
+      acceptance_threshold REAL DEFAULT 75.0 NOT NULL,
+      voting_anonymous BOOLEAN DEFAULT 0 NOT NULL,
+      voting_anonymity_locked BOOLEAN DEFAULT 0 NOT NULL,
+      vote_change_allowed BOOLEAN DEFAULT 1 NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (owner_id) REFERENCES users(id)
@@ -662,30 +666,44 @@ async function insertDemoData(db) {
   }
 
   function insertDocument(db) {
-    // Insert demo document
+    // Insert tutorial document with options
     db.run(`
-      INSERT OR IGNORE INTO documents (id, title, owner_id) VALUES (?, ?, ?)
-    `, ['demo-doc-1', 'Sample Collaborative Document', 'cmgxlfj9z0000orjgnfy3revt'], (err) => {
+      INSERT OR IGNORE INTO documents (
+        id, title, owner_id, 
+        acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `, [
+      'demo-doc-1', 
+      'Document Options Tutorial', 
+      'cmgxlfj9z0000orjgnfy3revt',
+      75.0,  // acceptance_threshold
+      0,     // voting_anonymous (public/open)
+      0,     // voting_anonymity_locked
+      1      // vote_change_allowed (flexible)
+    ], (err) => {
       if (err) {
         console.error('Error inserting document:', err);
         return;
       }
-      console.log('Document inserted, inserting paragraphs...');
+      console.log('Tutorial document inserted, inserting paragraphs...');
       insertParagraphs(db);
     });
   }
 
   function insertParagraphs(db) {
-    // Insert demo paragraphs with headings
+    // Insert tutorial paragraphs
     const demoParagraphs = [
-      { id: 'demo-doc-1-title', title: 'Sample Collaborative Document', text: 'Sample Collaborative Document', order_index: -1, heading_level: 'h1' },
-      { id: 'para-h1', title: 'Introduction', text: 'This document demonstrates the collaborative editing features of our platform.', order_index: 0, heading_level: 'h1' },
-      { id: 'para-h2-1', title: 'Getting Started', text: 'To begin collaborating, first create a new document or join an existing one.', order_index: 1, heading_level: 'h2' },
-      { id: 'para-1', text: 'This is the first paragraph of our collaborative document. It contains some sample text that can be edited by multiple users through our voting system.', order_index: 2 },
-      { id: 'para-h2-2', title: 'Making Changes', text: 'Learn how to propose and approve changes in our collaborative environment.', order_index: 3, heading_level: 'h2' },
-      { id: 'para-2', text: 'Here is another paragraph that demonstrates the collaborative editing features. Users can suggest changes, vote on proposals, and discuss modifications.', order_index: 4 },
-      { id: 'para-h3', title: 'Voting Process', text: 'Understanding how the 75% approval system works.', order_index: 5, heading_level: 'h3' },
-      { id: 'para-3', text: 'The voting system requires 75% approval for changes to be accepted. This ensures consensus-driven decision making while allowing progress.', order_index: 6 }
+      { id: 'demo-doc-1-title', title: 'Document Options Tutorial', text: 'Document Options Tutorial', order_index: -1, heading_level: 'h1' },
+      { id: 'para-h1', title: 'Introduction', text: 'Welcome to Colabora\'s new document options system! These settings control how voting works in your document. All options are set when you create a document and cannot be changed afterward.', order_index: 0, heading_level: 'h1' },
+      { id: 'para-1', text: 'This tutorial document will help you understand the different options available when creating documents. Each option affects how collaborators interact with proposals and votes.', order_index: 1 },
+      { id: 'para-h2-1', title: 'Acceptance Threshold', text: 'What is Acceptance Threshold?', order_index: 2, heading_level: 'h2' },
+      { id: 'para-2', text: 'The acceptance threshold is the percentage of collaborators who must vote PRO for a proposal to be automatically accepted. The default is 75%, but you can set it anywhere from 1% to 100% when creating a document. For example, with 4 collaborators and a 75% threshold, you need 3 PRO votes for automatic acceptance.', order_index: 3 },
+      { id: 'para-h2-2', title: 'Voting Anonymity', text: 'Public vs Anonymous Voting', order_index: 4, heading_level: 'h2' },
+      { id: 'para-3', text: 'Public (Open) Voting: Everyone can see who voted what. User names and avatars are shown with votes, providing full transparency. Anonymous (Closed) Voting: Votes are hidden - only vote counts are visible. You cannot see who voted what, providing privacy-focused collaboration.', order_index: 5 },
+      { id: 'para-h2-3', title: 'Vote Flexibility', text: 'Flexible vs Locked Votes', order_index: 6, heading_level: 'h2' },
+      { id: 'para-4', text: 'Flexible Votes: You can change your vote anytime after casting it. Vote buttons remain active, allowing reconsideration. Locked Votes: Once you vote, you cannot change it. Vote buttons are disabled after your first vote, ensuring committed decision-making.', order_index: 7 },
+      { id: 'para-h2-4', title: 'Creating Documents with Options', text: 'How to Set Options', order_index: 8, heading_level: 'h2' },
+      { id: 'para-5', text: 'When creating a new document, you\'ll see a "Document Options" section. Set your preferences before creating - remember, these are permanent choices! Choose carefully based on your collaboration needs.', order_index: 9 }
     ];
 
     let paragraphsInserted = 0;
@@ -728,48 +746,30 @@ async function insertDemoData(db) {
   }
 
   function insertProposals(db) {
-    // Insert demo proposals
+    // Insert tutorial proposals with examples
     const demoProposals = [
       {
-        id: 'proposal-h1',
-        paragraph_id: 'para-h1',
-        user_id: 'cmgxlfj9z0000orjgnfy3revu',
-        text: 'Getting Started with Collaboration',
-        type: 'TITLE',
-        heading_level: 'h1',
-        approved: true
-      },
-      {
         id: 'proposal-1',
-        paragraph_id: 'para-1',
+        paragraph_id: 'para-2',
         user_id: 'cmgxlfj9z0000orjgnfy3revu',
-        text: 'This is the first paragraph of our collaborative document. It contains sample text that can be modified by multiple users through our voting system.',
+        text: 'This proposal demonstrates how the 75% acceptance threshold works. With 4 collaborators, we need 3 PRO votes for automatic acceptance. Try voting on this proposal to see how the threshold affects approval!',
         type: 'BODY',
-        approved: true
+        approved: false
       },
       {
         id: 'proposal-2',
-        paragraph_id: 'para-1',
+        paragraph_id: 'para-3',
         user_id: 'cmgxlfj9z0000orjgnfy3revv',
-        text: 'This is the first paragraph of our collaborative document. It contains some sample text that can be edited by multiple users with approval from the team.',
+        text: 'In public voting mode (like this document), you can see who voted what. Look at the votes below to see user names and avatars. This provides full transparency in the collaboration process.',
         type: 'BODY',
         approved: false
       },
       {
         id: 'proposal-3',
-        paragraph_id: 'para-2',
+        paragraph_id: 'para-4',
         user_id: 'cmgxlfj9z0000orjgnfy3revw',
-        text: 'This paragraph showcases the collaborative editing capabilities. Team members can propose changes, vote on suggestions, and discuss modifications in real-time.',
+        text: 'With flexible votes enabled (like this document), you can change your vote anytime. Try voting PRO, then change to NEUTRAL, then to CONTRA. Notice how the vote buttons remain active!',
         type: 'BODY',
-        approved: false
-      },
-      {
-        id: 'proposal-h2',
-        paragraph_id: 'para-h2-2',
-        user_id: 'cmgxlfj9z0000orjgnfy3revt',
-        text: 'Proposing and Approving Changes',
-        type: 'TITLE',
-        heading_level: 'h2',
         approved: false
       }
     ];
@@ -795,14 +795,17 @@ async function insertDemoData(db) {
   function insertVotes(db) {
     // Insert demo votes
     const demoVotes = [
+      // Proposal 1: Show threshold example (3 PRO votes = 75% with 4 users)
       { id: 'vote-1', proposal_id: 'proposal-1', user_id: 'cmgxlfj9z0000orjgnfy3revt', vote: 'PRO' },
       { id: 'vote-2', proposal_id: 'proposal-1', user_id: 'cmgxlfj9z0000orjgnfy3revu', vote: 'PRO' },
       { id: 'vote-3', proposal_id: 'proposal-1', user_id: 'cmgxlfj9z0000orjgnfy3revv', vote: 'PRO' },
-      { id: 'vote-4', proposal_id: 'proposal-1', user_id: 'cmgxlfj9z0000orjgnfy3revw', vote: 'PRO' },
-      { id: 'vote-5', proposal_id: 'proposal-2', user_id: 'cmgxlfj9z0000orjgnfy3revt', vote: 'NEUTRAL' },
-      { id: 'vote-6', proposal_id: 'proposal-2', user_id: 'cmgxlfj9z0000orjgnfy3revu', vote: 'CONTRA' },
+      // Proposal 2: Show public voting (can see who voted)
+      { id: 'vote-4', proposal_id: 'proposal-2', user_id: 'cmgxlfj9z0000orjgnfy3revt', vote: 'PRO' },
+      { id: 'vote-5', proposal_id: 'proposal-2', user_id: 'cmgxlfj9z0000orjgnfy3revu', vote: 'NEUTRAL' },
+      { id: 'vote-6', proposal_id: 'proposal-2', user_id: 'cmgxlfj9z0000orjgnfy3revv', vote: 'PRO' },
+      // Proposal 3: Show flexible votes (can change)
       { id: 'vote-7', proposal_id: 'proposal-3', user_id: 'cmgxlfj9z0000orjgnfy3revt', vote: 'PRO' },
-      { id: 'vote-8', proposal_id: 'proposal-3', user_id: 'cmgxlfj9z0000orjgnfy3revv', vote: 'PRO' }
+      { id: 'vote-8', proposal_id: 'proposal-3', user_id: 'cmgxlfj9z0000orjgnfy3revw', vote: 'NEUTRAL' }
     ];
 
     let votesInserted = 0;
@@ -823,27 +826,27 @@ async function insertDemoData(db) {
   }
 
   function insertComments(db) {
-    // Insert demo comments
+    // Insert tutorial comments
     const demoComments = [
       {
         id: 'comment-1',
-        proposal_id: 'proposal-2',
+        proposal_id: 'proposal-1',
         user_id: 'cmgxlfj9z0000orjgnfy3revt',
-        text: 'I think this wording is clearer and more professional.',
+        text: 'This proposal has 3 PRO votes out of 4 collaborators, which equals 75% - exactly the threshold needed for automatic acceptance!',
         parent_id: null
       },
       {
         id: 'comment-2',
         proposal_id: 'proposal-2',
         user_id: 'cmgxlfj9z0000orjgnfy3revu',
-        text: 'Agreed, but maybe we can combine the best parts of both versions?',
+        text: 'Notice how you can see who voted what in public voting mode. Try creating a document with anonymous voting to see the difference!',
         parent_id: null
       },
       {
         id: 'comment-3',
         proposal_id: 'proposal-3',
         user_id: 'cmgxlfj9z0000orjgnfy3revw',
-        text: 'This captures the real-time aspect better.',
+        text: 'Since this document uses flexible votes, you can change your vote anytime. Try it out!',
         parent_id: null
       }
     ];

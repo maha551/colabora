@@ -39,6 +39,8 @@ import {
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import { Checkbox } from "./ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
+import { Slider } from "./ui/slider";
 import { Welcome } from "./Welcome";
 import { toast } from "sonner";
 
@@ -54,7 +56,17 @@ interface DocumentDashboardProps {
   documents: Document[];
   currentUser: User;
   onSelectDocument: (document: Document) => void;
-  onCreateDocument: (title: string, description?: string, contributors?: string[]) => void;
+  onCreateDocument: (
+    title: string, 
+    description?: string, 
+    contributors?: string[],
+    options?: {
+      acceptanceThreshold?: number;
+      votingAnonymous?: boolean;
+      votingAnonymityLocked?: boolean;
+      voteChangeAllowed?: boolean;
+    }
+  ) => void;
   onDeleteDocument: (documentId: string) => void;
   loading?: boolean;
   isCreateDialogOpen?: boolean;
@@ -83,6 +95,12 @@ export function DocumentDashboard({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("modified");
+  
+  // Document options state
+  const [acceptanceThreshold, setAcceptanceThreshold] = useState(75);
+  const [votingAnonymous, setVotingAnonymous] = useState(false);
+  const [votingAnonymityLocked, setVotingAnonymityLocked] = useState(false);
+  const [voteChangeAllowed, setVoteChangeAllowed] = useState(true);
 
   // Get available contributors (all demo users except current user)
   const availableContributors = demoUsers.filter(user => user.id !== currentUser.id);
@@ -146,11 +164,21 @@ export function DocumentDashboard({
       await onCreateDocument(
         newDocumentTitle.trim(),
         newDocumentDescription.trim() || undefined,
-        selectedContributors.length > 0 ? selectedContributors : undefined
+        selectedContributors.length > 0 ? selectedContributors : undefined,
+        {
+          acceptanceThreshold,
+          votingAnonymous,
+          votingAnonymityLocked,
+          voteChangeAllowed
+        }
       );
       setNewDocumentTitle("");
       setNewDocumentDescription("");
       setSelectedContributors([]);
+      setAcceptanceThreshold(75);
+      setVotingAnonymous(false);
+      setVotingAnonymityLocked(false);
+      setVoteChangeAllowed(true);
       setIsCreateDialogOpen(false);
       toast.success("Document created successfully!");
     } catch (error) {
@@ -298,6 +326,82 @@ export function DocumentDashboard({
                   />
                 </div>
 
+                {/* Document Options */}
+                <div className="space-y-4 border-t pt-4">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                    <span>⚠️</span>
+                    <span>Document Options</span>
+                  </div>
+                  <p className="text-xs text-gray-600 -mt-2">
+                    These settings cannot be changed after document creation
+                  </p>
+
+                  {/* Acceptance Threshold */}
+                  <div className="space-y-2">
+                    <Label htmlFor="threshold">Acceptance Threshold: {acceptanceThreshold}%</Label>
+                    <Slider
+                      id="threshold"
+                      min={1}
+                      max={100}
+                      step={1}
+                      value={[acceptanceThreshold]}
+                      onValueChange={(value) => setAcceptanceThreshold(value[0])}
+                      className="w-full"
+                    />
+                    <p className="text-xs text-gray-500">
+                      Percentage of collaborators who must vote PRO for automatic acceptance
+                    </p>
+                  </div>
+
+                  {/* Voting Anonymity */}
+                  <div className="space-y-2">
+                    <Label>Voting Anonymity</Label>
+                    <RadioGroup value={votingAnonymous ? "anonymous" : "public"} onValueChange={(value) => setVotingAnonymous(value === "anonymous")}>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="public" id="public" />
+                        <Label htmlFor="public" className="font-normal cursor-pointer">
+                          Public (Open) - Votes are visible
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="anonymous" id="anonymous" />
+                        <Label htmlFor="anonymous" className="font-normal cursor-pointer">
+                          Anonymous (Closed) - Votes are hidden
+                        </Label>
+                      </div>
+                    </RadioGroup>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="lock-anonymity"
+                        checked={votingAnonymityLocked}
+                        onCheckedChange={(checked) => setVotingAnonymityLocked(checked === true)}
+                      />
+                      <Label htmlFor="lock-anonymity" className="text-xs font-normal cursor-pointer">
+                        Lock anonymity setting (cannot be changed)
+                      </Label>
+                    </div>
+                  </div>
+
+                  {/* Vote Flexibility */}
+                  <div className="space-y-2">
+                    <Label>Vote Flexibility</Label>
+                    <RadioGroup value={voteChangeAllowed ? "flexible" : "locked"} onValueChange={(value) => setVoteChangeAllowed(value === "flexible")}>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="flexible" id="flexible" />
+                        <Label htmlFor="flexible" className="font-normal cursor-pointer">
+                          Flexible - Can change vote after casting
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="locked" id="locked" />
+                        <Label htmlFor="locked" className="font-normal cursor-pointer">
+                          Locked - Vote cannot be changed after first vote
+                        </Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+                </div>
+
                 {/* Contributors Selection */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
@@ -379,6 +483,10 @@ export function DocumentDashboard({
                       setNewDocumentTitle("");
                       setNewDocumentDescription("");
                       setSelectedContributors([]);
+                      setAcceptanceThreshold(75);
+                      setVotingAnonymous(false);
+                      setVotingAnonymityLocked(false);
+                      setVoteChangeAllowed(true);
                     }}
                     disabled={isSubmitting}
                     style={{ flex: 1, height: '40px', backgroundColor: '#fff', color: '#000', border: '1px solid #d1d5db', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}

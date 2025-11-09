@@ -72,7 +72,13 @@ router.get('/', requireAuth, (req, res) => {
                 email: doc.owner_email
               },
               collaborators: [],
-              paragraphs: []
+              paragraphs: [],
+              options: {
+                acceptanceThreshold: doc.acceptance_threshold || 75.0,
+                votingAnonymous: doc.voting_anonymous === 1,
+                votingAnonymityLocked: doc.voting_anonymity_locked === 1,
+                voteChangeAllowed: doc.vote_change_allowed === 1
+              }
             });
           }
 
@@ -112,7 +118,13 @@ router.get('/', requireAuth, (req, res) => {
                 email: doc.owner_email
               },
               collaborators: normalizedCollaborators,
-              paragraphs: paragraphs
+              paragraphs: paragraphs,
+              options: {
+                acceptanceThreshold: doc.acceptance_threshold || 75.0,
+                votingAnonymous: doc.voting_anonymous === 1,
+                votingAnonymityLocked: doc.voting_anonymity_locked === 1,
+                voteChangeAllowed: doc.vote_change_allowed === 1
+              }
             });
           });
         });
@@ -191,72 +203,85 @@ router.get('/:id', requireAuth, (req, res) => {
 
             const enrichProposal = (prop) => {
               return new Promise((resolveProposal) => {
-                const votesQuery = `
-                  SELECT v.*,
-                         u.name as user_name,
-                         u.email as user_email
-                  FROM votes v
-                  LEFT JOIN users u ON v.user_id = u.id
-                  WHERE v.proposal_id = ?
-                  ORDER BY v.created_at ASC
-                `;
+                // Get document voting_anonymous setting
+                db.get(`SELECT voting_anonymous FROM documents WHERE id = ?`, [documentId], (docErr, doc) => {
+                  const isAnonymous = doc?.voting_anonymous === 1;
 
-                const commentsQuery = `
-                  SELECT c.*,
-                         u.name as user_name,
-                         u.email as user_email,
-                         pc.user_id as parent_user_id,
-                         pu.name as parent_user_name
-                  FROM comments c
-                  LEFT JOIN users u ON c.user_id = u.id
-                  LEFT JOIN comments pc ON c.parent_id = pc.id
-                  LEFT JOIN users pu ON pc.user_id = pu.id
-                  WHERE c.proposal_id = ?
-                  ORDER BY c.created_at ASC
-                `;
+                  const votesQuery = `
+                    SELECT v.*,
+                           u.name as user_name,
+                           u.email as user_email
+                    FROM votes v
+                    LEFT JOIN users u ON v.user_id = u.id
+                    WHERE v.proposal_id = ?
+                    ORDER BY v.created_at ASC
+                  `;
 
-                const historyQuery = `
-                  SELECT 
-                    h.id,
-                    h.paragraph_id,
-                    h.user_id,
-                    h.old_text,
-                    h.new_text,
-                    h.approval_percentage,
-                    h.proposal_id,
-                    h.created_at,
-                    h.heading_level,
-                    u.name as user_name,
-                    u.email as user_email,
-                    pr.type as proposal_type
-                  FROM history h
-                  JOIN users u ON h.user_id = u.id
-                  LEFT JOIN proposals pr ON h.proposal_id = pr.id
-                  WHERE h.paragraph_id = ?
-                  ORDER BY h.created_at DESC
-                `;
+                  const commentsQuery = `
+                    SELECT c.*,
+                           u.name as user_name,
+                           u.email as user_email,
+                           pc.user_id as parent_user_id,
+                           pu.name as parent_user_name
+                    FROM comments c
+                    LEFT JOIN users u ON c.user_id = u.id
+                    LEFT JOIN comments pc ON c.parent_id = pc.id
+                    LEFT JOIN users pu ON pc.user_id = pu.id
+                    WHERE c.proposal_id = ?
+                    ORDER BY c.created_at ASC
+                  `;
 
-                const fetchVotes = new Promise((resolveVotes) => {
-                  db.all(votesQuery, [prop.id], (votesErr, voteRows) => {
-                    if (votesErr) {
-                      console.error('Error fetching votes:', votesErr);
-                      return resolveVotes([]);
-                    }
+                  const historyQuery = `
+                    SELECT 
+                      h.id,
+                      h.paragraph_id,
+                      h.user_id,
+                      h.old_text,
+                      h.new_text,
+                      h.approval_percentage,
+                      h.proposal_id,
+                      h.created_at,
+                      h.heading_level,
+                      u.name as user_name,
+                      u.email as user_email,
+                      pr.type as proposal_type
+                    FROM history h
+                    JOIN users u ON h.user_id = u.id
+                    LEFT JOIN proposals pr ON h.proposal_id = pr.id
+                    WHERE h.paragraph_id = ?
+                    ORDER BY h.created_at DESC
+                  `;
 
-                    const votes = (voteRows || []).map((vote) => ({
-                      ...vote,
-                      proposalId: vote.proposal_id,
-                      userId: vote.user_id,
-                      user: {
-                        id: vote.user_id,
-                        name: vote.user_name,
-                        email: vote.user_email
+                  const fetchVotes = new Promise((resolveVotes) => {
+                    db.all(votesQuery, [prop.id], (votesErr, voteRows) => {
+                      if (votesErr) {
+                        console.error('Error fetching votes:', votesErr);
+                        return resolveVotes([]);
                       }
-                    }));
 
-                    resolveVotes(votes);
+                      const votes = (voteRows || []).map((vote) => {
+                        const voteData = {
+                          ...vote,
+                          proposalId: vote.proposal_id,
+                          userId: vote.user_id,
+                          vote: vote.vote
+                        };
+
+                        // Hide user info if voting is anonymous
+                        if (!isAnonymous) {
+                          voteData.user = {
+                            id: vote.user_id,
+                            name: vote.user_name,
+                            email: vote.user_email
+                          };
+                        }
+
+                        return voteData;
+                      });
+
+                      resolveVotes(votes);
+                    });
                   });
-                });
 
                 const fetchComments = new Promise((resolveComments) => {
                   db.all(commentsQuery, [prop.id], (commentsErr, commentRows) => {
@@ -286,17 +311,18 @@ router.get('/:id', requireAuth, (req, res) => {
                   });
                 });
 
-                Promise.all([fetchVotes, fetchComments]).then(([votes, comments]) => {
-                  resolveProposal({
-                    ...prop,
-                    heading_level: prop.heading_level,
-                    user: {
-                      id: prop.user_id,
-                      name: prop.user_name,
-                      email: prop.user_email
-                    },
-                    votes,
-                    comments
+                  Promise.all([fetchVotes, fetchComments]).then(([votes, comments]) => {
+                    resolveProposal({
+                      ...prop,
+                      heading_level: prop.heading_level,
+                      user: {
+                        id: prop.user_id,
+                        name: prop.user_name,
+                        email: prop.user_email
+                      },
+                      votes,
+                      comments
+                    });
                   });
                 });
               });
@@ -406,7 +432,13 @@ router.get('/:id', requireAuth, (req, res) => {
               email: document.owner_email
             },
             collaborators: normalizedCollaborators,
-            paragraphs: paragraphData
+            paragraphs: paragraphData,
+            options: {
+              acceptanceThreshold: document.acceptance_threshold || 75.0,
+              votingAnonymous: document.voting_anonymous === 1,
+              votingAnonymityLocked: document.voting_anonymity_locked === 1,
+              voteChangeAllowed: document.vote_change_allowed === 1
+            }
           };
 
           res.json({ document: result });
@@ -423,7 +455,7 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
   console.log('User:', req.user ? req.user.name : 'No user');
 
   const db = req.app.locals.db;
-  const { title } = req.body;
+  const { title, description, options } = req.body;
   const userId = req.user.id;
 
   if (!title || title.trim() === '') {
@@ -431,13 +463,24 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
     return res.status(400).json({ error: 'Title is required' });
   }
 
+  // Parse and validate options
+  const acceptanceThreshold = options?.acceptanceThreshold !== undefined 
+    ? Math.max(1, Math.min(100, parseFloat(options.acceptanceThreshold))) 
+    : 75.0;
+  const votingAnonymous = options?.votingAnonymous === true ? 1 : 0;
+  const votingAnonymityLocked = options?.votingAnonymityLocked === true ? 1 : 0;
+  const voteChangeAllowed = options?.voteChangeAllowed !== undefined 
+    ? (options.voteChangeAllowed === true ? 1 : 0)
+    : 1;
+
   const documentId = uuidv4();
   const trimmedTitle = title.trim();
   const titleParagraphId = `${documentId}-title`;
 
   db.run(`
-    INSERT INTO documents (id, title, owner_id) VALUES (?, ?, ?)
-  `, [documentId, trimmedTitle, userId], function(err) {
+    INSERT INTO documents (id, title, owner_id, acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed) 
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `, [documentId, trimmedTitle, userId, acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed], function(err) {
     if (err) {
       console.error('Error creating document:', err);
       return res.status(500).json({ error: 'Failed to create document' });
@@ -486,7 +529,13 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
               name: document.owner_name,
               email: document.owner_email
             },
-            collaborators: []
+            collaborators: [],
+            options: {
+              acceptanceThreshold: document.acceptance_threshold || 75.0,
+              votingAnonymous: document.voting_anonymous === 1,
+              votingAnonymityLocked: document.voting_anonymity_locked === 1,
+              voteChangeAllowed: document.vote_change_allowed === 1
+            }
           };
 
           console.log('Document created successfully:', { id: documentId, title: trimmedTitle });

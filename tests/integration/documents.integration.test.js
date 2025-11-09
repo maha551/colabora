@@ -78,8 +78,37 @@ describe('Documents API Integration Tests', () => {
       expect(response.body).toHaveProperty('document');
       expect(response.body.document.title).toBe(docData.title);
       expect(response.body.document.owner.id).toBe(testUserId);
+      // Check that options are included with defaults
+      expect(response.body.document.options).toBeDefined();
+      expect(response.body.document.options.acceptanceThreshold).toBe(75);
+      expect(response.body.document.options.votingAnonymous).toBe(false);
+      expect(response.body.document.options.voteChangeAllowed).toBe(true);
 
       testDocumentId = response.body.document.id;
+    });
+
+    test('should create a document with custom options', async () => {
+      const docData = {
+        title: 'Document with Custom Options',
+        options: {
+          acceptanceThreshold: 50,
+          votingAnonymous: true,
+          voteChangeAllowed: false
+        }
+      };
+
+      const response = await request(server)
+        .post('/api/documents')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send(docData)
+        .expect(201);
+
+      expect(response.body).toHaveProperty('document');
+      expect(response.body.document.title).toBe(docData.title);
+      expect(response.body.document.options).toBeDefined();
+      expect(response.body.document.options.acceptanceThreshold).toBe(50);
+      expect(response.body.document.options.votingAnonymous).toBe(true);
+      expect(response.body.document.options.voteChangeAllowed).toBe(false);
     });
 
     test('should retrieve user documents', async () => {
@@ -106,6 +135,8 @@ describe('Documents API Integration Tests', () => {
       expect(response.body.document.id).toBe(testDocumentId);
       expect(response.body.document.title).toBe('Integration Test Document');
       expect(response.body.document.paragraphs).toBeDefined();
+      // Verify options are included in document retrieval
+      expect(response.body.document.options).toBeDefined();
     });
 
     test('should update document title', async () => {
@@ -248,7 +279,7 @@ describe('Documents API Integration Tests', () => {
       expect(response.body.message).toContain('Vote cast successfully');
     });
 
-    test('should allow vote changes', async () => {
+    test('should allow vote changes when voteChangeAllowed is true', async () => {
       const voteData = {
         vote: 'CONTRA' // Change from PRO to CONTRA
       };
@@ -260,6 +291,59 @@ describe('Documents API Integration Tests', () => {
         .expect(200);
 
       expect(response.body.message).toContain('Vote');
+    });
+
+    test('should prevent vote changes when voteChangeAllowed is false', async () => {
+      // Create a document with locked votes
+      const lockedDoc = await request(server)
+        .post('/api/documents')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          title: 'Locked Votes Document',
+          options: {
+            voteChangeAllowed: false
+          }
+        })
+        .expect(201);
+
+      const lockedDocId = lockedDoc.body.document.id;
+      
+      // Create a paragraph and proposal
+      const paraResponse = await request(server)
+        .post(`/api/documents/${lockedDocId}/paragraphs`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          text: 'Test paragraph',
+          order_index: 1
+        })
+        .expect(201);
+
+      const paraId = paraResponse.body.paragraph.id;
+
+      const proposalResponse = await request(server)
+        .post(`/api/documents/${lockedDocId}/paragraphs/${paraId}/proposals`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          text: 'Test proposal',
+          type: 'BODY'
+        })
+        .expect(201);
+
+      const proposalId = proposalResponse.body.proposal.id;
+
+      // Cast initial vote
+      await request(server)
+        .post(`/api/documents/${lockedDocId}/paragraphs/${paraId}/proposals/${proposalId}/vote`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ vote: 'PRO' })
+        .expect(200);
+
+      // Try to change vote - should fail
+      await request(server)
+        .post(`/api/documents/${lockedDocId}/paragraphs/${paraId}/proposals/${proposalId}/vote`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ vote: 'CONTRA' })
+        .expect(403);
     });
   });
 

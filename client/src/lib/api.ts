@@ -1,5 +1,5 @@
 // API client for backend integration
-import type { HeadingLevel } from "../types";
+import type { HeadingLevel, StructureOperation, StructureProposal } from "../types";
 
 const API_BASE_URL = process.env.NODE_ENV === 'production'
   ? '' // In production, use relative URLs
@@ -272,6 +272,71 @@ async function unauthenticatedRequest(
   }
 
   return camelCaseKeys(rawData)
+}
+
+// Structure Proposals API functions
+export const structureProposalsApi = {
+  // Get all structure proposals for a document
+  async getStructureProposals(documentId: string): Promise<{ structureProposals: StructureProposal[] }> {
+    return apiRequest(`/api/documents/${documentId}/structure-proposals`)
+  },
+
+  // Get a specific structure proposal
+  async getStructureProposal(documentId: string, proposalId: string): Promise<{ structureProposal: StructureProposal }> {
+    return apiRequest(`/api/documents/${documentId}/structure-proposals/${proposalId}`)
+  },
+
+  // Create a new structure proposal
+  async createStructureProposal(
+    documentId: string,
+    title: string,
+    description: string | undefined,
+    operations: StructureOperation[]
+  ): Promise<{ structureProposal: StructureProposal }> {
+    return apiRequest(`/api/documents/${documentId}/structure-proposals`, {
+      method: 'POST',
+      body: JSON.stringify({
+        title,
+        description,
+        operations
+      }),
+    })
+  },
+
+  // Vote on a structure proposal
+  async voteOnStructureProposal(
+    documentId: string,
+    proposalId: string,
+    vote: 'PRO' | 'NEUTRAL' | 'CONTRA'
+  ): Promise<{ message: string }> {
+    return apiRequest(`/api/documents/${documentId}/structure-proposals/${proposalId}/vote`, {
+      method: 'POST',
+      body: JSON.stringify({ vote }),
+    })
+  },
+
+  // Apply an approved structure proposal
+  async applyStructureProposal(
+    documentId: string,
+    proposalId: string
+  ): Promise<{ message: string }> {
+    return apiRequest(`/api/documents/${documentId}/structure-proposals/${proposalId}/apply`, {
+      method: 'POST',
+    })
+  },
+
+  // Add comment to structure proposal
+  async addCommentToStructureProposal(
+    documentId: string,
+    proposalId: string,
+    text: string,
+    parentId?: string
+  ): Promise<{ message: string }> {
+    return apiRequest(`/api/documents/${documentId}/structure-proposals/${proposalId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ text, parentId }),
+    })
+  },
 }
 
 // Auth API functions

@@ -137,6 +137,98 @@ export interface Document {
   options?: DocumentOptions;
 }
 
+// Structure Proposal Types
+export type StructureOperationType = 'MOVE' | 'MERGE' | 'SPLIT' | 'DELETE' | 'RENAME_HEADING' | 'CHANGE_HEADING_LEVEL' | 'INSERT_NEW';
+
+export interface StructureOperation {
+  id?: string;
+  structureProposalId?: string;
+  operationType: StructureOperationType;
+  sourceParagraphIds?: string[]; // For merge operations
+  targetParagraphId?: string;
+  newPositionIndex?: number;
+  newParentId?: string; // For nesting under headings
+  newText?: string;
+  newHeadingLevel?: HeadingLevel;
+  operationData?: any; // For complex operations like splits
+  createdAt?: string;
+}
+
+export interface StructureProposalVote {
+  id: string;
+  structureProposalId: string;
+  userId: string;
+  vote: 'PRO' | 'NEUTRAL' | 'CONTRA';
+  createdAt: string;
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+  };
+}
+
+export interface StructureProposalComment {
+  id: string;
+  structureProposalId: string;
+  userId: string;
+  text: string;
+  parentId?: string;
+  createdAt: string;
+  updatedAt: string;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  parent?: {
+    id: string;
+    user: {
+      id: string;
+      name: string;
+    };
+  };
+  replies: {
+    id: string;
+    user: {
+      id: string;
+      name: string;
+    };
+  }[];
+}
+
+export interface StructureProposal {
+  id: string;
+  documentId: string;
+  userId: string;
+  title: string;
+  description?: string;
+  approved: boolean;
+  applied: boolean;
+  createdAt: string;
+  updatedAt: string;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  operations: StructureOperation[];
+  votes: StructureProposalVote[];
+  comments: StructureProposalComment[];
+}
+
+// Outline types for structure proposal creation
+export interface OutlineItem {
+  id: string;
+  type: 'heading' | 'paragraph';
+  title?: string;
+  text: string;
+  headingLevel?: HeadingLevel;
+  orderIndex: number;
+  isSelected?: boolean;
+  isMergeCandidate?: boolean;
+  isDeleteCandidate?: boolean;
+}
+
 // Alias types for backward compatibility with existing components
 export type Suggestion = Proposal;
 export type Suggestions = Proposal[];

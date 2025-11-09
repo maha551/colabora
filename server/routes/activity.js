@@ -100,13 +100,74 @@ router.get('/', requireAuth, (req, res) => {
       JOIN users u ON c.user_id = u.id
       WHERE pr.document_id = ?
 
+      UNION ALL
+
+      SELECT
+        'structure_proposal_created' as type,
+        sp.id,
+        sp.user_id as userId,
+        u.name as userName,
+        u.avatar as userAvatar,
+        sp.title as paragraphTitle,
+        sp.description as proposalText,
+        sp.created_at as timestamp
+      FROM structure_proposals sp
+      JOIN users u ON sp.user_id = u.id
+      WHERE sp.document_id = ?
+
+      UNION ALL
+
+      SELECT
+        'structure_proposal_vote' as type,
+        spv.id,
+        spv.user_id as userId,
+        u.name as userName,
+        u.avatar as userAvatar,
+        sp.title as paragraphTitle,
+        spv.vote as voteType,
+        spv.created_at as timestamp
+      FROM structure_proposal_votes spv
+      JOIN structure_proposals sp ON spv.structure_proposal_id = sp.id
+      JOIN users u ON spv.user_id = u.id
+      WHERE sp.document_id = ?
+
+      UNION ALL
+
+      SELECT
+        'structure_proposal_approved' as type,
+        sp.id,
+        sp.user_id as userId,
+        u.name as userName,
+        u.avatar as userAvatar,
+        sp.title as paragraphTitle,
+        'Structure proposal approved' as proposalText,
+        sp.updated_at as timestamp
+      FROM structure_proposals sp
+      JOIN users u ON sp.user_id = u.id
+      WHERE sp.document_id = ? AND sp.approved = 1
+
+      UNION ALL
+
+      SELECT
+        'structure_proposal_applied' as type,
+        sp.id,
+        sp.user_id as userId,
+        u.name as userName,
+        u.avatar as userAvatar,
+        sp.title as paragraphTitle,
+        'Structure changes applied' as proposalText,
+        sp.updated_at as timestamp
+      FROM structure_proposals sp
+      JOIN users u ON sp.user_id = u.id
+      WHERE sp.document_id = ? AND sp.applied = 1
+
       ORDER BY timestamp DESC
       LIMIT 50
     `;
 
     db.all(
       activitiesQuery,
-      [documentId, documentId, documentId, documentId],
+      [documentId, documentId, documentId, documentId, documentId, documentId],
       (err, activities) => {
         if (err) {
           console.error('Error fetching activities:', err);

@@ -149,7 +149,7 @@ function InlineDiffText({ originalText, modifiedText }: { originalText: string; 
 
 interface ActivityItem {
   id: string;
-  type: 'proposal_created' | 'proposal_accepted' | 'vote_cast' | 'comment_added';
+  type: 'proposal_created' | 'proposal_accepted' | 'vote_cast' | 'comment_added' | 'structure_proposal_created' | 'structure_proposal_vote' | 'structure_proposal_approved' | 'structure_proposal_applied';
   userId: string;
   userName: string;
   userAvatar?: string;

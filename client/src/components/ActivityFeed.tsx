@@ -17,7 +17,7 @@ import { cn } from "./ui/utils";
 
 interface ActivityItem {
   id: string;
-  type: 'proposal_created' | 'proposal_accepted' | 'vote_cast' | 'comment_added';
+  type: 'proposal_created' | 'proposal_accepted' | 'vote_cast' | 'comment_added' | 'structure_proposal_created' | 'structure_proposal_vote' | 'structure_proposal_approved' | 'structure_proposal_applied';
   userId: string;
   userName: string;
   userAvatar?: string;
@@ -91,6 +91,16 @@ export function ActivityFeed({ documentId, currentUser }: ActivityFeedProps) {
         return <Minus className="h-4 w-4 text-gray-600" />;
       case 'comment_added':
         return <MessageSquare className="h-4 w-4 text-purple-600" />;
+      case 'structure_proposal_created':
+        return <div className="h-4 w-4 bg-purple-600 rounded text-white text-xs flex items-center justify-center font-bold">🏗️</div>;
+      case 'structure_proposal_vote':
+        if (voteType === 'PRO') return <ThumbsUp className="h-4 w-4 text-purple-600" />;
+        if (voteType === 'CONTRA') return <ThumbsDown className="h-4 w-4 text-red-600" />;
+        return <Minus className="h-4 w-4 text-gray-600" />;
+      case 'structure_proposal_approved':
+        return <CheckCircle2 className="h-4 w-4 text-green-600" />;
+      case 'structure_proposal_applied':
+        return <div className="h-4 w-4 bg-green-600 rounded text-white text-xs flex items-center justify-center">✓</div>;
       default:
         return <Clock className="h-4 w-4 text-gray-400" />;
     }
@@ -101,26 +111,26 @@ export function ActivityFeed({ documentId, currentUser }: ActivityFeedProps) {
       case 'proposal_created':
         return {
           title: 'suggested a change',
-          detail: activity.paragraphTitle 
+          detail: activity.paragraphTitle
             ? `to "${activity.paragraphTitle}"`
             : 'to paragraph',
         };
       case 'proposal_accepted':
         return {
           title: 'proposal was accepted',
-          detail: activity.paragraphTitle 
+          detail: activity.paragraphTitle
             ? `in "${activity.paragraphTitle}"`
             : 'for paragraph',
         };
       case 'vote_cast':
-        const voteText = activity.voteType === 'PRO' 
-          ? 'approved' 
-          : activity.voteType === 'CONTRA' 
-          ? 'rejected' 
+        const voteText = activity.voteType === 'PRO'
+          ? 'approved'
+          : activity.voteType === 'CONTRA'
+          ? 'rejected'
           : 'voted neutral on';
         return {
           title: `${voteText} a proposal`,
-          detail: activity.paragraphTitle 
+          detail: activity.paragraphTitle
             ? `in "${activity.paragraphTitle}"`
             : '',
         };
@@ -128,6 +138,31 @@ export function ActivityFeed({ documentId, currentUser }: ActivityFeedProps) {
         return {
           title: 'commented',
           detail: activity.commentText?.substring(0, 50) + (activity.commentText && activity.commentText.length > 50 ? '...' : ''),
+        };
+      case 'structure_proposal_created':
+        return {
+          title: 'proposed document restructure',
+          detail: activity.paragraphTitle || 'Major document changes',
+        };
+      case 'structure_proposal_vote':
+        const structVoteText = activity.voteType === 'PRO'
+          ? 'supported'
+          : activity.voteType === 'CONTRA'
+          ? 'opposed'
+          : 'was neutral on';
+        return {
+          title: `${structVoteText} restructure proposal`,
+          detail: activity.paragraphTitle || 'Document restructuring',
+        };
+      case 'structure_proposal_approved':
+        return {
+          title: 'restructure proposal approved',
+          detail: activity.paragraphTitle || 'Ready for application',
+        };
+      case 'structure_proposal_applied':
+        return {
+          title: 'applied document restructure',
+          detail: activity.paragraphTitle || 'Document structure updated',
         };
       default:
         return { title: 'activity', detail: '' };
@@ -144,6 +179,14 @@ export function ActivityFeed({ documentId, currentUser }: ActivityFeedProps) {
         return 'bg-purple-100 text-purple-800';
       case 'comment_added':
         return 'bg-orange-100 text-orange-800';
+      case 'structure_proposal_created':
+        return 'bg-purple-100 text-purple-800';
+      case 'structure_proposal_vote':
+        return 'bg-indigo-100 text-indigo-800';
+      case 'structure_proposal_approved':
+        return 'bg-green-100 text-green-800';
+      case 'structure_proposal_applied':
+        return 'bg-emerald-100 text-emerald-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }

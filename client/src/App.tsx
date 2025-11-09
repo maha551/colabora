@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Document, User, VersionHistory, ElementType, HeadingLevel } from "./types";
+import { Document, User, VersionHistory, ElementType, HeadingLevel, StructureProposal } from "./types";
 import { DocumentEditor } from "./components/DocumentEditor";
 import { AgreedDocument } from "./components/AgreedDocument";
 import { DocumentDashboard } from "./components/DocumentDashboard";
@@ -7,13 +7,15 @@ import { ActivityFeedView } from "./components/ActivityFeedView";
 import { UserProfile } from "./components/UserProfile";
 import { Login } from "./components/Login";
 import { AppHeader } from "./components/AppHeader";
+import { StructureProposalMode } from "./components/StructureProposalMode";
+import { StructureProposalCard } from "./components/StructureProposalCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { Avatar, AvatarFallback } from "./components/ui/avatar";
 import { CollaboratorManagement } from "./components/CollaboratorManagement";
 import { Users, FileText, Edit3, Clock, CheckCircle2 } from "lucide-react";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
-import { documentsApi, authApi, proposalsApi, votesApi, commentsApi, paragraphsApi } from "./lib/api";
+import { documentsApi, authApi, proposalsApi, votesApi, commentsApi, paragraphsApi, structureProposalsApi } from "./lib/api";
 import { toast } from "sonner";
 
 export default function App() {
@@ -27,6 +29,25 @@ export default function App() {
   const [currentView, setCurrentView] = useState<'documents' | 'activity' | 'document' | 'profile'>('documents');
   const [documentLoadKey, setDocumentLoadKey] = useState<number>(Date.now());
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [structureProposals, setStructureProposals] = useState<StructureProposal[]>([]);
+  const [showStructureProposalMode, setShowStructureProposalMode] = useState(false);
+
+  // Load structure proposals for current document
+  const loadStructureProposals = async () => {
+    if (!currentDocument) return;
+
+    try {
+      const response = await structureProposalsApi.getStructureProposals(currentDocument.id);
+      setStructureProposals(response.structureProposals);
+    } catch (error) {
+      console.error('Failed to load structure proposals:', error);
+    }
+  };
+
+  // Refresh structure proposals
+  const refreshStructureProposals = () => {
+    loadStructureProposals();
+  };
 
   // Helper function to map proposals to suggestions for backward compatibility
   const mapDocumentWithSuggestions = (document: any): Document | null => {
@@ -562,6 +583,8 @@ export default function App() {
                 setCurrentDocument(normalizedDocument);
                 setCurrentView('document');
                 setActiveTab('discussion');
+                // Load structure proposals for this document
+                await loadStructureProposals();
               }
             } catch (error) {
               console.error('Failed to load document:', error);
@@ -601,6 +624,54 @@ export default function App() {
             <p className="text-sm text-gray-600">{currentDocument.description}</p>
           </div>
         )}
+
+        {/* Structure Proposals Section */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-semibold">🏗️ Structure Proposals</h2>
+              {structureProposals.length > 0 && (
+                <Badge variant="secondary">
+                  {structureProposals.length}
+                </Badge>
+              )}
+            </div>
+            <Button
+              onClick={() => setShowStructureProposalMode(true)}
+              variant="outline"
+              size="sm"
+              className="gap-2"
+            >
+              🧩 Propose restructuring
+            </Button>
+          </div>
+
+          {structureProposals.length > 0 ? (
+            <div className="space-y-4">
+              {structureProposals.map((proposal) => (
+                <StructureProposalCard
+                  key={proposal.id}
+                  structureProposal={proposal}
+                  documentId={currentDocument.id}
+                  currentUserId={currentUser.id}
+                  onVote={refreshStructureProposals}
+                  onApply={() => {
+                    // Refresh document and structure proposals after applying
+                    loadDocuments();
+                    refreshStructureProposals();
+                  }}
+                  canApply={currentDocument.ownerId === currentUser.id}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
+              <div className="text-4xl mb-2">🏗️</div>
+              <p className="text-sm">No structure proposals yet.</p>
+              <p className="text-xs mt-1">Use "Propose restructuring" to suggest major document changes.</p>
+            </div>
+          )}
+        </div>
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "discussion" | "agreed")}>
@@ -743,6 +814,19 @@ export default function App() {
         </Tabs>
           </div>
         </>
+      )}
+
+      {/* Structure Proposal Mode */}
+      {showStructureProposalMode && currentDocument && (
+        <StructureProposalMode
+          documentId={currentDocument.id}
+          paragraphs={currentDocument.paragraphs}
+          onClose={() => setShowStructureProposalMode(false)}
+          onSuccess={() => {
+            setShowStructureProposalMode(false);
+            refreshStructureProposals();
+          }}
+        />
       )}
     </div>
   );

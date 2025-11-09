@@ -263,17 +263,24 @@ router.get('/:id', requireAuth, (req, res) => {
                         const voteData = {
                           ...vote,
                           proposalId: vote.proposal_id,
-                          userId: vote.user_id,
                           vote: vote.vote
                         };
 
                         // Hide user info if voting is anonymous
                         if (!isAnonymous) {
+                          voteData.userId = vote.user_id;
                           voteData.user = {
                             id: vote.user_id,
                             name: vote.user_name,
                             email: vote.user_email
                           };
+                        } else {
+                          // In anonymous mode, only include userId for the current user's own vote
+                          // This allows users to see their own vote while hiding others
+                          if (vote.user_id === userId) {
+                            voteData.userId = vote.user_id;
+                          }
+                          // Don't include user object or userId for other users
                         }
 
                         return voteData;

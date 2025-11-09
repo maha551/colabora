@@ -74,7 +74,7 @@ router.get('/', requireAuth, async (req, res) => {
       JOIN users u ON h.user_id = u.id
 
       WHERE p.document_id IN (${placeholders})
-        AND h.approval_percentage >= 75  -- Only highly approved changes
+        AND h.approval_percentage >= COALESCE(d.acceptance_threshold, 75.0)  -- Use document-specific threshold
         ${timeFilter}
 
       ORDER BY h.created_at DESC

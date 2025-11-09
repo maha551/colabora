@@ -489,7 +489,7 @@ export function SuggestionCard({
 
             {approvalPercentage >= 50 && !isAccepted && (
               <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 dark:bg-blue-900/20 p-2 rounded">
-                <span className="font-medium">Halfway to acceptance. {Math.max(75 - approvalPercentage, 0).toFixed(0)}% more PRO needed.</span>
+                <span className="font-medium">Halfway to acceptance. {Math.max(acceptanceThreshold - approvalPercentage, 0).toFixed(0)}% more PRO needed.</span>
               </div>
             )}
             

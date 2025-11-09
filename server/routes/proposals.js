@@ -173,23 +173,39 @@ router.get('/', requireAuth, requireDocumentAccess, (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch proposals' });
     }
 
-    // Get votes and comments for each proposal
-    const proposalsWithData = proposals.map(prop => {
-      return new Promise((resolve) => {
-        // Get votes
-        const votesQuery = `
-          SELECT v.*,
-                 u.name as user_name
-          FROM votes v
-          JOIN users u ON v.user_id = u.id
-          WHERE v.proposal_id = ?
-        `;
+    // Get document voting_anonymous setting first
+    const documentId = req.params.documentId;
+    db.get(`SELECT voting_anonymous FROM documents WHERE id = (SELECT document_id FROM paragraphs WHERE id = ?)`, [paragraphId], (docErr, doc) => {
+      const isAnonymous = doc?.voting_anonymous === 1;
+      const userId = req.user.id;
 
-        db.all(votesQuery, [prop.id], (err, votes) => {
-          const processedVotes = votes.map(vote => ({
-            ...vote,
-            user: { id: vote.user_id, name: vote.user_name }
-          }));
+      // Get votes and comments for each proposal
+      const proposalsWithData = proposals.map(prop => {
+        return new Promise((resolve) => {
+          // Get votes
+          const votesQuery = `
+            SELECT v.*,
+                   u.name as user_name
+            FROM votes v
+            JOIN users u ON v.user_id = u.id
+            WHERE v.proposal_id = ?
+          `;
+
+          db.all(votesQuery, [prop.id], (err, votes) => {
+            const processedVotes = votes.map(vote => {
+              const voteData = { ...vote };
+              // Hide user info if voting is anonymous
+              if (!isAnonymous) {
+                voteData.user = { id: vote.user_id, name: vote.user_name };
+              } else {
+                // In anonymous mode, only include userId for the current user's own vote
+                if (vote.user_id === userId) {
+                  voteData.userId = vote.user_id;
+                }
+                // Don't include user object for other users
+              }
+              return voteData;
+            });
 
           // Get comments
           const commentsQuery = `
@@ -227,8 +243,9 @@ router.get('/', requireAuth, requireDocumentAccess, (req, res) => {
       });
     });
 
-    Promise.all(proposalsWithData).then(results => {
-      res.json({ proposals: results });
+      Promise.all(proposalsWithData).then(results => {
+        res.json({ proposals: results });
+      });
     });
   });
 });

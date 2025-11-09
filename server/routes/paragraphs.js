@@ -82,9 +82,14 @@ router.get('/context/:paragraphId', requireAuth, requireDocumentAccess, (req, re
       const targetOrder = targetPara.order_index;
       const minOrder = Math.max(0, targetOrder - contextSize);
       const maxOrder = targetOrder + contextSize;
+      const userId = req.user.id;
 
-      // Get paragraphs in the context window
-      db.all(
+      // Get document voting_anonymous setting
+      db.get(`SELECT voting_anonymous FROM documents WHERE id = ?`, [documentId], (docErr, doc) => {
+        const isAnonymous = doc?.voting_anonymous === 1;
+
+        // Get paragraphs in the context window
+        db.all(
         `
         SELECT
           p.*,
@@ -150,11 +155,24 @@ router.get('/context/:paragraphId', requireAuth, requireDocumentAccess, (req, re
               heading_level: row.heading_level,
               order: row.order_index,
               isDocumentTitle: row.order_index < 0,
-              proposals: proposals.map(p => ({
-                ...p,
-                votes: p.votes ? JSON.parse(p.votes).filter(v => v.user_id) : [],
-                comments: p.comments ? JSON.parse(p.comments).filter(c => c.id) : []
-              }))
+              proposals: proposals.map(p => {
+                let votes = p.votes ? JSON.parse(p.votes).filter(v => v.user_id) : [];
+                // Filter user_id from votes if voting is anonymous
+                if (isAnonymous) {
+                  votes = votes.map(v => {
+                    // Only include user_id for the current user's own vote
+                    if (v.user_id === userId) {
+                      return { userId: v.user_id, vote: v.vote };
+                    }
+                    return { vote: v.vote }; // Remove user_id for other users
+                  });
+                }
+                return {
+                  ...p,
+                  votes,
+                  comments: p.comments ? JSON.parse(p.comments).filter(c => c.id) : []
+                };
+              })
             };
           });
 
@@ -165,6 +183,7 @@ router.get('/context/:paragraphId', requireAuth, requireDocumentAccess, (req, re
           });
         }
       );
+      });
     }
   );
 });
@@ -173,8 +192,13 @@ router.get('/context/:paragraphId', requireAuth, requireDocumentAccess, (req, re
 router.get('/', requireAuth, requireDocumentAccess, (req, res) => {
   const db = req.app.locals.db;
   const documentId = req.params.documentId;
+  const userId = req.user.id;
 
-  db.all(
+  // Get document voting_anonymous setting
+  db.get(`SELECT voting_anonymous FROM documents WHERE id = ?`, [documentId], (docErr, doc) => {
+    const isAnonymous = doc?.voting_anonymous === 1;
+
+    db.all(
     `
     SELECT
       p.*,
@@ -235,19 +259,41 @@ router.get('/', requireAuth, requireDocumentAccess, (req, res) => {
       }
 
       // Parse the JSON strings back to objects
-      const paragraphs = rows.map(row => ({
-        ...row,
-        proposals: row.proposals_json && row.proposals_json !== '[null]'
-          ? JSON.parse(row.proposals_json).filter(p => p.id !== null)
-          : [],
-        history: row.history_json && row.history_json !== '[null]'
-          ? JSON.parse(row.history_json).filter(h => h.id !== null)
-          : []
-      }));
+      const paragraphs = rows.map(row => {
+        let proposals = [];
+        if (row.proposals_json && row.proposals_json !== '[null]') {
+          proposals = JSON.parse(row.proposals_json).filter(p => p.id !== null);
+          // Filter user_id from votes if voting is anonymous
+          if (isAnonymous) {
+            proposals = proposals.map(p => {
+              if (p.votes) {
+                const votes = JSON.parse(p.votes);
+                p.votes = votes.map(v => {
+                  // Only include user_id for the current user's own vote
+                  if (v.user_id === userId) {
+                    return { userId: v.user_id, vote: v.vote };
+                  }
+                  return { vote: v.vote }; // Remove user_id for other users
+                });
+              }
+              return p;
+            });
+          }
+        }
+        
+        return {
+          ...row,
+          proposals,
+          history: row.history_json && row.history_json !== '[null]'
+            ? JSON.parse(row.history_json).filter(h => h.id !== null)
+            : []
+        };
+      });
 
       res.json({ paragraphs });
     }
   );
+  });
 });
 
 function normalizeParagraphOrder(db, documentId) {

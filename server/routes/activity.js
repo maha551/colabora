@@ -34,37 +34,46 @@ router.get('/', requireAuth, (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    // Get activities from multiple sources
-    const activitiesQuery = `
-      SELECT 
-        'proposal_created' as type,
-        p.id,
-        p.user_id as userId,
-        u.name as userName,
-        u.avatar as userAvatar,
-        pr.title as paragraphTitle,
-        p.text as proposalText,
-        p.created_at as timestamp
-      FROM proposals p
-      JOIN paragraphs pr ON p.paragraph_id = pr.id
-      JOIN users u ON p.user_id = u.id
-      WHERE pr.document_id = ?
+    // Get document acceptance threshold
+    db.get(`SELECT acceptance_threshold FROM documents WHERE id = ?`, [documentId], (docErr, document) => {
+      if (docErr) {
+        console.error('Error fetching document threshold:', docErr);
+        return res.status(500).json({ error: 'Failed to fetch document threshold' });
+      }
 
-      UNION ALL
+      const acceptanceThreshold = document?.acceptance_threshold || 75.0;
 
-      SELECT 
-        'proposal_accepted' as type,
-        h.id,
-        h.user_id as userId,
-        u.name as userName,
-        u.avatar as userAvatar,
-        pr.title as paragraphTitle,
-        h.new_text as proposalText,
-        h.created_at as timestamp
-      FROM history h
-      JOIN paragraphs pr ON h.paragraph_id = pr.id
-      JOIN users u ON h.user_id = u.id
-      WHERE pr.document_id = ? AND h.approval_percentage >= 75
+      // Get activities from multiple sources
+      const activitiesQuery = `
+        SELECT 
+          'proposal_created' as type,
+          p.id,
+          p.user_id as userId,
+          u.name as userName,
+          u.avatar as userAvatar,
+          pr.title as paragraphTitle,
+          p.text as proposalText,
+          p.created_at as timestamp
+        FROM proposals p
+        JOIN paragraphs pr ON p.paragraph_id = pr.id
+        JOIN users u ON p.user_id = u.id
+        WHERE pr.document_id = ?
+
+        UNION ALL
+
+        SELECT 
+          'proposal_accepted' as type,
+          h.id,
+          h.user_id as userId,
+          u.name as userName,
+          u.avatar as userAvatar,
+          pr.title as paragraphTitle,
+          h.new_text as proposalText,
+          h.created_at as timestamp
+        FROM history h
+        JOIN paragraphs pr ON h.paragraph_id = pr.id
+        JOIN users u ON h.user_id = u.id
+        WHERE pr.document_id = ? AND h.approval_percentage >= ?
 
       UNION ALL
 
@@ -76,11 +85,13 @@ router.get('/', requireAuth, (req, res) => {
         u.avatar as userAvatar,
         pr.title as paragraphTitle,
         v.vote as voteType,
-        v.created_at as timestamp
+        v.created_at as timestamp,
+        d.voting_anonymous
       FROM votes v
       JOIN proposals p ON v.proposal_id = p.id
       JOIN paragraphs pr ON p.paragraph_id = pr.id
-      JOIN users u ON v.user_id = u.id
+      JOIN documents d ON pr.document_id = d.id
+      LEFT JOIN users u ON v.user_id = u.id AND d.voting_anonymous = 0
       WHERE pr.document_id = ?
 
       UNION ALL
@@ -167,7 +178,7 @@ router.get('/', requireAuth, (req, res) => {
 
     db.all(
       activitiesQuery,
-      [documentId, documentId, documentId, documentId, documentId, documentId],
+      [documentId, documentId, acceptanceThreshold, documentId, documentId, documentId, documentId],
       (err, activities) => {
         if (err) {
           console.error('Error fetching activities:', err);
@@ -175,22 +186,29 @@ router.get('/', requireAuth, (req, res) => {
         }
 
         // Transform the data to match frontend expectations
-        const formattedActivities = activities.map(activity => ({
-          id: activity.id,
-          type: activity.type,
-          userId: activity.userId,
-          userName: activity.userName,
-          userAvatar: activity.userAvatar,
-          paragraphTitle: activity.paragraphTitle,
-          proposalText: activity.proposalText,
-          voteType: activity.voteType,
-          commentText: activity.commentText,
-          timestamp: activity.timestamp,
-        }));
+        const formattedActivities = activities.map(activity => {
+          // Hide user info for vote_cast activities if voting is anonymous
+          const isVoteCast = activity.type === 'vote_cast';
+          const isAnonymous = activity.voting_anonymous === 1;
+          
+          return {
+            id: activity.id,
+            type: activity.type,
+            userId: (isVoteCast && isAnonymous) ? undefined : activity.userId,
+            userName: (isVoteCast && isAnonymous) ? undefined : activity.userName,
+            userAvatar: (isVoteCast && isAnonymous) ? undefined : activity.userAvatar,
+            paragraphTitle: activity.paragraphTitle,
+            proposalText: activity.proposalText,
+            voteType: activity.voteType,
+            commentText: activity.commentText,
+            timestamp: activity.timestamp,
+          };
+        });
 
         res.json({ activities: formattedActivities });
       }
     );
+    });
   });
 });
 

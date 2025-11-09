@@ -59,24 +59,29 @@ router.get('/', requireAuth, requireDocumentAccess, (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch structure proposals' });
     }
 
-    // Enrich each structure proposal with operations, votes, and comments
-    const enrichStructureProposal = (sp) => {
-      return new Promise((resolve) => {
-        const operationsQuery = `
-          SELECT * FROM structure_operations
-          WHERE structure_proposal_id = ?
-          ORDER BY created_at ASC
-        `;
+    // Get document voting_anonymous setting
+    const userId = req.user.id;
+    db.get(`SELECT voting_anonymous FROM documents WHERE id = ?`, [documentId], (docErr, doc) => {
+      const isAnonymous = doc?.voting_anonymous === 1;
 
-        const votesQuery = `
-          SELECT v.*,
-                 u.name as user_name,
-                 u.email as user_email
-          FROM structure_proposal_votes v
-          LEFT JOIN users u ON v.user_id = u.id
-          WHERE v.structure_proposal_id = ?
-          ORDER BY v.created_at ASC
-        `;
+      // Enrich each structure proposal with operations, votes, and comments
+      const enrichStructureProposal = (sp) => {
+        return new Promise((resolve) => {
+          const operationsQuery = `
+            SELECT * FROM structure_operations
+            WHERE structure_proposal_id = ?
+            ORDER BY created_at ASC
+          `;
+
+          const votesQuery = `
+            SELECT v.*,
+                   u.name as user_name,
+                   u.email as user_email
+            FROM structure_proposal_votes v
+            LEFT JOIN users u ON v.user_id = u.id
+            WHERE v.structure_proposal_id = ?
+            ORDER BY v.created_at ASC
+          `;
 
         const commentsQuery = `
           SELECT c.*,
@@ -108,14 +113,24 @@ router.get('/', requireAuth, requireDocumentAccess, (req, res) => {
                 console.error('Error fetching votes:', err);
                 return resolveVotes([]);
               }
-              const enrichedVotes = (votes || []).map(vote => ({
-                ...vote,
-                user: {
-                  id: vote.user_id,
-                  name: vote.user_name,
-                  email: vote.user_email
+              const enrichedVotes = (votes || []).map(vote => {
+                const voteData = { ...vote };
+                // Hide user info if voting is anonymous
+                if (!isAnonymous) {
+                  voteData.user = {
+                    id: vote.user_id,
+                    name: vote.user_name,
+                    email: vote.user_email
+                  };
+                } else {
+                  // In anonymous mode, only include userId for the current user's own vote
+                  if (vote.user_id === userId) {
+                    voteData.userId = vote.user_id;
+                  }
+                  // Don't include user object for other users
                 }
-              }));
+                return voteData;
+              });
               resolveVotes(enrichedVotes);
             });
           }),
@@ -160,8 +175,9 @@ router.get('/', requireAuth, requireDocumentAccess, (req, res) => {
       });
     };
 
-    Promise.all(structureProposals.map(enrichStructureProposal)).then(enrichedProposals => {
-      res.json({ structureProposals: enrichedProposals });
+      Promise.all(structureProposals.map(enrichStructureProposal)).then(enrichedProposals => {
+        res.json({ structureProposals: enrichedProposals });
+      });
     });
   });
 });
@@ -311,36 +327,51 @@ router.get('/:proposalId', requireAuth, requireDocumentAccess, (req, res) => {
       return res.status(404).json({ error: 'Structure proposal not found' });
     }
 
-    // Enrich with operations, votes, and comments (same as above)
-    const operationsQuery = `SELECT * FROM structure_operations WHERE structure_proposal_id = ? ORDER BY created_at ASC`;
-    const votesQuery = `
-      SELECT v.*, u.name as user_name, u.email as user_email
-      FROM structure_proposal_votes v
-      LEFT JOIN users u ON v.user_id = u.id
-      WHERE v.structure_proposal_id = ?
-      ORDER BY v.created_at ASC
-    `;
-    const commentsQuery = `
-      SELECT c.*, u.name as user_name, u.email as user_email,
-             pc.user_id as parent_user_id, pu.name as parent_user_name
-      FROM structure_proposal_comments c
-      LEFT JOIN users u ON c.user_id = u.id
-      LEFT JOIN structure_proposal_comments pc ON c.parent_id = pc.id
-      LEFT JOIN users pu ON pc.user_id = pu.id
-      WHERE c.structure_proposal_id = ?
-      ORDER BY c.created_at ASC
-    `;
+    // Get document voting_anonymous setting
+    const userId = req.user.id;
+    db.get(`SELECT voting_anonymous FROM documents WHERE id = ?`, [documentId], (docErr, doc) => {
+      const isAnonymous = doc?.voting_anonymous === 1;
 
-    Promise.all([
-      new Promise(resolveOps => db.all(operationsQuery, [proposalId], (err, ops) => resolveOps(ops || []))),
-      new Promise(resolveVotes => db.all(votesQuery, [proposalId], (err, votes) => {
-        if (err) return resolveVotes([]);
-        const enrichedVotes = votes.map(vote => ({
-          ...vote,
-          user: { id: vote.user_id, name: vote.user_name, email: vote.user_email }
-        }));
-        resolveVotes(enrichedVotes);
-      })),
+      // Enrich with operations, votes, and comments (same as above)
+      const operationsQuery = `SELECT * FROM structure_operations WHERE structure_proposal_id = ? ORDER BY created_at ASC`;
+      const votesQuery = `
+        SELECT v.*, u.name as user_name, u.email as user_email
+        FROM structure_proposal_votes v
+        LEFT JOIN users u ON v.user_id = u.id
+        WHERE v.structure_proposal_id = ?
+        ORDER BY v.created_at ASC
+      `;
+      const commentsQuery = `
+        SELECT c.*, u.name as user_name, u.email as user_email,
+               pc.user_id as parent_user_id, pu.name as parent_user_name
+        FROM structure_proposal_comments c
+        LEFT JOIN users u ON c.user_id = u.id
+        LEFT JOIN structure_proposal_comments pc ON c.parent_id = pc.id
+        LEFT JOIN users pu ON pc.user_id = pu.id
+        WHERE c.structure_proposal_id = ?
+        ORDER BY c.created_at ASC
+      `;
+
+      Promise.all([
+        new Promise(resolveOps => db.all(operationsQuery, [proposalId], (err, ops) => resolveOps(ops || []))),
+        new Promise(resolveVotes => db.all(votesQuery, [proposalId], (err, votes) => {
+          if (err) return resolveVotes([]);
+          const enrichedVotes = votes.map(vote => {
+            const voteData = { ...vote };
+            // Hide user info if voting is anonymous
+            if (!isAnonymous) {
+              voteData.user = { id: vote.user_id, name: vote.user_name, email: vote.user_email };
+            } else {
+              // In anonymous mode, only include userId for the current user's own vote
+              if (vote.user_id === userId) {
+                voteData.userId = vote.user_id;
+              }
+              // Don't include user object for other users
+            }
+            return voteData;
+          });
+          resolveVotes(enrichedVotes);
+        })),
       new Promise(resolveComments => db.all(commentsQuery, [proposalId], (err, comments) => {
         if (err) return resolveComments([]);
         const enrichedComments = comments.map(comment => ({
@@ -354,19 +385,20 @@ router.get('/:proposalId', requireAuth, requireDocumentAccess, (req, res) => {
         }));
         resolveComments(enrichedComments);
       }))
-    ]).then(([operations, votes, comments]) => {
-      const result = {
-        ...structureProposal,
-        user: {
-          id: structureProposal.user_id,
-          name: structureProposal.user_name,
-          email: structureProposal.user_email
-        },
-        operations,
-        votes,
-        comments
-      };
-      res.json({ structureProposal: result });
+      ]).then(([operations, votes, comments]) => {
+        const result = {
+          ...structureProposal,
+          user: {
+            id: structureProposal.user_id,
+            name: structureProposal.user_name,
+            email: structureProposal.user_email
+          },
+          operations,
+          votes,
+          comments
+        };
+        res.json({ structureProposal: result });
+      });
     });
   });
 });

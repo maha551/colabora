@@ -414,11 +414,35 @@ function ensureColumn(db, tableName, columnName, columnDefinition) {
     }
     const hasColumn = columns.some(column => column.name === columnName);
     if (!hasColumn) {
-      db.run(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDefinition}`, alterErr => {
+      console.log(`Adding column ${columnName} to ${tableName}...`);
+      // SQLite doesn't support DEFAULT/NOT NULL in ALTER TABLE ADD COLUMN
+      // Extract just the type for ALTER TABLE
+      const typeOnly = columnDefinition.split('DEFAULT')[0].split('NOT NULL')[0].trim();
+      db.run(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${typeOnly}`, alterErr => {
         if (alterErr) {
           console.error(`Error adding column ${columnName} to ${tableName}:`, alterErr.message);
+        } else {
+          console.log(`✅ Added column ${columnName} to ${tableName}`);
+          
+          // Update default values for existing rows if needed
+          if (columnDefinition.includes('DEFAULT')) {
+            const defaultValueMatch = columnDefinition.match(/DEFAULT\s+([^\s]+)/);
+            if (defaultValueMatch) {
+              const defaultValue = defaultValueMatch[1];
+              // Update NULL values to default
+              db.run(`UPDATE ${tableName} SET ${columnName} = ${defaultValue} WHERE ${columnName} IS NULL`, (updateErr) => {
+                if (updateErr) {
+                  console.error(`Error setting default for ${columnName}:`, updateErr.message);
+                } else {
+                  console.log(`✅ Set default value ${defaultValue} for ${columnName}`);
+                }
+              });
+            }
+          }
         }
       });
+    } else {
+      console.log(`Column ${columnName} already exists in ${tableName}`);
     }
   });
 }

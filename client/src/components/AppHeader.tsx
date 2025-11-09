@@ -52,7 +52,7 @@ export function AppHeader({
             {showCreateButton && onCreateDocument && (
               <Button
                 onClick={onCreateDocument}
-                className="gap-2 bg-black hover:bg-gray-900 text-white"
+                className="gap-2 !bg-black hover:!bg-gray-900 !text-white"
                 variant="default"
               >
                 <Plus className="h-4 w-4" />

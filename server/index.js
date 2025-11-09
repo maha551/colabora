@@ -659,6 +659,12 @@ function initializeDatabase(db) {
       console.log('All tables created, ensuring new columns...');
       ensureColumn(db, 'users', 'avatar', 'TEXT');
       ensureColumn(db, 'users', 'bio', 'TEXT');
+      
+      // Ensure documents table has new option columns
+      ensureColumn(db, 'documents', 'acceptance_threshold', 'REAL DEFAULT 75.0 NOT NULL');
+      ensureColumn(db, 'documents', 'voting_anonymous', 'BOOLEAN DEFAULT 0 NOT NULL');
+      ensureColumn(db, 'documents', 'voting_anonymity_locked', 'BOOLEAN DEFAULT 0 NOT NULL');
+      ensureColumn(db, 'documents', 'vote_change_allowed', 'BOOLEAN DEFAULT 1 NOT NULL');
 
       // Ensure history table has accepted_at column
       ensureHistoryAcceptedAt(db).catch(err => {

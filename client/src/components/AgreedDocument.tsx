@@ -13,17 +13,14 @@ export function AgreedDocument({ document, totalUsers }: AgreedDocumentProps) {
 
   const sortedParagraphs = [...document.paragraphs].sort((a, b) => a.order - b.order);
 
-  // Check if a paragraph has accepted changes by looking at history
-  const hasAcceptedChanges = (paragraph: any) => {
-    return paragraph.history && paragraph.history.length > 0;
-  };
-
   // Get the highest approved change info (with highest approval percentage)
   const getHighestApprovedChangeInfo = (paragraph: any) => {
     if (!paragraph.history || paragraph.history.length === 0) return null;
+    // Use document's acceptance threshold instead of hardcoded 75%
+    const acceptanceThreshold = document.options?.acceptanceThreshold || 75.0;
     // Sort by approval percentage descending, then by acceptance date descending
     const highestApprovedChange = paragraph.history
-      .filter((change: any) => change.approvalPercentage >= 75)
+      .filter((change: any) => change.approvalPercentage >= acceptanceThreshold)
       .sort((a: any, b: any) => {
         // First sort by approval percentage (highest first)
         if (b.approvalPercentage !== a.approvalPercentage) {
@@ -33,6 +30,11 @@ export function AgreedDocument({ document, totalUsers }: AgreedDocumentProps) {
         return new Date(b.acceptedAt).getTime() - new Date(a.acceptedAt).getTime();
       })[0];
     return highestApprovedChange;
+  };
+
+  // Check if a paragraph has accepted changes by looking at history that meets threshold
+  const hasAcceptedChanges = (paragraph: any) => {
+    return getHighestApprovedChangeInfo(paragraph) !== null;
   };
 
     // Count paragraphs with accepted changes and non-empty content

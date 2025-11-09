@@ -61,12 +61,30 @@ router.post('/', requireAuth, requireDocumentAccess, (req, res) => {
     return res.status(400).json({ error: 'Text is required' });
   }
 
-  // Verify paragraph exists and belongs to document
-  console.log('Checking paragraph:', paragraphId, 'in document:', documentId);
+  // Check if there's an active structure proposal that would block new paragraph proposals
+  const activeStructureQuery = `
+    SELECT id FROM structure_proposals
+    WHERE document_id = ? AND approved = 0 AND applied = 0
+  `;
 
-  db.get(`
-    SELECT * FROM paragraphs WHERE id = ? AND document_id = ?
-  `, [paragraphId, documentId], (err, paragraph) => {
+  db.get(activeStructureQuery, [documentId], (err, activeStructure) => {
+    if (err) {
+      console.error('Error checking active structure proposals:', err);
+      return res.status(500).json({ error: 'Failed to check active structure proposals' });
+    }
+
+    if (activeStructure) {
+      return res.status(409).json({
+        error: 'Cannot create paragraph proposals while a structure proposal is active. Please vote on or wait for the structure proposal to be resolved first.'
+      });
+    }
+
+    // Verify paragraph exists and belongs to document
+    console.log('Checking paragraph:', paragraphId, 'in document:', documentId);
+
+    db.get(`
+      SELECT * FROM paragraphs WHERE id = ? AND document_id = ?
+    `, [paragraphId, documentId], (err, paragraph) => {
     if (err) {
       console.error('Error checking paragraph:', err);
       return res.status(500).json({ error: 'Failed to create proposal' });
@@ -130,6 +148,7 @@ router.post('/', requireAuth, requireDocumentAccess, (req, res) => {
         res.status(201).json({ proposal: result });
       });
     });
+  });
   });
 });
 

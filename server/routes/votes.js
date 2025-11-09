@@ -183,53 +183,54 @@ function checkAndUpdateProposalApproval(db, proposalId, documentId) {
         const approvalPercentage = totalUsers > 0 ? (proVotes / totalUsers) * 100 : 0;
         const shouldApprove = approvalPercentage >= acceptanceThreshold;
 
-      // Update proposal approval status
-      db.run(`
-        UPDATE proposals SET approved = ? WHERE id = ?
-      `, [shouldApprove ? 1 : 0, proposalId], function(err) {
+        // Update proposal approval status
+        db.run(`
+          UPDATE proposals SET approved = ? WHERE id = ?
+        `, [shouldApprove ? 1 : 0, proposalId], function(err) {
         if (err) {
           console.error('Error updating proposal approval:', err);
           return;
         }
 
-        // Always update the agreed view based on the highest approved proposal
-        // regardless of whether this specific proposal was just approved or not
-        updateAgreedViewForParagraph(db, proposalId, documentId);
+          // Always update the agreed view based on the highest approved proposal
+          // regardless of whether this specific proposal was just approved or not
+          updateAgreedViewForParagraph(db, proposalId, documentId);
 
-        // Also check if this proposal should be unapproved (if votes dropped below 75%)
-        if (!shouldApprove) {
-          // Check if this was the currently accepted proposal in the agreed view
-          db.get(`
-            SELECT p.text, p.title
-            FROM paragraphs p
-            WHERE p.id = (SELECT paragraph_id FROM proposals WHERE id = ?)
-          `, [proposalId], (err, currentParagraph) => {
-            if (err || !currentParagraph) return;
-
-            // Get the proposal that was used for the current paragraph content
+          // Also check if this proposal should be unapproved (if votes dropped below threshold)
+          if (!shouldApprove) {
+            // Check if this was the currently accepted proposal in the agreed view
             db.get(`
-              SELECT pr.text, pr.type
-              FROM proposals pr
-              JOIN history h ON pr.id = h.proposal_id
-              WHERE h.paragraph_id = (SELECT paragraph_id FROM proposals WHERE id = ?)
-              ORDER BY h.approval_percentage DESC, h.created_at DESC
-              LIMIT 1
-            `, [proposalId], (err, currentProposal) => {
-              if (err || !currentProposal) return;
+              SELECT p.text, p.title
+              FROM paragraphs p
+              WHERE p.id = (SELECT paragraph_id FROM proposals WHERE id = ?)
+            `, [proposalId], (err, currentParagraph) => {
+              if (err || !currentParagraph) return;
 
-              // If the current paragraph content matches this now-unapproved proposal,
-              // we need to update to the next best approved proposal
-              const isTitleChange = currentProposal.type === 'TITLE';
-              const currentContent = isTitleChange ? currentParagraph.title : currentParagraph.text;
-              const proposalContent = currentProposal.text;
+              // Get the proposal that was used for the current paragraph content
+              db.get(`
+                SELECT pr.text, pr.type
+                FROM proposals pr
+                JOIN history h ON pr.id = h.proposal_id
+                WHERE h.paragraph_id = (SELECT paragraph_id FROM proposals WHERE id = ?)
+                ORDER BY h.approval_percentage DESC, h.created_at DESC
+                LIMIT 1
+              `, [proposalId], (err, currentProposal) => {
+                if (err || !currentProposal) return;
 
-              if (currentContent === proposalContent) {
-                // This was the active proposal, update to next best
-                updateAgreedViewForParagraph(db, proposalId, documentId);
-              }
+                // If the current paragraph content matches this now-unapproved proposal,
+                // we need to update to the next best approved proposal
+                const isTitleChange = currentProposal.type === 'TITLE';
+                const currentContent = isTitleChange ? currentParagraph.title : currentParagraph.text;
+                const proposalContent = currentProposal.text;
+
+                if (currentContent === proposalContent) {
+                  // This was the active proposal, update to next best
+                  updateAgreedViewForParagraph(db, proposalId, documentId);
+                }
+              });
             });
-          });
-        }
+          }
+        });
       });
     });
   });

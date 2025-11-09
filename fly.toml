@@ -34,8 +34,19 @@ primary_region = "iad"
   [[services.http_checks]]
     interval = "15s"
     timeout = "10s"
-    grace_period = "120s"
+    grace_period = "180s"
     method = "GET"
     path = "/api/health"
     protocol = "http"
     restart_limit = 10
+    tls_skip_verify = false
+
+  # Simple health check that doesn't require database
+  [[services.http_checks]]
+    interval = "10s"
+    timeout = "5s"
+    grace_period = "60s"
+    method = "GET"
+    path = "/health"
+    protocol = "http"
+    restart_limit = 5

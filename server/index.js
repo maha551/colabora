@@ -1039,13 +1039,8 @@ async function insertDemoData(db) {
   }
 }
 
-// Always register routes
-registerRoutes();
-
-// Only start listening in non-test mode
-if (process.env.NODE_ENV !== 'test') {
-  startServer();
-}
+// Routes are registered in startServer() function
+// Server is started in initializeDatabaseAndStartServer() after database connection
 
 // Export server instance for testing
 if (process.env.NODE_ENV === 'test') {

@@ -5,6 +5,10 @@ import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Avatar, AvatarFallback } from "./ui/avatar";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
+import { Input } from "./ui/input";
+import { Textarea } from "./ui/textarea";
+import { Label } from "./ui/label";
 import { Users, Vote, FileText, Settings, Plus, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { OrganizationManagement } from "./OrganizationManagement";
@@ -18,6 +22,15 @@ export function OrganizationDashboard({ currentUser }: OrganizationDashboardProp
   const [selectedOrganization, setSelectedOrganization] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+
+  // Organization creation form state
+  const [orgName, setOrgName] = useState('');
+  const [orgDescription, setOrgDescription] = useState('');
+  const [representatives, setRepresentatives] = useState<string[]>([]);
+  const [membershipPolicy, setMembershipPolicy] = useState<'open' | 'invitation'>('invitation');
+  const [votingThreshold, setVotingThreshold] = useState(0.5);
+  const [creatingOrg, setCreatingOrg] = useState(false);
 
   useEffect(() => {
     loadOrganizations();
@@ -34,6 +47,51 @@ export function OrganizationDashboard({ currentUser }: OrganizationDashboardProp
       toast.error('Failed to load organizations');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreateOrganization = async () => {
+    if (!orgName.trim()) {
+      toast.error('Organization name is required');
+      return;
+    }
+
+    if (representatives.length < 3) {
+      toast.error('At least 3 representatives are required');
+      return;
+    }
+
+    try {
+      setCreatingOrg(true);
+      const response = await organizationsApi.createOrganization(
+        orgName.trim(),
+        orgDescription.trim() || undefined,
+        representatives,
+        membershipPolicy,
+        votingThreshold
+      );
+
+      toast.success('Organization created successfully!');
+      setShowCreateDialog(false);
+
+      // Reset form
+      setOrgName('');
+      setOrgDescription('');
+      setRepresentatives([]);
+      setMembershipPolicy('invitation');
+      setVotingThreshold(0.5);
+
+      // Reload organizations to show the new one
+      await loadOrganizations();
+    } catch (err: any) {
+      console.error('Failed to create organization:', err);
+      if (err.status === 403) {
+        toast.error('Only administrators can create organizations');
+      } else {
+        toast.error('Failed to create organization');
+      }
+    } finally {
+      setCreatingOrg(false);
     }
   };
 
@@ -85,7 +143,7 @@ export function OrganizationDashboard({ currentUser }: OrganizationDashboardProp
           <h1 className="text-2xl font-bold">Organizations</h1>
           <p className="text-gray-600">Collaborative spaces for democratic decision-making</p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={() => setShowCreateDialog(true)}>
           <Plus className="h-4 w-4" />
           Create Organization
         </Button>
@@ -202,6 +260,117 @@ export function OrganizationDashboard({ currentUser }: OrganizationDashboardProp
           ))}
         </div>
       )}
+
+      {/* Create Organization Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Create New Organization</DialogTitle>
+            <DialogDescription>
+              Create a collaborative space for democratic decision-making. Only administrators can create organizations.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="orgName">Organization Name *</Label>
+              <Input
+                id="orgName"
+                value={orgName}
+                onChange={(e) => setOrgName(e.target.value)}
+                placeholder="Enter organization name"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="orgDescription">Description</Label>
+              <Textarea
+                id="orgDescription"
+                value={orgDescription}
+                onChange={(e) => setOrgDescription(e.target.value)}
+                placeholder="Describe the organization's purpose and goals"
+                rows={3}
+              />
+            </div>
+
+            <div>
+              <Label>Membership Policy</Label>
+              <select
+                value={membershipPolicy}
+                onChange={(e) => setMembershipPolicy(e.target.value as 'open' | 'invitation')}
+                className="w-full p-2 border rounded-md"
+              >
+                <option value="invitation">Invitation Only</option>
+                <option value="open">Open Membership</option>
+              </select>
+            </div>
+
+            <div>
+              <Label htmlFor="votingThreshold">Voting Threshold</Label>
+              <Input
+                id="votingThreshold"
+                type="number"
+                min="0.1"
+                max="1.0"
+                step="0.1"
+                value={votingThreshold}
+                onChange={(e) => setVotingThreshold(parseFloat(e.target.value))}
+              />
+              <p className="text-sm text-gray-600 mt-1">
+                Percentage of votes needed to pass proposals (0.1 = 10%, 1.0 = 100%)
+              </p>
+            </div>
+
+            <div>
+              <Label>Initial Representatives *</Label>
+              <p className="text-sm text-gray-600 mb-2">
+                At least 3 representatives are required to start the organization.
+              </p>
+              <div className="border rounded-md p-3 min-h-[100px]">
+                {representatives.length === 0 ? (
+                  <p className="text-gray-500 text-sm">No representatives selected</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {representatives.map((repId) => (
+                      <Badge key={repId} variant="secondary">
+                        {repId}
+                        <button
+                          onClick={() => setRepresentatives(representatives.filter(id => id !== repId))}
+                          className="ml-1 text-xs"
+                        >
+                          ×
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <Input
+                placeholder="Add representative user ID"
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    const newRep = e.currentTarget.value.trim();
+                    if (newRep && !representatives.includes(newRep)) {
+                      setRepresentatives([...representatives, newRep]);
+                      e.currentTarget.value = '';
+                    }
+                  }
+                }}
+                className="mt-2"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 mt-6">
+            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateOrganization} disabled={creatingOrg}>
+              {creatingOrg ? 'Creating...' : 'Create Organization'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -15,8 +15,10 @@ const requireDocumentAccess = (req, res, next) => {
   const documentId = req.params.documentId;
   const userId = req.user.id;
 
+  console.log(`Checking access for user ${userId} to document ${documentId}`);
+
   const query = `
-    SELECT d.id FROM documents d
+    SELECT d.id, d.owner_id FROM documents d
     LEFT JOIN document_collaborators dc ON d.id = dc.document_id
     WHERE d.id = ? AND (d.owner_id = ? OR dc.user_id = ?)
   `;
@@ -27,7 +29,10 @@ const requireDocumentAccess = (req, res, next) => {
       return res.status(500).json({ error: 'Access check failed' });
     }
 
+    console.log(`Access check result for user ${userId}, document ${documentId}:`, document);
+
     if (!document) {
+      console.log(`Access denied: No document found for user ${userId}, document ${documentId}`);
       return res.status(403).json({ error: 'Access denied to this document' });
     }
 

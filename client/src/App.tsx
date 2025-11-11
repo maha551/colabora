@@ -252,6 +252,8 @@ export default function App() {
         setCurrentDocument(normalizedDocument);
         setDocumentLoadKey(Date.now()); // Force remount of all components to collapse comments
         setCurrentView('document');
+        // Load structure proposals for this document
+        await loadStructureProposals();
       }
     } catch (err) {
       toast.error('Failed to load document');

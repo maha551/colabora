@@ -1,49 +1,9 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { metricsCollector } = require('../middleware/monitoring');
+const { requireAuth, requireDocumentAccess } = require('../middleware/auth');
 
 const router = express.Router({ mergeParams: true });
-
-// Middleware to check authentication
-const requireAuth = (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  next();
-};
-
-// Middleware to check document access (owner or collaborator)
-const requireDocumentAccess = (req, res, next) => {
-  const db = req.app.locals.db;
-  const documentId = req.params.documentId;
-  const userId = req.user.id;
-
-  // First check if user is owner
-  db.get('SELECT id FROM documents WHERE id = ? AND owner_id = ?', [documentId, userId], (err, ownerDoc) => {
-    if (err) {
-      console.error('Error checking owner access:', err);
-      return res.status(500).json({ error: 'Access check failed' });
-    }
-
-    if (ownerDoc) {
-      return next();
-    }
-
-    // Check if user is collaborator
-    db.get('SELECT id FROM document_collaborators WHERE document_id = ? AND user_id = ?', [documentId, userId], (err, collabDoc) => {
-      if (err) {
-        console.error('Error checking collaborator access:', err);
-        return res.status(500).json({ error: 'Access check failed' });
-      }
-
-      if (collabDoc) {
-        return next();
-      }
-
-      return res.status(403).json({ error: 'Access denied to this document' });
-    });
-  });
-};
 
 // Create a new proposal/suggestion
 router.post('/', requireAuth, requireDocumentAccess, (req, res) => {

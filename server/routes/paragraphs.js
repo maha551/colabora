@@ -1,15 +1,8 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
+const { requireAuth, requireDocumentAccess } = require('../middleware/auth');
 
 const router = express.Router({ mergeParams: true });
-
-// Middleware to check authentication
-const requireAuth = (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  next();
-};
 
 // Middleware to check for active structure proposals that would prevent modifications
 const checkNoActiveStructureProposals = (req, res, next) => {
@@ -45,52 +38,6 @@ const checkNoActiveStructureProposals = (req, res, next) => {
   });
 };
 
-// Middleware to check document access (owner or collaborator)
-const requireDocumentAccess = (req, res, next) => {
-  const db = req.app.locals.db;
-  const documentId = req.params.documentId;
-  const userId = req.user ? req.user.id : 'no-user';
-
-  console.log(`Access check for document ${documentId}, user ${userId}`);
-
-  if (!req.user) {
-    console.log('Access denied: No user authenticated');
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-
-  const query = `
-    SELECT d.id, d.owner_id FROM documents d
-    LEFT JOIN document_collaborators dc ON d.id = dc.document_id
-    WHERE d.id = ? AND (d.owner_id = ? OR dc.user_id = ?)
-  `;
-
-  db.get(query, [documentId, userId, userId], (err, document) => {
-    if (err) {
-      console.error('Error checking document access:', err);
-      return res.status(500).json({ error: 'Access check failed' });
-    }
-
-    if (!document) {
-      console.log(`Access denied for document ${documentId}: user ${userId} is not owner/collaborator`);
-
-      // Additional debug: check if document exists at all
-      db.get('SELECT id, owner_id FROM documents WHERE id = ?', [documentId], (docErr, docResult) => {
-        if (docErr) {
-          console.error('Error checking if document exists:', docErr);
-        } else if (docResult) {
-          console.log(`Document exists, owned by: ${docResult.owner_id}`);
-        } else {
-          console.log('Document does not exist');
-        }
-      });
-
-      return res.status(403).json({ error: 'Access denied to this document' });
-    }
-
-    console.log(`Access granted for document ${documentId} to user ${userId}`);
-    next();
-  });
-};
 
 // Get contextual paragraphs around a specific paragraph
 router.get('/context/:paragraphId', requireAuth, requireDocumentAccess, (req, res) => {

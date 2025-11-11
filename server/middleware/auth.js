@@ -98,12 +98,48 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+// Middleware to check document access (owner or collaborator)
+function requireDocumentAccess(req, res, next) {
+  const db = req.app.locals.db;
+  const documentId = req.params.documentId || req.params.id;
+  const userId = req.user.id;
+
+  if (!documentId) {
+    return res.status(400).json({ error: 'Document ID is required' });
+  }
+
+  console.log(`[ACCESS CHECK] User ${userId} accessing document ${documentId}`);
+
+  const query = `
+    SELECT d.id, d.owner_id FROM documents d
+    LEFT JOIN document_collaborators dc ON d.id = dc.document_id
+    WHERE d.id = ? AND (d.owner_id = ? OR dc.user_id = ?)
+  `;
+
+  db.get(query, [documentId, userId, userId], (err, document) => {
+    if (err) {
+      console.error('Error checking document access:', err);
+      return res.status(500).json({ error: 'Access check failed' });
+    }
+
+    console.log(`[ACCESS CHECK] Result for user ${userId}, document ${documentId}:`, document ? 'GRANTED' : 'DENIED');
+
+    if (!document) {
+      console.log(`[ACCESS DENIED] User ${userId} cannot access document ${documentId}`);
+      return res.status(403).json({ error: 'Access denied to this document' });
+    }
+
+    next();
+  });
+}
+
 module.exports = {
   generateToken,
   authenticateToken,
   authenticateSession,
   requireAuth,
   requireAdmin,
+  requireDocumentAccess,
   hashPassword,
   verifyPassword
 };

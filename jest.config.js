@@ -33,7 +33,5 @@ module.exports = {
   verbose: true,
   forceExit: true,
   detectOpenHandles: true,
-  maxWorkers: 1, // Run tests serially to avoid conflicts
-  // Allow proper cleanup of servers
-  teardown: true
+  maxWorkers: 1 // Run tests serially to avoid conflicts
 };

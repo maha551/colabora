@@ -209,17 +209,25 @@ function initializeDatabaseAndStartServer(db, forceRecreate = false) {
   let checkCount = 0;
   const checkInterval = setInterval(() => {
     checkCount++;
-    console.log(`🔍 Database readiness check #${checkCount}...`);
+    if (config.NODE_ENV !== 'test') {
+      console.log(`🔍 Database readiness check #${checkCount}...`);
+    }
 
     db.get('SELECT COUNT(*) as count FROM paragraphs WHERE document_id = ?', ['demo-doc-1'], (err, row) => {
       if (err) {
-        console.log('❌ Database check failed:', err.message);
+        if (config.NODE_ENV !== 'test') {
+          console.log('❌ Database check failed:', err.message);
+        }
         return;
       }
 
-      console.log(`✅ Database check: found ${row.count} paragraphs for demo-doc-1`);
+      if (config.NODE_ENV !== 'test') {
+        console.log(`✅ Database check: found ${row.count} paragraphs for demo-doc-1`);
+      }
       if (row && row.count > 0) {
-        console.log('🎉 Database initialization complete!');
+        if (config.NODE_ENV !== 'test') {
+          console.log('🎉 Database initialization complete!');
+        }
         clearInterval(checkInterval);
       }
     });
@@ -228,7 +236,9 @@ function initializeDatabaseAndStartServer(db, forceRecreate = false) {
   // Clear interval after reasonable timeout
   setTimeout(() => {
     clearInterval(checkInterval);
-    console.log('✅ Database initialization check completed');
+    if (config.NODE_ENV !== 'test') {
+      console.log('✅ Database initialization check completed');
+    }
   }, 30000);
 }
 
@@ -534,7 +544,7 @@ app.post('/api/admin/create-tables', requireAuth, (req, res) => {
       name TEXT NOT NULL,
       description TEXT,
       representatives TEXT NOT NULL, -- JSON array of user IDs
-      membership_policy TEXT CHECK(policy IN ('open', 'invitation')) DEFAULT 'invitation',
+      membership_policy TEXT CHECK(membership_policy IN ('open', 'invitation')) DEFAULT 'invitation',
       voting_threshold REAL DEFAULT 0.5,
       is_active BOOLEAN DEFAULT true,
       created_by_admin_id TEXT NOT NULL,
@@ -559,7 +569,7 @@ app.post('/api/admin/create-tables', requireAuth, (req, res) => {
       organization_id TEXT NOT NULL,
       title TEXT NOT NULL,
       description TEXT,
-      vote_type TEXT CHECK(type IN ('policy', 'document_change', 'membership', 'dissolution', 'other')),
+      vote_type TEXT CHECK(vote_type IN ('policy', 'document_change', 'membership', 'dissolution', 'other')),
       proposed_by_user_id TEXT NOT NULL,
       approved_by_rep_id TEXT,
       threshold REAL NOT NULL,
@@ -578,8 +588,8 @@ app.post('/api/admin/create-tables', requireAuth, (req, res) => {
       id TEXT PRIMARY KEY,
       vote_id TEXT NOT NULL,
       user_id TEXT NOT NULL,
-      membership_status TEXT CHECK(status IN ('active', 'legacy')),
-      vote_choice TEXT CHECK(choice IN ('yes', 'no', 'abstain')),
+      membership_status TEXT CHECK(membership_status IN ('active', 'legacy')),
+      vote_choice TEXT CHECK(vote_choice IN ('yes', 'no', 'abstain')),
       voted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (vote_id) REFERENCES organization_votes(id),
       FOREIGN KEY (user_id) REFERENCES users(id),
@@ -588,7 +598,7 @@ app.post('/api/admin/create-tables', requireAuth, (req, res) => {
     `CREATE TABLE IF NOT EXISTS organization_audit (
       id TEXT PRIMARY KEY,
       organization_id TEXT NOT NULL,
-      action_type TEXT CHECK(type IN (
+      action_type TEXT CHECK(action_type IN (
         'org_created', 'rep_added', 'rep_removed', 'rep_removal_failed',
         'member_invited', 'member_joined', 'member_left', 'member_bulk_added',
         'vote_proposed', 'vote_approved', 'vote_started', 'vote_completed',
@@ -771,7 +781,7 @@ function initializeDatabase(db) {
       name TEXT NOT NULL,
       description TEXT,
       representatives TEXT NOT NULL, -- JSON array of user IDs
-      membership_policy TEXT CHECK(policy IN ('open', 'invitation')) DEFAULT 'invitation',
+      membership_policy TEXT CHECK(membership_policy IN ('open', 'invitation')) DEFAULT 'invitation',
       voting_threshold REAL DEFAULT 0.5,
       is_active BOOLEAN DEFAULT true,
       created_by_admin_id TEXT NOT NULL,
@@ -798,7 +808,7 @@ function initializeDatabase(db) {
       organization_id TEXT NOT NULL,
       title TEXT NOT NULL,
       description TEXT,
-      vote_type TEXT CHECK(type IN ('policy', 'document_change', 'membership', 'dissolution', 'other')),
+      vote_type TEXT CHECK(vote_type IN ('policy', 'document_change', 'membership', 'dissolution', 'other')),
       proposed_by_user_id TEXT NOT NULL,
       approved_by_rep_id TEXT,
       threshold REAL NOT NULL,
@@ -818,8 +828,8 @@ function initializeDatabase(db) {
       id TEXT PRIMARY KEY,
       vote_id TEXT NOT NULL,
       user_id TEXT NOT NULL,
-      membership_status TEXT CHECK(status IN ('active', 'legacy')),
-      vote_choice TEXT CHECK(choice IN ('yes', 'no', 'abstain')),
+      membership_status TEXT CHECK(membership_status IN ('active', 'legacy')),
+      vote_choice TEXT CHECK(vote_choice IN ('yes', 'no', 'abstain')),
       voted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (vote_id) REFERENCES organization_votes(id),
       FOREIGN KEY (user_id) REFERENCES users(id),
@@ -829,7 +839,7 @@ function initializeDatabase(db) {
     `CREATE TABLE IF NOT EXISTS organization_audit (
       id TEXT PRIMARY KEY,
       organization_id TEXT NOT NULL,
-      action_type TEXT CHECK(type IN (
+      action_type TEXT CHECK(action_type IN (
         'org_created', 'rep_added', 'rep_removed', 'rep_removal_failed',
         'member_invited', 'member_joined', 'member_left', 'member_bulk_added',
         'vote_proposed', 'vote_approved', 'vote_started', 'vote_completed',
@@ -850,7 +860,7 @@ function initializeDatabase(db) {
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
       owner_id TEXT NOT NULL,
-      ownership_type TEXT CHECK(type IN ('personal', 'shared', 'organizational')) DEFAULT 'personal',
+      ownership_type TEXT CHECK(ownership_type IN ('personal', 'shared', 'organizational')) DEFAULT 'personal',
       creator_ids TEXT, -- JSON array for shared docs
       organization_id TEXT, -- For organizational docs
       acceptance_threshold REAL DEFAULT 75.0 NOT NULL,
@@ -1063,27 +1073,30 @@ function initializeDatabase(db) {
 
   function createNextTable() {
     if (tablesCreated >= totalTables) {
-      // All tables created, now ensure new columns exist
-      console.log('All tables created, ensuring new columns...');
-      ensureColumn(db, 'users', 'avatar', 'TEXT');
-      ensureColumn(db, 'users', 'bio', 'TEXT');
-      
-      // Ensure documents table has new option columns
-      ensureColumn(db, 'documents', 'acceptance_threshold', 'REAL DEFAULT 75.0 NOT NULL');
-      ensureColumn(db, 'documents', 'voting_anonymous', 'BOOLEAN DEFAULT 0 NOT NULL');
-      ensureColumn(db, 'documents', 'voting_anonymity_locked', 'BOOLEAN DEFAULT 0 NOT NULL');
-      ensureColumn(db, 'documents', 'vote_change_allowed', 'BOOLEAN DEFAULT 1 NOT NULL');
-      ensureColumn(db, 'documents', 'structure_proposals_enabled', 'BOOLEAN DEFAULT 0 NOT NULL');
+      // All tables created, wait a bit for SQLite to fully commit, then ensure new columns exist
+      console.log('All tables created, waiting for SQLite to commit before adding columns...');
+      setTimeout(() => {
+        console.log('Ensuring new columns exist...');
+        ensureColumn(db, 'users', 'avatar', 'TEXT');
+        ensureColumn(db, 'users', 'bio', 'TEXT');
 
-      // Ensure history table has accepted_at column
-      ensureHistoryAcceptedAt(db).catch(err => {
-        console.error('Error ensuring history table schema:', err);
-      });
-      
-      // Wait a bit for column additions to complete, then insert demo data
-      setTimeout(async () => {
-        await insertDemoData(db);
-      }, 500);
+        // Ensure documents table has new option columns
+        ensureColumn(db, 'documents', 'acceptance_threshold', 'REAL DEFAULT 75.0 NOT NULL');
+        ensureColumn(db, 'documents', 'voting_anonymous', 'BOOLEAN DEFAULT 0 NOT NULL');
+        ensureColumn(db, 'documents', 'voting_anonymity_locked', 'BOOLEAN DEFAULT 0 NOT NULL');
+        ensureColumn(db, 'documents', 'vote_change_allowed', 'BOOLEAN DEFAULT 1 NOT NULL');
+        ensureColumn(db, 'documents', 'structure_proposals_enabled', 'BOOLEAN DEFAULT 0 NOT NULL');
+
+        // Ensure history table has accepted_at column
+        ensureHistoryAcceptedAt(db).catch(err => {
+          console.error('Error ensuring history table schema:', err);
+        });
+
+        // Wait a bit for column additions to complete, then insert demo data
+        setTimeout(async () => {
+          await insertDemoData(db);
+        }, 500);
+      }, 200); // Wait 200ms for SQLite to fully commit table creation
       return;
     }
 
@@ -1464,6 +1477,10 @@ if (process.env.NODE_ENV === 'test') {
   module.exports = async function startTestServer(port = 3000) {
     return new Promise((resolve) => {
       console.log(`🔄 Starting test server on port ${port}...`);
+
+      // Register routes for test server
+      registerRoutes();
+
       const testServer = app.listen(port, '0.0.0.0', () => {
         console.log(`🚀 Test server started on port ${port}`);
         resolve(testServer);

@@ -632,21 +632,35 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
         }
 
         function sendResponse() {
-          const result = {
-            id: documentId,
-            title: trimmedTitle,
-            description: trimmedDescription,
-            ownerId: userId,
-            ownershipType,
-            organizationId: ownershipType === 'organizational' ? organizationId : null,
-            acceptanceThreshold,
-            votingAnonymous: false,
-            votingAnonymityLocked: false,
-            voteChangeAllowed: true,
-            structureProposalsEnabled: false,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          };
+          // Get user details for owner information
+          db.get('SELECT name, email FROM users WHERE id = ?', [userId], (err, user) => {
+            if (err) {
+              console.error('Error fetching user details:', err);
+              return res.status(500).json({ error: 'Failed to create document' });
+            }
+
+            const result = {
+              id: documentId,
+              title: trimmedTitle,
+              description: trimmedDescription,
+              ownerId: userId,
+              owner: {
+                id: userId,
+                name: user.name,
+                email: user.email
+              },
+              ownershipType,
+              organizationId: ownershipType === 'organizational' ? organizationId : null,
+              options: {
+                acceptanceThreshold,
+                votingAnonymous: false,
+                votingAnonymityLocked: false,
+                voteChangeAllowed: true,
+                structureProposalsEnabled: false
+              },
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            };
 
           console.log('Document created successfully:', { id: documentId, title: trimmedTitle });
 
@@ -659,6 +673,7 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
           });
 
           res.status(201).json({ document: result });
+          });
         }
       });
     });

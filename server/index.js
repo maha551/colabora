@@ -461,6 +461,77 @@ app.get('/api/health/detailed', requireAuth, (req, res) => {
   });
 });
 
+// Temporary database migration endpoint (remove after migration)
+app.post('/api/admin/run-migration', requireAuth, (req, res) => {
+  // Simple auth check - in production, use proper admin auth
+  if (req.user.id !== 'cmgxlfj9z0000orjgnfy3revt') { // Alice as temp admin
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  console.log('🔄 Starting database migration for organization features...');
+
+  const db = req.app.locals.db;
+  const fs = require('fs');
+  const path = require('path');
+
+  // Read migration file
+  const migrationPath = path.join(__dirname, 'migration-organizations.sql');
+
+  console.log('Looking for migration file at:', migrationPath);
+  console.log('Current directory:', __dirname);
+
+  if (!fs.existsSync(migrationPath)) {
+    return res.status(404).json({ error: 'Migration file not found' });
+  }
+
+  const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
+
+  // Split into individual statements (simple approach)
+  const statements = migrationSQL
+    .split(';')
+    .map(stmt => stmt.trim())
+    .filter(stmt => stmt.length > 0 && !stmt.startsWith('--'));
+
+  console.log(`📋 Found ${statements.length} migration statements to execute`);
+
+  let completedStatements = 0;
+  let errors = [];
+
+  // Execute statements sequentially
+  function executeNext() {
+    if (completedStatements >= statements.length) {
+      console.log('✅ Database migration completed');
+      return res.json({
+        success: true,
+        message: 'Database migration completed successfully',
+        statementsExecuted: completedStatements,
+        errors: errors.length > 0 ? errors : undefined
+      });
+    }
+
+    const statement = statements[completedStatements];
+    console.log(`🔄 Executing statement ${completedStatements + 1}/${statements.length}`);
+
+    db.run(statement, (err) => {
+      if (err) {
+        console.log(`⚠️ Statement ${completedStatements + 1} warning:`, err.message);
+        errors.push({
+          statement: completedStatements + 1,
+          error: err.message
+        });
+      } else {
+        console.log(`✅ Statement ${completedStatements + 1} completed`);
+      }
+
+      completedStatements++;
+      executeNext();
+    });
+  }
+
+  executeNext();
+});
+
+
 function ensureColumn(db, tableName, columnName, columnDefinition) {
   db.all(`PRAGMA table_info(${tableName})`, (err, columns) => {
     if (err) {

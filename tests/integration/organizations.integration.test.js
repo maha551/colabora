@@ -1,5 +1,5 @@
 const request = require('supertest');
-const { startTestServer } = require('../../server/index');
+const startTestServer = require('../../server/index');
 const { hashPassword } = require('../../server/middleware/auth');
 
 let server;

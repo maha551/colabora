@@ -5,8 +5,9 @@ import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Avatar, AvatarFallback } from "./ui/avatar";
-import { Users, Vote, FileText, Settings, Plus } from "lucide-react";
+import { Users, Vote, FileText, Settings, Plus, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
+import { OrganizationManagement } from "./OrganizationManagement";
 
 interface OrganizationDashboardProps {
   currentUser: User;
@@ -14,6 +15,7 @@ interface OrganizationDashboardProps {
 
 export function OrganizationDashboard({ currentUser }: OrganizationDashboardProps) {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [selectedOrganization, setSelectedOrganization] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,6 +64,17 @@ export function OrganizationDashboard({ currentUser }: OrganizationDashboardProp
         <p className="text-red-600 mb-4">{error}</p>
         <Button onClick={loadOrganizations}>Try Again</Button>
       </div>
+    );
+  }
+
+  // Show organization management if one is selected
+  if (selectedOrganization) {
+    return (
+      <OrganizationManagement
+        organization={selectedOrganization}
+        currentUser={currentUser}
+        onBack={() => setSelectedOrganization(null)}
+      />
     );
   }
 
@@ -168,13 +181,14 @@ export function OrganizationDashboard({ currentUser }: OrganizationDashboardProp
 
                   {/* Actions */}
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="flex-1">
-                      <FileText className="h-4 w-4 mr-2" />
-                      View Docs
-                    </Button>
-                    <Button variant="outline" size="sm" className="flex-1">
-                      <Vote className="h-4 w-4 mr-2" />
-                      Votes
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => setSelectedOrganization(org)}
+                    >
+                      <ArrowRight className="h-4 w-4 mr-2" />
+                      Manage
                     </Button>
                     {getRepresentativeStatus(org) && (
                       <Button variant="outline" size="sm">

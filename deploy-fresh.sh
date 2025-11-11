@@ -16,10 +16,26 @@ if ! fly auth whoami &> /dev/null; then
     fly auth login
 fi
 
-# Generate secure secrets
-echo "🔑 Generating secure secrets..."
-SESSION_SECRET=$(openssl rand -base64 32)
-JWT_SECRET=$(openssl rand -base64 32)
+# Check if secrets already exist, generate only if missing
+echo "🔑 Checking/applying secure secrets..."
+
+# Check if JWT_SECRET exists
+if fly secrets list | grep -q JWT_SECRET; then
+  echo "✅ JWT_SECRET already exists, keeping existing value"
+else
+  echo "🔑 Generating new JWT_SECRET..."
+  JWT_SECRET=$(openssl rand -base64 32)
+  fly secrets set JWT_SECRET="$JWT_SECRET"
+fi
+
+# Check if SESSION_SECRET exists
+if fly secrets list | grep -q SESSION_SECRET; then
+  echo "✅ SESSION_SECRET already exists, keeping existing value"
+else
+  echo "🔑 Generating new SESSION_SECRET..."
+  SESSION_SECRET=$(openssl rand -base64 32)
+  fly secrets set SESSION_SECRET="$SESSION_SECRET"
+fi
 
 # Launch fresh app
 echo "📦 Launching fresh app in EU..."
@@ -28,11 +44,6 @@ fly launch --name colabora-fresh --region fra --no-deploy
 # Create volume
 echo "💾 Creating persistent volume..."
 fly volumes create colabora_data --size 1 --region fra
-
-# Set secrets
-echo "🔒 Setting secrets..."
-fly secrets set SESSION_SECRET="$SESSION_SECRET"
-fly secrets set JWT_SECRET="$JWT_SECRET"
 
 # Deploy
 echo "🚀 Deploying application..."

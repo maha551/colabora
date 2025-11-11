@@ -803,10 +803,8 @@ export default function App() {
         </Tabs>
 
         {/* Structure Proposals Section - Moved to end of document */}
-        {console.log('Current document structureProposalsEnabled:', currentDocument?.structureProposalsEnabled, 'document:', currentDocument?.title)}
         {currentDocument?.structureProposalsEnabled && (
           <div className="mt-12 pt-8 border-t">
-          {console.log('Rendering Structure Proposals Section, structureProposals:', structureProposals?.length || 0, 'items')}
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
               <h2 className="text-xl font-semibold">🏗️ Structure Proposals</h2>

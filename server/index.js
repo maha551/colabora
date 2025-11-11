@@ -461,31 +461,69 @@ app.get('/api/health/detailed', requireAuth, (req, res) => {
   });
 });
 
-// Temporary database check endpoint (remove after debugging)
-app.get('/api/admin/check-db', requireAuth, (req, res) => {
+// Database reset endpoint (drops all data and recreates fresh database)
+app.post('/api/admin/reset-database', requireAuth, (req, res) => {
   // Simple auth check - in production, use proper admin auth
   if (req.user.id !== 'cmgxlfj9z0000orjgnfy3revt') { // Alice as temp admin
     return res.status(403).json({ error: 'Admin access required' });
   }
 
+  console.log('🔄 Resetting database - dropping all tables and recreating...');
+
   const db = req.app.locals.db;
 
-  // Check what tables exist
-  db.all("SELECT name FROM sqlite_master WHERE type='table'", (err, tables) => {
+  // Get all table names
+  db.all("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'", (err, tables) => {
     if (err) {
-      return res.status(500).json({ error: 'Failed to query tables', details: err.message });
+      return res.status(500).json({ error: 'Failed to get table list', details: err.message });
     }
 
-    // Check documents table structure
-    db.all("PRAGMA table_info(documents)", (err, columns) => {
-      const result = {
-        tables: tables.map(t => t.name),
-        documentsColumns: err ? null : columns.map(c => ({ name: c.name, type: c.type })),
-        error: err ? err.message : null
-      };
+    const tableNames = tables.map(t => t.name);
+    console.log(`📋 Found ${tableNames.length} tables to drop:`, tableNames);
 
-      res.json(result);
-    });
+    // Drop all tables
+    let droppedCount = 0;
+    const dropErrors = [];
+
+    function dropNextTable() {
+      if (droppedCount >= tableNames.length) {
+        console.log('✅ All tables dropped, recreating database...');
+        // Reinitialize the database
+        initializeDatabaseAndStartServer(db);
+        return res.json({
+          success: true,
+          message: 'Database reset completed. All tables dropped and recreated.',
+          tablesDropped: tableNames.length
+        });
+      }
+
+      const tableName = tableNames[droppedCount];
+      console.log(`🔄 Dropping table: ${tableName}`);
+
+      db.run(`DROP TABLE IF EXISTS ${tableName}`, (err) => {
+        if (err) {
+          console.error(`❌ Failed to drop table ${tableName}:`, err.message);
+          dropErrors.push({ table: tableName, error: err.message });
+        } else {
+          console.log(`✅ Dropped table: ${tableName}`);
+        }
+
+        droppedCount++;
+        dropNextTable();
+      });
+    }
+
+    if (tableNames.length > 0) {
+      dropNextTable();
+    } else {
+      // No tables to drop, just reinitialize
+      initializeDatabaseAndStartServer(db);
+      res.json({
+        success: true,
+        message: 'No tables to drop, database reinitialized.',
+        tablesDropped: 0
+      });
+    }
   });
 });
 

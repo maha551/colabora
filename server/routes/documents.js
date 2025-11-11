@@ -527,6 +527,12 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
       ? requestedThreshold
       : 75.0;
 
+    // Extract document options with defaults
+    const votingAnonymous = options?.votingAnonymous === true ? 1 : 0;
+    const votingAnonymityLocked = options?.votingAnonymityLocked === true ? 1 : 0;
+    const voteChangeAllowed = options?.voteChangeAllowed !== false ? 1 : 0; // Default to true
+    const structureProposalsEnabled = options?.structureProposalsEnabled === true ? 1 : 0;
+
     const documentId = uuidv4();
     const trimmedTitle = title.trim();
     const trimmedDescription = description ? description.trim() : null;
@@ -534,6 +540,7 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
     console.log('Creating document with ID:', documentId);
     console.log('Title:', trimmedTitle);
     console.log('Ownership type:', ownershipType);
+    console.log('Structure proposals enabled:', structureProposalsEnabled);
 
     // Build the SQL query based on ownership type
     let sql, params;
@@ -549,7 +556,7 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
       `;
       params = [
         documentId, trimmedTitle, userId, ownershipType, JSON.stringify(creatorIds), null,
-        acceptanceThreshold, 0, 0, 1, 0
+        acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
       ];
     } else if (ownershipType === 'organizational') {
       // For organizational documents, set organization_id
@@ -562,7 +569,7 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
       `;
       params = [
         documentId, trimmedTitle, userId, ownershipType, null, organizationId,
-        acceptanceThreshold, 0, 0, 1, 0
+        acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
       ];
     } else {
       // For personal documents (default)
@@ -575,7 +582,7 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
       `;
       params = [
         documentId, trimmedTitle, userId, ownershipType, null, null,
-        acceptanceThreshold, 0, 0, 1, 0
+        acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
       ];
     }
 

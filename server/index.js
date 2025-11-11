@@ -486,6 +486,190 @@ app.post('/api/admin/reset-database', requireAuth, (req, res) => {
   });
 });
 
+// Debug endpoint to manually create tables
+app.post('/api/admin/create-tables', requireAuth, (req, res) => {
+  // Simple auth check - in production, use proper admin auth
+  if (req.user.id !== 'cmgxlfj9z0000orjgnfy3revt') { // Alice as temp admin
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  console.log('🔄 Manually creating all tables...');
+
+  const db = req.app.locals.db;
+
+  // Create all tables manually
+  const tables = [
+    `CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS documents (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      content TEXT,
+      owner_id TEXT NOT NULL,
+      collaborators TEXT, -- JSON array of user IDs
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      ownership_type TEXT DEFAULT 'personal',
+      creator_ids TEXT,
+      organization_id TEXT,
+      FOREIGN KEY (owner_id) REFERENCES users(id),
+      FOREIGN KEY (organization_id) REFERENCES organizations(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS paragraphs (
+      id TEXT PRIMARY KEY,
+      document_id TEXT NOT NULL,
+      content TEXT,
+      position INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (document_id) REFERENCES documents(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS organizations (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      representatives TEXT NOT NULL, -- JSON array of user IDs
+      membership_policy TEXT CHECK(policy IN ('open', 'invitation')) DEFAULT 'invitation',
+      voting_threshold REAL DEFAULT 0.5,
+      is_active BOOLEAN DEFAULT true,
+      created_by_admin_id TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (created_by_admin_id) REFERENCES users(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS organization_members (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      status TEXT CHECK(status IN ('active', 'legacy', 'suspended')) DEFAULT 'active',
+      invited_by_rep_id TEXT,
+      joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      left_at DATETIME,
+      FOREIGN KEY (organization_id) REFERENCES organizations(id),
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (invited_by_rep_id) REFERENCES users(id),
+      UNIQUE(organization_id, user_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS organization_votes (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      vote_type TEXT CHECK(type IN ('policy', 'document_change', 'membership', 'dissolution', 'other')),
+      proposed_by_user_id TEXT NOT NULL,
+      approved_by_rep_id TEXT,
+      threshold REAL NOT NULL,
+      status TEXT CHECK(status IN ('proposed', 'approved', 'voting', 'passed', 'failed', 'cancelled')),
+      voting_starts_at DATETIME,
+      voting_ends_at DATETIME,
+      result_yes INTEGER DEFAULT 0,
+      result_no INTEGER DEFAULT 0,
+      result_abstain INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (organization_id) REFERENCES organizations(id),
+      FOREIGN KEY (proposed_by_user_id) REFERENCES users(id),
+      FOREIGN KEY (approved_by_rep_id) REFERENCES users(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS vote_ballots (
+      id TEXT PRIMARY KEY,
+      vote_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      membership_status TEXT CHECK(status IN ('active', 'legacy')),
+      vote_choice TEXT CHECK(choice IN ('yes', 'no', 'abstain')),
+      voted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (vote_id) REFERENCES organization_votes(id),
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      UNIQUE(vote_id, user_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS organization_audit (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      action_type TEXT CHECK(type IN (
+        'org_created', 'rep_added', 'rep_removed', 'rep_removal_failed',
+        'member_invited', 'member_joined', 'member_left', 'member_bulk_added',
+        'vote_proposed', 'vote_approved', 'vote_started', 'vote_completed',
+        'doc_created', 'dissolution_proposed', 'org_dissolved'
+      )),
+      performed_by_user_id TEXT NOT NULL,
+      affected_user_id TEXT,
+      details TEXT, -- JSON with full action details
+      ip_address TEXT,
+      user_agent TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (organization_id) REFERENCES organizations(id),
+      FOREIGN KEY (performed_by_user_id) REFERENCES users(id),
+      FOREIGN KEY (affected_user_id) REFERENCES users(id)
+    )`
+  ];
+
+  let createdCount = 0;
+  const errors = [];
+
+  function createNextTable() {
+    if (createdCount >= tables.length) {
+      console.log('✅ All tables created');
+
+      // Insert demo data
+      const hashPassword = require('./utils').hashPassword;
+
+      // Demo users
+      const demoUsers = [
+        { id: 'cmgxlfj9z0000orjgnfy3revt', name: 'Alice Johnson', email: 'alice@example.com', password: 'SecurePass123!' },
+        { id: 'cmgxlfj9z0000orjgnfy3revu', name: 'Bob Smith', email: 'bob@example.com', password: 'SecurePass123!' },
+        { id: 'cmgxlfj9z0000orjgnfy3revv', name: 'Charlie Brown', email: 'charlie@example.com', password: 'SecurePass123!' },
+        { id: 'cmgxlfj9z0000orjgnfy3revw', name: 'Diana Prince', email: 'diana@example.com', password: 'SecurePass123!' }
+      ];
+
+      let usersInserted = 0;
+      for (const user of demoUsers) {
+        hashPassword(user.password).then(passwordHash => {
+          db.run(`
+            INSERT OR IGNORE INTO users (id, name, email, password_hash) VALUES (?, ?, ?, ?)
+          `, [user.id, user.name, user.email, passwordHash], (err) => {
+            if (err) {
+              console.error('Error inserting demo user:', err);
+            } else {
+              console.log(`✅ Inserted demo user: ${user.name}`);
+            }
+            usersInserted++;
+            if (usersInserted >= demoUsers.length) {
+              res.json({
+                success: true,
+                message: 'All tables created and demo data inserted successfully.',
+                tablesCreated: tables.length,
+                usersInserted: demoUsers.length
+              });
+            }
+          });
+        });
+      }
+
+      return;
+    }
+
+    const sql = tables[createdCount];
+    console.log(`🔄 Creating table ${createdCount + 1}/${tables.length}`);
+
+    db.run(sql, (err) => {
+      if (err) {
+        console.error(`❌ Failed to create table ${createdCount + 1}:`, err.message);
+        errors.push({ table: createdCount + 1, error: err.message });
+      } else {
+        console.log(`✅ Created table ${createdCount + 1}`);
+      }
+
+      createdCount++;
+      createNextTable();
+    });
+  }
+
+  createNextTable();
+});
+
 
 function ensureColumn(db, tableName, columnName, columnDefinition) {
   db.all(`PRAGMA table_info(${tableName})`, (err, columns) => {

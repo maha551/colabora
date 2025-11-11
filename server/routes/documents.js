@@ -76,6 +76,7 @@ router.get('/', requireAuth, (req, res) => {
               options: {
                 acceptanceThreshold: doc.acceptance_threshold || 75.0,
                 votingAnonymous: doc.voting_anonymous === 1,
+                structureProposalsEnabled: doc.structure_proposals_enabled === 1,
                 votingAnonymityLocked: doc.voting_anonymity_locked === 1,
                 voteChangeAllowed: doc.vote_change_allowed === 1
               }
@@ -122,6 +123,7 @@ router.get('/', requireAuth, (req, res) => {
               options: {
                 acceptanceThreshold: doc.acceptance_threshold || 75.0,
                 votingAnonymous: doc.voting_anonymous === 1,
+                structureProposalsEnabled: doc.structure_proposals_enabled === 1,
                 votingAnonymityLocked: doc.voting_anonymity_locked === 1,
                 voteChangeAllowed: doc.vote_change_allowed === 1
               }
@@ -462,7 +464,7 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
   console.log('User:', req.user ? req.user.name : 'No user');
 
   const db = req.app.locals.db;
-  const { title, description, options } = req.body;
+  const { title, description, options, ownershipType = 'personal', organizationId, creatorIds } = req.body;
   const userId = req.user.id;
 
   if (!title || title.trim() === '') {
@@ -470,28 +472,62 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
     return res.status(400).json({ error: 'Title is required' });
   }
 
-  // Parse and validate options - only allow preset values: 50, 75, 90, 100
-  const validThresholds = [50, 75, 90, 100];
-  const requestedThreshold = options?.acceptanceThreshold !== undefined 
-    ? parseFloat(options.acceptanceThreshold) 
-    : 75.0;
-  const acceptanceThreshold = validThresholds.includes(requestedThreshold) 
-    ? requestedThreshold 
-    : 75.0; // Default to 75 if invalid value provided
-  const votingAnonymous = options?.votingAnonymous === true ? 1 : 0;
-  const votingAnonymityLocked = options?.votingAnonymityLocked === true ? 1 : 0;
-  const voteChangeAllowed = options?.voteChangeAllowed !== undefined 
-    ? (options.voteChangeAllowed === true ? 1 : 0)
-    : 1;
+  // Validate ownership type and permissions
+  if (ownershipType === 'organizational') {
+    if (!organizationId) {
+      return res.status(400).json({ error: 'Organization ID required for organizational documents' });
+    }
+  } else if (ownershipType === 'shared') {
+    if (!creatorIds || !Array.isArray(creatorIds) || creatorIds.length < 2) {
+      return res.status(400).json({ error: 'Shared documents require at least 2 creators' });
+    }
+    if (!creatorIds.includes(userId)) {
+      return res.status(400).json({ error: 'Current user must be included in shared document creators' });
+    }
+  }
 
-  const documentId = uuidv4();
-  const trimmedTitle = title.trim();
-  const titleParagraphId = `${documentId}-title`;
+  // For organizational documents, check representative status
+  if (ownershipType === 'organizational') {
+    db.get(`
+      SELECT representatives FROM organizations
+      WHERE id = ? AND representatives LIKE '%' || ? || '%' AND is_active = 1
+    `, [organizationId, userId], (err, org) => {
+      if (err || !org) {
+        return res.status(403).json({ error: 'Only organization representatives can create organizational documents' });
+      }
+      createDocument();
+    });
+  } else {
+    createDocument();
+  }
 
-  db.run(`
-    INSERT INTO documents (id, title, owner_id, acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed) 
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `, [documentId, trimmedTitle, userId, acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed], function(err) {
+  function createDocument() {
+    // Parse and validate options - only allow preset values: 50, 75, 90, 100
+    const validThresholds = [50, 75, 90, 100];
+    const requestedThreshold = options?.acceptanceThreshold !== undefined
+      ? parseFloat(options.acceptanceThreshold)
+      : 75.0;
+    const acceptanceThreshold = validThresholds.includes(requestedThreshold)
+      ? requestedThreshold
+      : 75.0; // Default to 75 if invalid value provided
+    const votingAnonymous = options?.votingAnonymous === true ? 1 : 0;
+    const votingAnonymityLocked = options?.votingAnonymityLocked === true ? 1 : 0;
+    const voteChangeAllowed = options?.voteChangeAllowed !== undefined
+      ? (options.voteChangeAllowed === true ? 1 : 0)
+      : 1;
+    const structureProposalsEnabled = options?.structureProposalsEnabled === true ? 1 : 0;
+
+    const documentId = uuidv4();
+    const trimmedTitle = title.trim();
+    const titleParagraphId = `${documentId}-title`;
+
+    // Prepare creator IDs for shared documents
+    const finalCreatorIds = ownershipType === 'shared' ? JSON.stringify(creatorIds) : null;
+
+    db.run(`
+      INSERT INTO documents (id, title, owner_id, ownership_type, creator_ids, organization_id, acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed, structure_proposals_enabled)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [documentId, trimmedTitle, userId, ownershipType, finalCreatorIds, organizationId || null, acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled], function(err) {
     if (err) {
       console.error('Error creating document:', err);
       return res.status(500).json({ error: 'Failed to create document' });
@@ -560,9 +596,7 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
 
           res.status(201).json({ document: result });
         });
-      });
-    });
-  });
+  }
 });
 
 // Update document title

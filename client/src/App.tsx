@@ -9,6 +9,7 @@ import { Login } from "./components/Login";
 import { AppHeader } from "./components/AppHeader";
 import { StructureProposalMode } from "./components/StructureProposalMode";
 import { StructureProposalCard } from "./components/StructureProposalCard";
+import { StructureHistory } from "./components/StructureHistory";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { Avatar, AvatarFallback } from "./components/ui/avatar";
 import { CollaboratorManagement } from "./components/CollaboratorManagement";
@@ -23,7 +24,7 @@ export default function App() {
   const [currentDocument, setCurrentDocument] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"discussion" | "agreed">("discussion");
+  const [activeTab, setActiveTab] = useState<"discussion" | "agreed" | "history">("discussion");
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [currentView, setCurrentView] = useState<'documents' | 'activity' | 'document' | 'profile'>('documents');
@@ -633,57 +634,9 @@ export default function App() {
           </div>
         )}
 
-        {/* Structure Proposals Section */}
-        <div className="mb-6">
-          {console.log('Rendering Structure Proposals Section, structureProposals:', structureProposals?.length || 0, 'items')}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <h2 className="text-lg font-semibold">🏗️ Structure Proposals</h2>
-              {structureProposals.length > 0 && (
-                <Badge variant="secondary">
-                  {structureProposals.length}
-                </Badge>
-              )}
-            </div>
-            <Button
-              onClick={() => setShowStructureProposalMode(true)}
-              variant="outline"
-              size="sm"
-              className="gap-2"
-            >
-              🧩 Propose restructuring
-            </Button>
-          </div>
-
-          {structureProposals.length > 0 ? (
-            <div className="space-y-4">
-              {structureProposals.map((proposal) => (
-                <StructureProposalCard
-                  key={proposal.id}
-                  structureProposal={proposal}
-                  documentId={currentDocument.id}
-                  currentUserId={currentUser.id}
-                  onVote={refreshStructureProposals}
-                  onApply={() => {
-                    // Refresh document and structure proposals after applying
-                    loadDocuments();
-                    refreshStructureProposals();
-                  }}
-                  canApply={currentDocument.ownerId === currentUser.id}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
-              <div className="text-4xl mb-2">🏗️</div>
-              <p className="text-sm">No structure proposals yet.</p>
-              <p className="text-xs mt-1">Use "Propose restructuring" to suggest major document changes.</p>
-            </div>
-          )}
-        </div>
 
         {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "discussion" | "agreed")}>
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "discussion" | "agreed" | "history")}>
           <div className="flex justify-center mb-6 px-4">
             <TabsList className="w-full sm:w-auto">
               <TabsTrigger value="discussion" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm">
@@ -703,6 +656,10 @@ export default function App() {
                     {acceptedSuggestions}
                   </Badge>
                 )}
+              </TabsTrigger>
+              <TabsTrigger value="history" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm">
+                <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden xs:inline">History</span>
               </TabsTrigger>
             </TabsList>
           </div>
@@ -820,8 +777,66 @@ export default function App() {
               totalUsers={(currentDocument?.collaborators.length || 0) + 1} // Owner + collaborators
             />
           </TabsContent>
+
+          <TabsContent value="history" className="mt-0">
+            <StructureHistory
+              documentId={currentDocument.id}
+              currentUserId={currentUser.id}
+            />
+          </TabsContent>
         </Tabs>
+
+        {/* Structure Proposals Section - Moved to end of document */}
+        {currentDocument?.structureProposalsEnabled && (
+          <div className="mt-12 pt-8 border-t">
+          {console.log('Rendering Structure Proposals Section, structureProposals:', structureProposals?.length || 0, 'items')}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <h2 className="text-xl font-semibold">🏗️ Structure Proposals</h2>
+              {structureProposals.length > 0 && (
+                <Badge variant="secondary" className="text-sm">
+                  {structureProposals.length}
+                </Badge>
+              )}
+            </div>
+            <Button
+              onClick={() => setShowStructureProposalMode(true)}
+              variant="outline"
+              size="sm"
+              className="gap-2"
+            >
+              🧩 Propose restructuring
+            </Button>
           </div>
+
+          {structureProposals.length > 0 ? (
+            <div className="space-y-4">
+              {structureProposals.map((proposal) => (
+                <StructureProposalCard
+                  key={proposal.id}
+                  structureProposal={proposal}
+                  documentId={currentDocument.id}
+                  currentUserId={currentUser.id}
+                  onVote={refreshStructureProposals}
+                  onApply={() => {
+                    // Refresh document and structure proposals after applying
+                    loadDocuments();
+                    refreshStructureProposals();
+                  }}
+                  canApply={currentDocument.ownerId === currentUser.id}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
+              <div className="text-5xl mb-3">🏗️</div>
+              <p className="text-base font-medium mb-1">No structure proposals yet.</p>
+              <p className="text-sm">Use "Propose restructuring" to suggest major document changes.</p>
+            </div>
+          )}
+        </div>
+        )}
+        </div>
         </>
       )}
 

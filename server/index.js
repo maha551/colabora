@@ -29,6 +29,7 @@ const structureHistoryRoutes = require('./routes/structure-history');
 const pendingVotesRoutes = require('./routes/pending-votes');
 const debatedProposalsRoutes = require('./routes/debated-proposals');
 const agreedVersionsRoutes = require('./routes/agreed-versions');
+const organizationRoutes = require('./routes/organizations');
 
 // Initialize Express app
 const app = express();
@@ -275,6 +276,7 @@ function registerRoutes() {
 
   // Routes
   app.use('/api/auth', authRoutes);
+  app.use('/api/organizations', organizationRoutes);
   app.use('/api/pending-votes', pendingVotesRoutes);
   app.use('/api/debated-proposals', debatedProposalsRoutes);
   app.use('/api/agreed-versions', agreedVersionsRoutes);
@@ -502,17 +504,102 @@ function initializeDatabase(db) {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`,
 
+    `CREATE TABLE IF NOT EXISTS organizations (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      representatives TEXT NOT NULL, -- JSON array of user IDs
+      membership_policy TEXT CHECK(policy IN ('open', 'invitation')) DEFAULT 'invitation',
+      voting_threshold REAL DEFAULT 0.5,
+      is_active BOOLEAN DEFAULT true,
+      created_by_admin_id TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (created_by_admin_id) REFERENCES users(id)
+    )`,
+
+    `CREATE TABLE IF NOT EXISTS organization_members (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      status TEXT CHECK(status IN ('active', 'legacy', 'suspended')) DEFAULT 'active',
+      invited_by_rep_id TEXT,
+      joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      left_at DATETIME,
+      FOREIGN KEY (organization_id) REFERENCES organizations(id),
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (invited_by_rep_id) REFERENCES users(id),
+      UNIQUE(organization_id, user_id)
+    )`,
+
+    `CREATE TABLE IF NOT EXISTS organization_votes (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      vote_type TEXT CHECK(type IN ('policy', 'document_change', 'membership', 'dissolution', 'other')),
+      proposed_by_user_id TEXT NOT NULL,
+      approved_by_rep_id TEXT,
+      threshold REAL NOT NULL,
+      status TEXT CHECK(status IN ('proposed', 'approved', 'voting', 'passed', 'failed', 'cancelled')),
+      voting_starts_at DATETIME,
+      voting_ends_at DATETIME,
+      result_yes INTEGER DEFAULT 0,
+      result_no INTEGER DEFAULT 0,
+      result_abstain INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (organization_id) REFERENCES organizations(id),
+      FOREIGN KEY (proposed_by_user_id) REFERENCES users(id),
+      FOREIGN KEY (approved_by_rep_id) REFERENCES users(id)
+    )`,
+
+    `CREATE TABLE IF NOT EXISTS vote_ballots (
+      id TEXT PRIMARY KEY,
+      vote_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      membership_status TEXT CHECK(status IN ('active', 'legacy')),
+      vote_choice TEXT CHECK(choice IN ('yes', 'no', 'abstain')),
+      voted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (vote_id) REFERENCES organization_votes(id),
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      UNIQUE(vote_id, user_id)
+    )`,
+
+    `CREATE TABLE IF NOT EXISTS organization_audit (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      action_type TEXT CHECK(type IN (
+        'org_created', 'rep_added', 'rep_removed', 'rep_removal_failed',
+        'member_invited', 'member_joined', 'member_left', 'member_bulk_added',
+        'vote_proposed', 'vote_approved', 'vote_started', 'vote_completed',
+        'doc_created', 'dissolution_proposed', 'org_dissolved'
+      )),
+      performed_by_user_id TEXT NOT NULL,
+      affected_user_id TEXT,
+      details TEXT, -- JSON with full action details
+      ip_address TEXT,
+      user_agent TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (organization_id) REFERENCES organizations(id),
+      FOREIGN KEY (performed_by_user_id) REFERENCES users(id),
+      FOREIGN KEY (affected_user_id) REFERENCES users(id)
+    )`,
+
     `CREATE TABLE IF NOT EXISTS documents (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
       owner_id TEXT NOT NULL,
+      ownership_type TEXT CHECK(type IN ('personal', 'shared', 'organizational')) DEFAULT 'personal',
+      creator_ids TEXT, -- JSON array for shared docs
+      organization_id TEXT, -- For organizational docs
       acceptance_threshold REAL DEFAULT 75.0 NOT NULL,
       voting_anonymous BOOLEAN DEFAULT 0 NOT NULL,
       voting_anonymity_locked BOOLEAN DEFAULT 0 NOT NULL,
       vote_change_allowed BOOLEAN DEFAULT 1 NOT NULL,
+      structure_proposals_enabled BOOLEAN DEFAULT 0 NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (owner_id) REFERENCES users(id)
+      FOREIGN KEY (owner_id) REFERENCES users(id),
+      FOREIGN KEY (organization_id) REFERENCES organizations(id)
     )`,
 
     `CREATE TABLE IF NOT EXISTS document_collaborators (
@@ -724,6 +811,7 @@ function initializeDatabase(db) {
       ensureColumn(db, 'documents', 'voting_anonymous', 'BOOLEAN DEFAULT 0 NOT NULL');
       ensureColumn(db, 'documents', 'voting_anonymity_locked', 'BOOLEAN DEFAULT 0 NOT NULL');
       ensureColumn(db, 'documents', 'vote_change_allowed', 'BOOLEAN DEFAULT 1 NOT NULL');
+      ensureColumn(db, 'documents', 'structure_proposals_enabled', 'BOOLEAN DEFAULT 0 NOT NULL');
 
       // Ensure history table has accepted_at column
       ensureHistoryAcceptedAt(db).catch(err => {
@@ -790,17 +878,18 @@ async function insertDemoData(db) {
     // Insert tutorial document with options
     db.run(`
       INSERT OR IGNORE INTO documents (
-        id, title, owner_id, 
-        acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        id, title, owner_id,
+        acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed, structure_proposals_enabled
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `, [
-      'demo-doc-1', 
-      'Document Options Tutorial', 
+      'demo-doc-1',
+      'Document Options Tutorial',
       'cmgxlfj9z0000orjgnfy3revt',
       75.0,  // acceptance_threshold
       0,     // voting_anonymous (public/open)
       0,     // voting_anonymity_locked
-      1      // vote_change_allowed (flexible)
+      1,     // vote_change_allowed (flexible)
+      1      // structure_proposals_enabled (enabled for demo)
     ], (err) => {
       if (err) {
         console.error('Error inserting document:', err);

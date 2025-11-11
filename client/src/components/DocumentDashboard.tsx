@@ -64,6 +64,7 @@ interface DocumentDashboardProps {
       votingAnonymous?: boolean;
       votingAnonymityLocked?: boolean;
       voteChangeAllowed?: boolean;
+      structureProposalsEnabled?: boolean;
     }
   ) => void;
   onDeleteDocument: (documentId: string) => void;
@@ -100,6 +101,7 @@ export function DocumentDashboard({
   const [votingAnonymous, setVotingAnonymous] = useState(false);
   const [votingAnonymityLocked, setVotingAnonymityLocked] = useState(false);
   const [voteChangeAllowed, setVoteChangeAllowed] = useState(true);
+  const [structureProposalsEnabled, setStructureProposalsEnabled] = useState(false);
 
   // Get available contributors (all demo users except current user)
   const availableContributors = demoUsers.filter(user => user.id !== currentUser.id);
@@ -168,7 +170,8 @@ export function DocumentDashboard({
           acceptanceThreshold,
           votingAnonymous,
           votingAnonymityLocked,
-          voteChangeAllowed
+          voteChangeAllowed,
+          structureProposalsEnabled
         }
       );
       setNewDocumentTitle("");
@@ -178,6 +181,7 @@ export function DocumentDashboard({
       setVotingAnonymous(false);
       setVotingAnonymityLocked(false);
       setVoteChangeAllowed(true);
+      setStructureProposalsEnabled(false);
       setIsCreateDialogOpen(false);
       toast.success("Document created successfully!");
     } catch (error) {
@@ -304,7 +308,7 @@ export function DocumentDashboard({
                 <CardTitle className="text-lg font-bold text-gray-900">Create New Document</CardTitle>
                 <CardDescription>Start a new collaborative document</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 max-h-96 overflow-y-auto">
                 <div className="space-y-2">
                   <Label htmlFor="title">Document Title *</Label>
                   <Input
@@ -418,6 +422,25 @@ export function DocumentDashboard({
                         </Label>
                       </div>
                     </RadioGroup>
+                  </div>
+
+                  {/* Structure Proposals */}
+                  <div className="space-y-2">
+                    <Label>Structure Proposals</Label>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="structure-proposals"
+                        checked={structureProposalsEnabled}
+                        onCheckedChange={(checked) => setStructureProposalsEnabled(checked === true)}
+                      />
+                      <Label htmlFor="structure-proposals" className="font-normal cursor-pointer">
+                        Enable structure proposals - Allow collaborators to propose major document reorganizations
+                      </Label>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      When enabled, users can propose moving, merging, deleting, or restructuring document sections.
+                      All proposals require voting and approval before being applied.
+                    </p>
                   </div>
                 </div>
 

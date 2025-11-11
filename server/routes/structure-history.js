@@ -2,8 +2,31 @@ const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { requireAuth, requireDocumentAccess } = require('../middleware/auth');
 
+// Middleware to check if structure proposals are enabled for the document
+const requireStructureProposalsEnabled = (req, res, next) => {
+  const db = req.app.locals.db;
+  const documentId = req.params.documentId;
+
+  db.get('SELECT structure_proposals_enabled FROM documents WHERE id = ?', [documentId], (err, document) => {
+    if (err) {
+      console.error('Error checking structure proposals setting:', err);
+      return res.status(500).json({ error: 'Failed to check document settings' });
+    }
+
+    if (!document) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    if (document.structure_proposals_enabled !== 1) {
+      return res.status(403).json({ error: 'Structure history is not available for this document' });
+    }
+
+    next();
+  });
+};
+
 // GET /api/documents/:documentId/structure-history - Get document structure versions
-router.get('/', requireAuth, requireDocumentAccess, (req, res) => {
+router.get('/', requireAuth, requireDocumentAccess, requireStructureProposalsEnabled, (req, res) => {
   const db = req.app.locals.db;
   const documentId = req.params.documentId;
 
@@ -52,7 +75,7 @@ router.get('/', requireAuth, requireDocumentAccess, (req, res) => {
 });
 
 // GET /api/documents/:documentId/structure-history/:versionId - Get detailed change log for a version
-router.get('/:versionId', requireAuth, requireDocumentAccess, (req, res) => {
+router.get('/:versionId', requireAuth, requireDocumentAccess, requireStructureProposalsEnabled, (req, res) => {
   const db = req.app.locals.db;
   const { documentId, versionId } = req.params;
 
@@ -131,7 +154,7 @@ router.get('/:versionId', requireAuth, requireDocumentAccess, (req, res) => {
 });
 
 // POST /api/documents/:documentId/structure-history/:versionId/restore - Restore document to a previous version
-router.post('/:versionId/restore', requireAuth, requireDocumentAccess, (req, res) => {
+router.post('/:versionId/restore', requireAuth, requireDocumentAccess, requireStructureProposalsEnabled, (req, res) => {
   const db = req.app.locals.db;
   const { documentId, versionId } = req.params;
   const userId = req.user.id;

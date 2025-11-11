@@ -669,10 +669,12 @@ export default function App() {
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="history" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm">
-                <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
-                <span className="hidden xs:inline">History</span>
-              </TabsTrigger>
+              {currentDocument?.structureProposalsEnabled && (
+                <TabsTrigger value="history" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm">
+                  <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden xs:inline">History</span>
+                </TabsTrigger>
+              )}
             </TabsList>
           </div>
 
@@ -790,12 +792,14 @@ export default function App() {
             />
           </TabsContent>
 
-          <TabsContent value="history" className="mt-0">
-            <StructureHistory
-              documentId={currentDocument.id}
-              currentUserId={currentUser.id}
-            />
-          </TabsContent>
+          {currentDocument?.structureProposalsEnabled && (
+            <TabsContent value="history" className="mt-0">
+              <StructureHistory
+                documentId={currentDocument.id}
+                currentUserId={currentUser.id}
+              />
+            </TabsContent>
+          )}
         </Tabs>
 
         {/* Structure Proposals Section - Moved to end of document */}

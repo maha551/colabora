@@ -17,9 +17,22 @@ const requireAdmin = (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({ error: 'Authentication required' });
   }
-  // TODO: Implement proper admin role checking
-  // For now, allow all authenticated users (will be restricted later)
-  next();
+
+  const db = req.app.locals.db;
+  db.get('SELECT role FROM users WHERE id = ?', [req.user.id], (err, user) => {
+    if (err) {
+      console.error('Error checking user role:', err);
+      return res.status(500).json({ error: 'Failed to verify permissions' });
+    }
+
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({
+        error: 'Admin privileges required to create organizations'
+      });
+    }
+
+    next();
+  });
 };
 
 // Helper function to check if user is representative of organization

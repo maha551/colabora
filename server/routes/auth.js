@@ -297,4 +297,32 @@ router.put('/profile', (req, res) => {
   );
 });
 
+// TEMPORARY: Promote user to admin (for development only)
+// In production, this should be secured and restricted
+router.post('/promote-admin/:userId', requireAuth, (req, res) => {
+  const db = req.app.locals.db;
+  const { userId } = req.params;
+  const requestingUserId = req.user.id;
+
+  // For now, allow any authenticated user to promote others (development only)
+  // In production, this should check if the requesting user is already an admin
+
+  db.run('UPDATE users SET role = ? WHERE id = ?', ['admin', userId], function(err) {
+    if (err) {
+      console.error('Error promoting user to admin:', err);
+      return res.status(500).json({ error: 'Failed to promote user' });
+    }
+
+    if (this.changes === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    console.log(`User ${userId} promoted to admin by ${requestingUserId}`);
+    res.json({
+      message: `User ${userId} has been promoted to admin`,
+      promotedUserId: userId
+    });
+  });
+});
+
 module.exports = router;

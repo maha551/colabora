@@ -500,6 +500,7 @@ function initializeDatabase(db) {
       password_hash TEXT,
       avatar TEXT,
       bio TEXT,
+      role TEXT CHECK(role IN ('user', 'admin')) DEFAULT 'user',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`,

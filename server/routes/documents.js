@@ -176,6 +176,7 @@ router.get('/:id', requireAuth, (req, res) => {
       return res.status(404).json({ error: 'Document not found or access denied' });
     }
 
+
     const paragraphsQuery = `
       SELECT p.*
       FROM paragraphs p
@@ -540,7 +541,6 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
     console.log('Creating document with ID:', documentId);
     console.log('Title:', trimmedTitle);
     console.log('Ownership type:', ownershipType);
-    console.log('Structure proposals enabled:', structureProposalsEnabled);
 
     // Build the SQL query based on ownership type
     let sql, params;
@@ -660,10 +660,10 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
               organizationId: ownershipType === 'organizational' ? organizationId : null,
               options: {
                 acceptanceThreshold,
-                votingAnonymous: false,
-                votingAnonymityLocked: false,
-                voteChangeAllowed: true,
-                structureProposalsEnabled: false
+                votingAnonymous: votingAnonymous === 1,
+                votingAnonymityLocked: votingAnonymityLocked === 1,
+                voteChangeAllowed: voteChangeAllowed === 1,
+                structureProposalsEnabled: structureProposalsEnabled === 1
               },
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString()

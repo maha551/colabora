@@ -1131,9 +1131,12 @@ async function insertDemoData(db) {
   for (const user of demoUsers) {
     try {
       const passwordHash = await hashPassword(user.password);
+      // Make Diana Prince an admin, others are regular users
+      const role = user.name === 'Diana Prince' ? 'admin' : 'user';
+
       db.run(`
-        INSERT OR IGNORE INTO users (id, name, email, password_hash) VALUES (?, ?, ?, ?)
-      `, [user.id, user.name, user.email, passwordHash], (err) => {
+        INSERT OR IGNORE INTO users (id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)
+      `, [user.id, user.name, user.email, passwordHash, role], (err) => {
         if (err) {
           console.error('Error inserting user:', err);
         }
@@ -1459,13 +1462,89 @@ async function insertDemoData(db) {
           }
           votesInserted++;
           if (votesInserted === demoStructureVotes.length) {
-            console.log('Structure votes inserted, demo data insertion complete!');
-            console.log('Database initialized with demo data including structure proposals.');
+            console.log('Structure votes inserted, inserting demo organizations...');
+            insertDemoOrganizations(db);
           }
         });
       });
     }
   }
+}
+
+function insertDemoOrganizations(db) {
+  const demoOrganizations = [
+    {
+      id: 'org-demo-1',
+      name: 'Justice League',
+      description: 'A team of superheroes dedicated to protecting Earth from threats too great for any one hero to handle.',
+      representatives: ['cmgxlfj9z0000orjgnfy3revt', 'cmgxlfj9z0000orjgnfy3revw'], // Alice and Diana
+      membershipPolicy: 'invitation',
+      votingThreshold: 0.5,
+      isActive: true,
+      createdByAdminId: 'cmgxlfj9z0000orjgnfy3revw' // Diana (admin)
+    }
+  ];
+
+  let orgsInserted = 0;
+  demoOrganizations.forEach(org => {
+    db.run(`
+      INSERT OR IGNORE INTO organizations (
+        id, name, description, representatives, membership_policy,
+        voting_threshold, is_active, created_by_admin_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      org.id,
+      org.name,
+      org.description,
+      JSON.stringify(org.representatives),
+      org.membershipPolicy,
+      org.votingThreshold,
+      org.isActive ? 1 : 0,
+      org.createdByAdminId
+    ], (err) => {
+      if (err) {
+        console.error('Error inserting demo organization:', err);
+      }
+      orgsInserted++;
+      if (orgsInserted === demoOrganizations.length) {
+        console.log('Demo organizations inserted, inserting organization members...');
+        insertDemoOrganizationMembers(db);
+      }
+    });
+  });
+}
+
+function insertDemoOrganizationMembers(db) {
+  let membersInserted = 0;
+  const demoOrganizationMembers = [
+    // Justice League members
+    { organizationId: 'org-demo-1', userId: 'cmgxlfj9z0000orjgnfy3revt', status: 'active' }, // Alice
+    { organizationId: 'org-demo-1', userId: 'cmgxlfj9z0000orjgnfy3revu', status: 'active' }, // Bob
+    { organizationId: 'org-demo-1', userId: 'cmgxlfj9z0000orjgnfy3revv', status: 'active' }, // Charlie
+    { organizationId: 'org-demo-1', userId: 'cmgxlfj9z0000orjgnfy3revw', status: 'active' }  // Diana
+  ];
+
+  demoOrganizationMembers.forEach(member => {
+    db.run(`
+      INSERT OR IGNORE INTO organization_members (
+        id, organization_id, user_id, status
+      ) VALUES (?, ?, ?, ?)
+    `, [
+      uuidv4(),
+      member.organizationId,
+      member.userId,
+      member.status
+    ], (err) => {
+      if (err) {
+        console.error('Error inserting demo organization member:', err);
+      }
+      membersInserted++;
+      if (membersInserted === demoOrganizationMembers.length) {
+        console.log('Demo organization members inserted, demo data insertion complete!');
+        console.log('Database initialized with demo data including organizations.');
+      }
+    });
+  });
 }
 
 // Routes are registered in startServer() function

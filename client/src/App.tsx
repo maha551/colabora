@@ -10,13 +10,14 @@ import { AppHeader } from "./components/AppHeader";
 import { StructureProposalMode } from "./components/StructureProposalMode";
 import { StructureProposalCard } from "./components/StructureProposalCard";
 import { StructureHistory } from "./components/StructureHistory";
+import { OrganizationDashboard } from "./components/OrganizationDashboard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { Avatar, AvatarFallback } from "./components/ui/avatar";
 import { CollaboratorManagement } from "./components/CollaboratorManagement";
 import { Users, FileText, Edit3, Clock, CheckCircle2 } from "lucide-react";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
-import { documentsApi, authApi, proposalsApi, votesApi, commentsApi, paragraphsApi, structureProposalsApi, structureHistoryApi } from "./lib/api";
+import { documentsApi, authApi, proposalsApi, votesApi, commentsApi, paragraphsApi, structureProposalsApi, structureHistoryApi, organizationsApi } from "./lib/api";
 import { toast } from "sonner";
 
 export default function App() {
@@ -27,7 +28,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<"discussion" | "agreed" | "history">("discussion");
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [currentView, setCurrentView] = useState<'documents' | 'activity' | 'document' | 'profile'>('documents');
+  const [currentView, setCurrentView] = useState<'documents' | 'activity' | 'document' | 'profile' | 'organizations'>('documents');
   const [documentLoadKey, setDocumentLoadKey] = useState<number>(Date.now());
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [structureProposals, setStructureProposals] = useState<StructureProposal[]>([]);
@@ -229,6 +230,11 @@ export default function App() {
   const handleShowProfile = () => {
     setCurrentDocument(null);
     setCurrentView('profile');
+  };
+
+  const handleShowOrganizations = () => {
+    setCurrentDocument(null);
+    setCurrentView('organizations');
   };
 
   const handleBackToDocuments = () => {
@@ -553,12 +559,14 @@ export default function App() {
         onShowActivity={handleShowActivity}
         onShowProfile={handleShowProfile}
         onShowDocuments={handleShowDocuments}
-        showBackButton={currentView === 'activity' || currentView === 'document' || currentView === 'profile'}
+        onShowOrganizations={handleShowOrganizations}
+        showBackButton={currentView === 'activity' || currentView === 'document' || currentView === 'profile' || currentView === 'organizations'}
         onBack={handleBackToDocuments}
         title={
           currentView === 'document' && currentDocument ? currentDocument.title :
           currentView === 'activity' ? 'Activity Feed' :
           currentView === 'profile' ? 'Edit Profile' :
+          currentView === 'organizations' ? 'Organizations' :
           currentView === 'documents' ? 'Documents' :
           undefined
         }
@@ -621,6 +629,10 @@ export default function App() {
             isModal={false}
           />
         </div>
+      )}
+
+      {currentView === 'organizations' && (
+        <OrganizationDashboard currentUser={currentUser!} />
       )}
 
       {currentView === 'document' && currentDocument && (

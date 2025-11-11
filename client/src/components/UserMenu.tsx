@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
-import { Activity, UserCircle, LogOut, FileText } from 'lucide-react';
+import { Activity, UserCircle, LogOut, FileText, Users } from 'lucide-react';
 
 interface UserMenuProps {
   currentUser: User;
@@ -17,6 +17,7 @@ interface UserMenuProps {
   onShowActivity?: () => void;
   onShowProfile?: () => void;
   onShowDocuments?: () => void;
+  onShowOrganizations?: () => void;
 }
 
 export function UserMenu({
@@ -25,6 +26,7 @@ export function UserMenu({
   onShowActivity,
   onShowProfile,
   onShowDocuments,
+  onShowOrganizations,
 }: UserMenuProps) {
   return (
     <DropdownMenu>
@@ -57,6 +59,12 @@ export function UserMenu({
           <DropdownMenuItem onClick={onShowProfile}>
             <UserCircle className="h-4 w-4 mr-2" />
             Edit Profile
+          </DropdownMenuItem>
+        )}
+        {onShowOrganizations && (
+          <DropdownMenuItem onClick={onShowOrganizations}>
+            <Users className="h-4 w-4 mr-2" />
+            Organizations
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />

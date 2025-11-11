@@ -10,6 +10,7 @@ interface AppHeaderProps {
   onShowActivity?: () => void;
   onShowProfile?: () => void;
   onShowDocuments?: () => void;
+  onShowOrganizations?: () => void;
   showBackButton?: boolean;
   onBack?: () => void;
   title?: string;
@@ -23,6 +24,7 @@ export function AppHeader({
   onShowActivity,
   onShowProfile,
   onShowDocuments,
+  onShowOrganizations,
   showBackButton = false,
   onBack,
   title,
@@ -65,6 +67,7 @@ export function AppHeader({
               onShowActivity={onShowActivity}
               onShowProfile={onShowProfile}
               onShowDocuments={onShowDocuments}
+              onShowOrganizations={onShowOrganizations}
             />
           </div>
         </div>

@@ -272,6 +272,71 @@ export interface StructureVersionDetail extends StructureVersion {
   changes: StructureChange[];
 }
 
+// Organization Types
+export interface Organization {
+  id: string;
+  name: string;
+  description?: string;
+  representatives: string[];
+  membershipPolicy: 'open' | 'invitation';
+  votingThreshold: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface OrganizationMember {
+  id: string;
+  userId: string;
+  status: 'active' | 'legacy' | 'suspended';
+  joinedAt: string;
+  leftAt?: string;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    avatar?: string;
+  };
+}
+
+export interface OrganizationVote {
+  id: string;
+  organizationId: string;
+  title: string;
+  description?: string;
+  voteType: 'policy' | 'document_change' | 'membership' | 'dissolution' | 'other';
+  proposedByUserId: string;
+  approvedByRepId?: string;
+  threshold: number;
+  status: 'proposed' | 'approved' | 'voting' | 'passed' | 'failed' | 'cancelled';
+  votingStartsAt?: string;
+  votingEndsAt?: string;
+  resultYes: number;
+  resultNo: number;
+  resultAbstain: number;
+  createdAt: string;
+}
+
+export interface VoteBallot {
+  id: string;
+  voteId: string;
+  userId: string;
+  membershipStatus: 'active' | 'legacy';
+  voteChoice: 'yes' | 'no' | 'abstain';
+  votedAt: string;
+}
+
+export interface OrganizationAudit {
+  id: string;
+  organizationId: string;
+  actionType: string;
+  performedByUserId: string;
+  affectedUserId?: string;
+  details: string;
+  ipAddress: string;
+  userAgent: string;
+  createdAt: string;
+}
+
 // Alias types for backward compatibility with existing components
 export type Suggestion = Proposal;
 export type Suggestions = Proposal[];

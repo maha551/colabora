@@ -10,6 +10,8 @@ function getAuthToken(): string | null {
   return localStorage.getItem('authToken')
 }
 
+
+
 const CAMEL_CACHE = new Map<string, string>()
 
 function toCamelCase(key: string): string {
@@ -328,7 +330,7 @@ export const commentsApi = {
 }
 
 // Helper function to make unauthenticated requests (for login/register)
-async function unauthenticatedRequest(
+async function unapiRequest(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<any> {
@@ -460,11 +462,117 @@ export const structureProposalsApi = {
   },
 }
 
+// Organization API functions
+export const organizationsApi = {
+  // Get user's organizations
+  async getOrganizations() {
+    return apiRequest('/api/organizations')
+  },
+
+  // Get organization details
+  async getOrganization(organizationId: string) {
+    return apiRequest(`/api/organizations/${organizationId}`)
+  },
+
+  // Create organization (admin only)
+  async createOrganization(name: string, description?: string, representatives: string[], membershipPolicy?: 'open' | 'invitation', votingThreshold?: number) {
+    return apiRequest('/api/organizations', {
+      method: 'POST',
+      body: JSON.stringify({
+        name,
+        description,
+        representatives,
+        membershipPolicy,
+        votingThreshold
+      }),
+    })
+  },
+
+  // Update organization
+  async updateOrganization(organizationId: string, updates: { name?: string, description?: string, membershipPolicy?: 'open' | 'invitation', votingThreshold?: number }) {
+    return apiRequest(`/api/organizations/${organizationId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    })
+  },
+
+  // Nominate new representative
+  async nominateRepresentative(organizationId: string, newRepresentativeId: string) {
+    return apiRequest(`/api/organizations/${organizationId}/representatives`, {
+      method: 'POST',
+      body: JSON.stringify({ newRepresentativeId }),
+    })
+  },
+
+  // Remove representative
+  async removeRepresentative(organizationId: string, repId: string) {
+    return apiRequest(`/api/organizations/${organizationId}/representatives/${repId}`, {
+      method: 'DELETE',
+    })
+  },
+
+  // Invite members
+  async inviteMembers(organizationId: string, emails: string[]) {
+    return apiRequest(`/api/organizations/${organizationId}/members/invite`, {
+      method: 'POST',
+      body: JSON.stringify({ emails }),
+    })
+  },
+
+  // Add member
+  async addMember(organizationId: string, userId: string) {
+    return apiRequest(`/api/organizations/${organizationId}/members`, {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+    })
+  },
+
+  // Remove member
+  async removeMember(organizationId: string, userId: string) {
+    return apiRequest(`/api/organizations/${organizationId}/members/${userId}`, {
+      method: 'DELETE',
+    })
+  },
+
+  // Get organization votes
+  async getOrganizationVotes(organizationId: string) {
+    return apiRequest(`/api/organizations/${organizationId}/votes`)
+  },
+
+  // Create organization vote
+  async createOrganizationVote(organizationId: string, title: string, description?: string, voteType?: string, targetDocumentId?: string) {
+    return apiRequest(`/api/organizations/${organizationId}/votes`, {
+      method: 'POST',
+      body: JSON.stringify({
+        title,
+        description,
+        voteType,
+        targetDocumentId
+      }),
+    })
+  },
+
+  // Approve vote (representatives only)
+  async approveVote(organizationId: string, voteId: string) {
+    return apiRequest(`/api/organizations/${organizationId}/votes/${voteId}/approve`, {
+      method: 'POST',
+    })
+  },
+
+  // Cast vote in organization vote
+  async castVote(organizationId: string, voteId: string, choice: 'yes' | 'no' | 'abstain') {
+    return apiRequest(`/api/organizations/${organizationId}/votes/${voteId}/vote`, {
+      method: 'POST',
+      body: JSON.stringify({ choice }),
+    })
+  },
+}
+
 // Auth API functions
 export const authApi = {
   // Login
   async login(email: string, password: string) {
-    return unauthenticatedRequest('/api/auth/login', {
+    return unapiRequest('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     })
@@ -472,7 +580,7 @@ export const authApi = {
 
   // Register
   async register(name: string, email: string, password: string) {
-    return unauthenticatedRequest('/api/auth/register', {
+    return unapiRequest('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify({ name, email, password }),
     })

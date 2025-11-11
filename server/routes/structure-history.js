@@ -1,5 +1,5 @@
 const express = require('express');
-const router = express.Router();
+const router = express.Router({ mergeParams: true });
 const { requireAuth, requireDocumentAccess } = require('../middleware/auth');
 
 // GET /api/documents/:documentId/structure-history - Get document structure versions

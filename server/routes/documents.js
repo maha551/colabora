@@ -29,11 +29,22 @@ router.get('/', requireAuth, (req, res) => {
     ORDER BY d.updated_at DESC
   `;
 
+  console.log('Executing documents query for user:', userId);
+  console.log('Query:', query);
+
   db.all(query, [userId, userId], (err, documents) => {
     if (err) {
       console.error('Error fetching documents:', err);
-      return res.status(500).json({ error: 'Failed to fetch documents' });
+      console.error('SQL Error details:', err.message);
+      console.error('SQL Error code:', err.code);
+      return res.status(500).json({
+        error: 'Failed to fetch documents',
+        details: err.message,
+        code: err.code
+      });
     }
+
+    console.log('Found', documents ? documents.length : 0, 'documents');
 
     const documentsWithCollaborators = documents.map(doc => {
       return new Promise((resolve) => {
@@ -459,9 +470,199 @@ router.get('/:id', requireAuth, (req, res) => {
 
 // Create a new document
 router.post('/', requireAuth, documentValidation.create, (req, res) => {
-  return res.status(503).json({
-    error: 'Document creation temporarily disabled due to maintenance. Please try again later.'
-  });
+  console.log(`[${new Date().toISOString()}] POST /api/documents - Creating document`);
+  console.log('Request body:', req.body);
+  console.log('User:', req.user ? req.user.name : 'No user');
+
+  const db = req.app.locals.db;
+  const { title, description, options, ownershipType = 'personal', organizationId, creatorIds } = req.body;
+  const userId = req.user.id;
+
+  if (!title || title.trim() === '') {
+    console.log('Document creation failed: Title is required');
+    return res.status(400).json({ error: 'Title is required' });
+  }
+
+  // Validate ownership type and permissions
+  if (ownershipType === 'organizational') {
+    if (!organizationId) {
+      return res.status(400).json({ error: 'Organization ID required for organizational documents' });
+    }
+  } else if (ownershipType === 'shared') {
+    if (!creatorIds || !Array.isArray(creatorIds) || creatorIds.length < 2) {
+      return res.status(400).json({ error: 'Shared documents require at least 2 creators' });
+    }
+    if (!creatorIds.includes(userId)) {
+      return res.status(400).json({ error: 'Current user must be included in shared document creators' });
+    }
+  }
+
+  // For organizational documents, check representative status
+  if (ownershipType === 'organizational') {
+    if (!organizationId) {
+      return res.status(400).json({ error: 'Organization ID required for organizational documents' });
+    }
+    db.get(`
+      SELECT representatives FROM organizations
+      WHERE id = ? AND representatives LIKE '%' || ? || '%' AND is_active = 1
+    `, [organizationId, userId], (err, org) => {
+      if (err || !org) {
+        return res.status(403).json({ error: 'Only organization representatives can create organizational documents' });
+      }
+      createDocument();
+    });
+    return; // Don't continue execution, wait for async callback
+  }
+
+  // For non-organizational documents, create immediately
+  createDocument();
+
+  function createDocument() {
+    // Parse and validate options - only allow preset values: 50, 75, 90, 100
+    const validThresholds = [50, 75, 90, 100];
+    const requestedThreshold = options?.acceptanceThreshold !== undefined
+      ? parseFloat(options.acceptanceThreshold)
+      : 75.0;
+    const acceptanceThreshold = validThresholds.includes(requestedThreshold)
+      ? requestedThreshold
+      : 75.0;
+
+    const documentId = uuidv4();
+    const trimmedTitle = title.trim();
+    const trimmedDescription = description ? description.trim() : null;
+
+    console.log('Creating document with ID:', documentId);
+    console.log('Title:', trimmedTitle);
+    console.log('Ownership type:', ownershipType);
+
+    // Build the SQL query based on ownership type
+    let sql, params;
+
+    if (ownershipType === 'shared') {
+      // For shared documents, store creator IDs as JSON
+      sql = `
+        INSERT INTO documents (
+          id, title, owner_id, ownership_type, creator_ids, organization_id,
+          acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed,
+          structure_proposals_enabled, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `;
+      params = [
+        documentId, trimmedTitle, userId, ownershipType, JSON.stringify(creatorIds), null,
+        acceptanceThreshold, 0, 0, 1, 0
+      ];
+    } else if (ownershipType === 'organizational') {
+      // For organizational documents, set organization_id
+      sql = `
+        INSERT INTO documents (
+          id, title, owner_id, ownership_type, creator_ids, organization_id,
+          acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed,
+          structure_proposals_enabled, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `;
+      params = [
+        documentId, trimmedTitle, userId, ownershipType, null, organizationId,
+        acceptanceThreshold, 0, 0, 1, 0
+      ];
+    } else {
+      // For personal documents (default)
+      sql = `
+        INSERT INTO documents (
+          id, title, owner_id, ownership_type, creator_ids, organization_id,
+          acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed,
+          structure_proposals_enabled, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `;
+      params = [
+        documentId, trimmedTitle, userId, ownershipType, null, null,
+        acceptanceThreshold, 0, 0, 1, 0
+      ];
+    }
+
+    db.run(sql, params, function(err) {
+      if (err) {
+        console.error('Error creating document:', err);
+        return res.status(500).json({ error: 'Failed to create document' });
+      }
+
+      console.log('Document created in database, now creating initial paragraph...');
+
+      // Create initial title paragraph
+      const paragraphId = uuidv4();
+      db.run(`
+        INSERT INTO paragraphs (
+          id, document_id, title, text, order_index, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `, [paragraphId, documentId, trimmedTitle, trimmedDescription || trimmedTitle, -1], function(err) {
+        if (err) {
+          console.error('Error creating title paragraph:', err);
+          // Don't fail the whole request if paragraph creation fails
+          console.error('Title paragraph creation failed:', err);
+        }
+
+        // Add creators as collaborators if it's a shared document
+        if (ownershipType === 'shared' && creatorIds) {
+          let collaboratorsAdded = 0;
+          const totalCollaborators = creatorIds.length - 1; // Excluding the owner
+
+          creatorIds.forEach(creatorId => {
+            if (creatorId !== userId) { // Don't add owner as collaborator
+              const collabId = uuidv4();
+              db.run(`
+                INSERT INTO document_collaborators (id, document_id, user_id)
+                VALUES (?, ?, ?)
+              `, [collabId, documentId, creatorId], function(err) {
+                if (err) {
+                  console.error('Error adding collaborator:', creatorId, err);
+                }
+                collaboratorsAdded++;
+                if (collaboratorsAdded >= totalCollaborators) {
+                  sendResponse();
+                }
+              });
+            } else {
+              collaboratorsAdded++;
+              if (collaboratorsAdded >= totalCollaborators) {
+                sendResponse();
+              }
+            }
+          });
+        } else {
+          sendResponse();
+        }
+
+        function sendResponse() {
+          const result = {
+            id: documentId,
+            title: trimmedTitle,
+            description: trimmedDescription,
+            ownerId: userId,
+            ownershipType,
+            organizationId: ownershipType === 'organizational' ? organizationId : null,
+            acceptanceThreshold,
+            votingAnonymous: false,
+            votingAnonymityLocked: false,
+            voteChangeAllowed: true,
+            structureProposalsEnabled: false,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+
+          console.log('Document created successfully:', { id: documentId, title: trimmedTitle });
+
+          // Record business metrics
+          metricsCollector.recordBusinessEvent('document_created', {
+            documentId,
+            ownerId: userId,
+            ownershipType,
+            organizationId: ownershipType === 'organizational' ? organizationId : null
+          });
+
+          res.status(201).json({ document: result });
+        }
+      });
+    });
+  }
 });
 
 // Update document title

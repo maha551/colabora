@@ -267,6 +267,57 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Database diagnostic endpoint
+app.get('/api/diagnostics', (req, res) => {
+  const db = req.app.locals.db;
+
+  if (!db) {
+    return res.json({
+      error: 'Database not initialized',
+      tables: [],
+      organizationTables: []
+    });
+  }
+
+  // Check all tables
+  db.all("SELECT name FROM sqlite_master WHERE type='table'", (err, tables) => {
+    if (err) {
+      return res.json({
+        error: 'Failed to query tables',
+        details: err.message,
+        tables: [],
+        organizationTables: []
+      });
+    }
+
+    const tableNames = tables.map(t => t.name);
+    const organizationTables = tableNames.filter(name => name.includes('organization'));
+
+    // Check organization table structure
+    if (organizationTables.includes('organizations')) {
+      db.all("PRAGMA table_info(organizations)", (err, columns) => {
+        const orgColumns = err ? [] : columns.map(c => ({ name: c.name, type: c.type }));
+
+        res.json({
+          status: 'success',
+          tables: tableNames,
+          organizationTables: organizationTables,
+          organizationsTableColumns: orgColumns,
+          error: err ? err.message : null
+        });
+      });
+    } else {
+      res.json({
+        status: 'success',
+        tables: tableNames,
+        organizationTables: organizationTables,
+        organizationsTableColumns: [],
+        error: 'organizations table not found'
+      });
+    }
+  });
+});
+
 function registerRoutes() {
   // Debug middleware to log all API requests
   app.use('/api', (req, res, next) => {

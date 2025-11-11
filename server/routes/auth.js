@@ -1,7 +1,7 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { body, validationResult } = require('express-validator');
-const { generateToken, hashPassword, verifyPassword } = require('../middleware/auth');
+const { requireAuth, generateToken, hashPassword, verifyPassword } = require('../middleware/auth');
 const { securityLogger } = require('../middleware/logger');
 const { metricsCollector } = require('../middleware/monitoring');
 const config = require('../config');

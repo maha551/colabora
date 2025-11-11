@@ -470,10 +470,14 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
     return res.status(400).json({ error: 'Title is required' });
   }
 
-  // Parse and validate options
-  const acceptanceThreshold = options?.acceptanceThreshold !== undefined 
-    ? Math.max(1, Math.min(100, parseFloat(options.acceptanceThreshold))) 
+  // Parse and validate options - only allow preset values: 50, 75, 90, 100
+  const validThresholds = [50, 75, 90, 100];
+  const requestedThreshold = options?.acceptanceThreshold !== undefined 
+    ? parseFloat(options.acceptanceThreshold) 
     : 75.0;
+  const acceptanceThreshold = validThresholds.includes(requestedThreshold) 
+    ? requestedThreshold 
+    : 75.0; // Default to 75 if invalid value provided
   const votingAnonymous = options?.votingAnonymous === true ? 1 : 0;
   const votingAnonymityLocked = options?.votingAnonymityLocked === true ? 1 : 0;
   const voteChangeAllowed = options?.voteChangeAllowed !== undefined 

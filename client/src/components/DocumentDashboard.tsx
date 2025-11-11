@@ -40,7 +40,6 @@ import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import { Checkbox } from "./ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
-import { Slider } from "./ui/slider";
 import { Welcome } from "./Welcome";
 import { toast } from "sonner";
 
@@ -338,16 +337,36 @@ export function DocumentDashboard({
 
                   {/* Acceptance Threshold */}
                   <div className="space-y-2">
-                    <Label htmlFor="threshold">Acceptance Threshold: {acceptanceThreshold}%</Label>
-                    <Slider
-                      id="threshold"
-                      min={1}
-                      max={100}
-                      step={1}
-                      value={[acceptanceThreshold]}
-                      onValueChange={(value) => setAcceptanceThreshold(value[0])}
-                      className="w-full"
-                    />
+                    <Label>Acceptance Threshold</Label>
+                    <RadioGroup 
+                      value={acceptanceThreshold.toString()} 
+                      onValueChange={(value) => setAcceptanceThreshold(parseInt(value))}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="50" id="threshold-50" />
+                        <Label htmlFor="threshold-50" className="font-normal cursor-pointer">
+                          50% - Simple majority
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="75" id="threshold-75" />
+                        <Label htmlFor="threshold-75" className="font-normal cursor-pointer">
+                          75% - Strong consensus (default)
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="90" id="threshold-90" />
+                        <Label htmlFor="threshold-90" className="font-normal cursor-pointer">
+                          90% - Near-unanimous
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="100" id="threshold-100" />
+                        <Label htmlFor="threshold-100" className="font-normal cursor-pointer">
+                          100% - Unanimous approval required
+                        </Label>
+                      </div>
+                    </RadioGroup>
                     <p className="text-xs text-gray-500">
                       Percentage of collaborators who must vote PRO for automatic acceptance
                     </p>

@@ -25,6 +25,7 @@ const voteRoutes = require('./routes/votes');
 const commentRoutes = require('./routes/comments');
 const activityRoutes = require('./routes/activity');
 const structureProposalRoutes = require('./routes/structure-proposals');
+const structureHistoryRoutes = require('./routes/structure-history');
 const pendingVotesRoutes = require('./routes/pending-votes');
 const debatedProposalsRoutes = require('./routes/debated-proposals');
 const agreedVersionsRoutes = require('./routes/agreed-versions');
@@ -280,6 +281,7 @@ function registerRoutes() {
   app.use('/api/documents', documentRoutes);
   app.use('/api/documents/:documentId/activity', activityRoutes);
   app.use('/api/documents/:documentId/structure-proposals', structureProposalRoutes);
+  app.use('/api/documents/:documentId/structure-history', structureHistoryRoutes);
   app.use('/api/documents/:documentId/paragraphs', paragraphRoutes);
   app.use('/api/documents/:documentId/paragraphs/:paragraphId/proposals', proposalRoutes);
   app.use('/api/documents/:documentId/paragraphs/:paragraphId/proposals/:proposalId/vote', voteRoutes);
@@ -643,6 +645,39 @@ function initializeDatabase(db) {
       FOREIGN KEY (structure_proposal_id) REFERENCES structure_proposals(id),
       FOREIGN KEY (user_id) REFERENCES users(id),
       FOREIGN KEY (parent_id) REFERENCES structure_proposal_comments(id)
+    )`,
+
+    // Structure history tables
+    `CREATE TABLE IF NOT EXISTS document_structure_versions (
+      id TEXT PRIMARY KEY,
+      document_id TEXT NOT NULL,
+      version_number INTEGER NOT NULL,
+      name TEXT, -- Optional user-provided name like "Before Chapter 2 Reorg"
+      description TEXT, -- What changed in this version
+      created_by TEXT NOT NULL,
+      structure_snapshot TEXT NOT NULL, -- JSON of complete document structure
+      change_type TEXT CHECK(change_type IN ('structure_proposal', 'manual', 'initial')),
+      related_proposal_id TEXT, -- Links to structure proposal that created this version
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (document_id) REFERENCES documents(id),
+      FOREIGN KEY (created_by) REFERENCES users(id),
+      FOREIGN KEY (related_proposal_id) REFERENCES structure_proposals(id),
+      UNIQUE(document_id, version_number)
+    )`,
+
+    `CREATE TABLE IF NOT EXISTS structure_change_log (
+      id TEXT PRIMARY KEY,
+      document_id TEXT NOT NULL,
+      version_id TEXT NOT NULL,
+      operation_type TEXT CHECK(operation_type IN ('MOVE', 'MERGE', 'DELETE', 'INSERT_NEW', 'RENAME_HEADING', 'CHANGE_HEADING_LEVEL')),
+      paragraph_id TEXT,
+      old_data TEXT, -- JSON: {order_index, text, title, heading_level}
+      new_data TEXT, -- JSON: {order_index, text, title, heading_level}
+      operation_metadata TEXT, -- JSON: additional operation details
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (document_id) REFERENCES documents(id),
+      FOREIGN KEY (version_id) REFERENCES document_structure_versions(id),
+      FOREIGN KEY (paragraph_id) REFERENCES paragraphs(id)
     )`
   ];
 

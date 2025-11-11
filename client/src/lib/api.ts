@@ -38,10 +38,38 @@ function camelCaseKeys<T>(input: T): T {
   return input
 }
 
-// Helper function to make authenticated requests
+// Enhanced error types for better error handling
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public endpoint: string,
+    public details?: any
+  ) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
+
+export class NetworkError extends Error {
+  constructor(message: string, public endpoint: string) {
+    super(message)
+    this.name = 'NetworkError'
+  }
+}
+
+export class AuthError extends ApiError {
+  constructor(message: string, endpoint: string) {
+    super(message, 401, endpoint)
+    this.name = 'AuthError'
+  }
+}
+
+// Helper function to make authenticated requests with enhanced error handling
 async function apiRequest(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  retries: number = 2
 ): Promise<any> {
   const headersFromOptions = (options.headers ?? {}) as Record<string, string>
   const headers: Record<string, string> = {
@@ -62,20 +90,78 @@ async function apiRequest(
     credentials: 'include',
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, config)
+  let lastError: Error
 
-  if (response.status === 204) {
-    return null
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      console.log(`API Request attempt ${attempt + 1}/${retries + 1} to ${endpoint}`)
+
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, config)
+
+      if (response.status === 204) {
+        return null
+      }
+
+      let rawData: any = {}
+      try {
+        rawData = await response.json()
+      } catch (parseError) {
+        console.warn(`Failed to parse JSON response from ${endpoint}:`, parseError)
+        rawData = { error: 'Invalid response format' }
+      }
+
+      if (!response.ok) {
+        const errorMessage = (rawData && rawData.error)
+          ? rawData.error
+          : `API request failed: ${response.status} ${response.statusText}`
+
+        // Create specific error types based on status
+        if (response.status === 401) {
+          throw new AuthError(errorMessage, endpoint)
+        } else if (response.status === 409) {
+          // Conflict - special case for structure proposals
+          throw new ApiError(errorMessage, response.status, endpoint, rawData)
+        } else {
+          throw new ApiError(errorMessage, response.status, endpoint, rawData)
+        }
+      }
+
+      console.log(`API Request successful: ${endpoint}`)
+      return camelCaseKeys(rawData)
+
+    } catch (error) {
+      lastError = error as Error
+      console.error(`API Request attempt ${attempt + 1} failed:`, error)
+
+      // Don't retry on auth errors or permanent client errors
+      // Retry on: network errors, server errors (5xx), timeouts (408), rate limits (429), and specific 4xx that might be transient
+      const shouldNotRetry = error instanceof AuthError ||
+        (error instanceof ApiError && (
+          (error.status >= 400 && error.status < 408) ||  // 400-407 (except 408)
+          (error.status >= 410 && error.status < 429) ||  // 410-428 (except 429)
+          (error.status >= 430 && error.status < 500)     // 430-499
+        ));
+
+      if (shouldNotRetry) {
+        throw error;
+      }
+
+      // Wait before retrying (exponential backoff)
+      if (attempt < retries) {
+        const delay = Math.min(1000 * Math.pow(2, attempt), 5000)
+        console.log(`Retrying in ${delay}ms...`)
+        await new Promise(resolve => setTimeout(resolve, delay))
+      }
+    }
   }
 
-  const rawData = await response.json().catch(() => ({}))
-
-  if (!response.ok) {
-    const errorMessage = (rawData && rawData.error) ? rawData.error : `API request failed: ${response.status} ${response.statusText}`
-    throw new Error(errorMessage)
+  // If we get here, all retries failed
+  if (lastError instanceof ApiError || lastError instanceof AuthError) {
+    throw lastError
+  } else {
+    // Network or other error
+    throw new NetworkError(`Network error: ${lastError.message}`, endpoint)
   }
-
-  return camelCaseKeys(rawData)
 }
 
 // Document API functions
@@ -274,11 +360,39 @@ async function unauthenticatedRequest(
   return camelCaseKeys(rawData)
 }
 
+// Structure History API functions
+export const structureHistoryApi = {
+  // Get document structure versions
+  async getStructureVersions(documentId: string): Promise<{ versions: StructureVersion[] }> {
+    return apiRequest(`/api/documents/${documentId}/structure-history`)
+  },
+
+  // Get detailed change log for a version
+  async getStructureVersion(documentId: string, versionId: string): Promise<{ version: StructureVersionDetail }> {
+    return apiRequest(`/api/documents/${documentId}/structure-history/${versionId}`)
+  },
+
+  // Restore document to a previous version
+  async restoreStructureVersion(documentId: string, versionId: string): Promise<{ message: string; backupVersionId: string; restoredVersionId: string }> {
+    return apiRequest(`/api/documents/${documentId}/structure-history/${versionId}/restore`, {
+      method: 'POST'
+    })
+  }
+}
+
 // Structure Proposals API functions
 export const structureProposalsApi = {
   // Get all structure proposals for a document
   async getStructureProposals(documentId: string): Promise<{ structureProposals: StructureProposal[] }> {
-    return apiRequest(`/api/documents/${documentId}/structure-proposals`)
+    console.log('API: getStructureProposals called for document:', documentId);
+    try {
+      const result = await apiRequest(`/api/documents/${documentId}/structure-proposals`);
+      console.log('API: getStructureProposals success:', result);
+      return result;
+    } catch (error) {
+      console.error('API: getStructureProposals failed:', error);
+      throw error;
+    }
   },
 
   // Get a specific structure proposal
@@ -312,6 +426,13 @@ export const structureProposalsApi = {
     return apiRequest(`/api/documents/${documentId}/structure-proposals/${proposalId}/vote`, {
       method: 'POST',
       body: JSON.stringify({ vote }),
+    })
+  },
+
+  // Delete/cancel a structure proposal
+  async deleteStructureProposal(documentId: string, proposalId: string): Promise<{ message: string }> {
+    return apiRequest(`/api/documents/${documentId}/structure-proposals/${proposalId}`, {
+      method: 'DELETE'
     })
   },
 

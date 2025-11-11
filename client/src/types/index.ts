@@ -229,6 +229,49 @@ export interface OutlineItem {
   isDeleteCandidate?: boolean;
 }
 
+// Structure History Types
+export interface StructureVersion {
+  id: string;
+  versionNumber: number;
+  name?: string;
+  description?: string;
+  createdBy: {
+    id: string;
+    name: string;
+    avatar?: string;
+  };
+  changeType: 'structure_proposal' | 'manual' | 'initial';
+  proposalTitle?: string;
+  createdAt: string;
+  structureSnapshot: StructureSnapshot[];
+}
+
+export interface StructureSnapshot {
+  id: string;
+  text: string;
+  title?: string;
+  orderIndex: number;
+  headingLevel?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StructureChange {
+  id: string;
+  operationType: StructureOperationType;
+  paragraphId?: string;
+  paragraphTitle?: string;
+  currentText?: string;
+  oldData: any[];
+  newData: any;
+  metadata: any;
+  createdAt: string;
+}
+
+export interface StructureVersionDetail extends StructureVersion {
+  changes: StructureChange[];
+}
+
 // Alias types for backward compatibility with existing components
 export type Suggestion = Proposal;
 export type Suggestions = Proposal[];

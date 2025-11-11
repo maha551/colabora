@@ -28,7 +28,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 import { OutlineItem, StructureOperation, HeadingLevel } from '@/types';
-import { structureProposalsApi } from '@/lib/api';
+import { structureProposalsApi, ApiError, NetworkError, AuthError } from '@/lib/api';
 
 interface StructureProposalModeProps {
   documentId: string;
@@ -127,6 +127,7 @@ export function StructureProposalMode({ documentId, paragraphs, onClose, onSucce
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [outlineItems, setOutlineItems] = useState<OutlineItem[]>([]);
+  const [originalOrder, setOriginalOrder] = useState<Map<string, number>>(new Map());
   const [mergeCandidates, setMergeCandidates] = useState<string[]>([]);
   const [deleteCandidates, setDeleteCandidates] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -150,7 +151,15 @@ export function StructureProposalMode({ documentId, paragraphs, onClose, onSucce
         headingLevel: para.headingLevel,
         orderIndex: index,
       }));
+
+    // Track original order for move detection
+    const originalOrderMap = new Map<string, number>();
+    items.forEach((item, index) => {
+      originalOrderMap.set(item.id, index);
+    });
+
     setOutlineItems(items);
+    setOriginalOrder(originalOrderMap);
   }, [paragraphs]);
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -188,14 +197,38 @@ export function StructureProposalMode({ documentId, paragraphs, onClose, onSucce
   const generateOperations = (): StructureOperation[] => {
     const operations: StructureOperation[] = [];
 
-    // Handle moves (reordering)
-    outlineItems.forEach((item, newIndex) => {
-      if (item.orderIndex !== newIndex) {
-        operations.push({
-          operationType: 'MOVE',
-          targetParagraphId: item.id,
-          newPositionIndex: newIndex,
-        });
+    // Create a set of valid paragraph IDs for validation
+    const validParagraphIds = new Set(paragraphs.map(p => p.id));
+
+    // Helper function to validate paragraph existence
+    const validateParagraphExists = (id: string, operationType: string): boolean => {
+      if (!validParagraphIds.has(id)) {
+        console.error(`Invalid ${operationType} operation: paragraph ${id} does not exist`);
+        return false;
+      }
+      return true;
+    };
+
+    // Handle moves (reordering) - compare current position with original position
+    // Create a map of current positions for accurate comparison
+    const currentPositions = new Map<string, number>();
+    outlineItems.forEach((item, index) => {
+      currentPositions.set(item.id, index);
+    });
+
+    // Find items that have moved from their original positions
+    outlineItems.forEach((item) => {
+      const originalIndex = originalOrder.get(item.id);
+      const currentIndex = currentPositions.get(item.id);
+
+      if (originalIndex !== undefined && currentIndex !== undefined && originalIndex !== currentIndex) {
+        if (validateParagraphExists(item.id, 'MOVE')) {
+          operations.push({
+            operationType: 'MOVE',
+            targetParagraphId: item.id,
+            newPositionIndex: currentIndex,
+          });
+        }
       }
     });
 
@@ -204,19 +237,26 @@ export function StructureProposalMode({ documentId, paragraphs, onClose, onSucce
       const mergeTargets = mergeCandidates.slice(1); // First item is the target
       const targetId = mergeCandidates[0];
 
-      operations.push({
-        operationType: 'MERGE',
-        sourceParagraphIds: mergeTargets,
-        targetParagraphId: targetId,
-      });
+      // Validate all merge participants exist
+      const allValid = [targetId, ...mergeTargets].every(id => validateParagraphExists(id, 'MERGE'));
+
+      if (allValid) {
+        operations.push({
+          operationType: 'MERGE',
+          sourceParagraphIds: mergeTargets,
+          targetParagraphId: targetId,
+        });
+      }
     }
 
     // Handle deletions
     deleteCandidates.forEach(deleteId => {
-      operations.push({
-        operationType: 'DELETE',
-        targetParagraphId: deleteId,
-      });
+      if (validateParagraphExists(deleteId, 'DELETE')) {
+        operations.push({
+          operationType: 'DELETE',
+          targetParagraphId: deleteId,
+        });
+      }
     });
 
     return operations;
@@ -245,7 +285,25 @@ export function StructureProposalMode({ documentId, paragraphs, onClose, onSucce
       onSuccess();
     } catch (error) {
       console.error('Failed to create structure proposal:', error);
-      alert('Failed to create structure proposal. Please try again.');
+
+      let userMessage = 'Failed to create structure proposal. Please try again.';
+
+      if (error instanceof AuthError) {
+        userMessage = 'Your session has expired. Please log in again.';
+        // Could trigger logout here
+      } else if (error instanceof NetworkError) {
+        userMessage = 'Network error. Please check your connection and try again.';
+      } else if (error instanceof ApiError) {
+        if (error.status === 409) {
+          userMessage = error.message; // "There is already an active structure proposal for this document"
+        } else if (error.status === 400) {
+          userMessage = 'Invalid proposal data. Please check your changes and try again.';
+        } else if (error.status >= 500) {
+          userMessage = 'Server error. Please try again later.';
+        }
+      }
+
+      alert(userMessage);
     } finally {
       setIsSubmitting(false);
     }

@@ -30,6 +30,7 @@ export function StructureProposalCard({
 }: StructureProposalCardProps) {
   const [isVoting, setIsVoting] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [showCommentDialog, setShowCommentDialog] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [showDiff, setShowDiff] = useState(false);
@@ -37,6 +38,7 @@ export function StructureProposalCard({
   const userVote = structureProposal.votes.find(vote => vote.userId === currentUserId);
   const isApproved = structureProposal.approved;
   const isApplied = structureProposal.applied;
+  const isCreator = structureProposal.user.id === currentUserId;
 
   const voteCounts = {
     pro: structureProposal.votes.filter(v => v.vote === 'PRO').length,
@@ -75,6 +77,25 @@ export function StructureProposalCard({
       alert('Failed to apply structure proposal. Please try again.');
     } finally {
       setIsApplying(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (isDeleting || isApplied) return;
+
+    if (!confirm('Are you sure you want to delete this structure proposal? This action cannot be undone.')) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      await structureProposalsApi.deleteStructureProposal(documentId, structureProposal.id);
+      onVote(); // Refresh the proposals list
+    } catch (error) {
+      console.error('Failed to delete structure proposal:', error);
+      alert('Failed to delete structure proposal. Please try again.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -280,6 +301,18 @@ export function StructureProposalCard({
               </div>
             </DialogContent>
           </Dialog>
+
+          {isCreator && !isApplied && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isDeleting ? 'Deleting...' : '🗑️ Delete Proposal'}
+            </Button>
+          )}
 
           {canApply && isApproved && !isApplied && (
             <Button

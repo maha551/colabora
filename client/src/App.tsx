@@ -15,7 +15,7 @@ import { CollaboratorManagement } from "./components/CollaboratorManagement";
 import { Users, FileText, Edit3, Clock, CheckCircle2 } from "lucide-react";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
-import { documentsApi, authApi, proposalsApi, votesApi, commentsApi, paragraphsApi, structureProposalsApi } from "./lib/api";
+import { documentsApi, authApi, proposalsApi, votesApi, commentsApi, paragraphsApi, structureProposalsApi, structureHistoryApi } from "./lib/api";
 import { toast } from "sonner";
 
 export default function App() {
@@ -34,13 +34,21 @@ export default function App() {
 
   // Load structure proposals for current document
   const loadStructureProposals = async () => {
-    if (!currentDocument) return;
+    if (!currentDocument) {
+      console.log('loadStructureProposals: No current document');
+      return;
+    }
+
+    console.log('loadStructureProposals: Loading proposals for document:', currentDocument.id);
 
     try {
       const response = await structureProposalsApi.getStructureProposals(currentDocument.id);
-      setStructureProposals(response.structureProposals);
+      console.log('loadStructureProposals: Received response:', response);
+      console.log('loadStructureProposals: Setting proposals:', response.structureProposals?.length || 0, 'items');
+      setStructureProposals(response.structureProposals || []);
     } catch (error) {
       console.error('Failed to load structure proposals:', error);
+      setStructureProposals([]);
     }
   };
 
@@ -627,6 +635,7 @@ export default function App() {
 
         {/* Structure Proposals Section */}
         <div className="mb-6">
+          {console.log('Rendering Structure Proposals Section, structureProposals:', structureProposals?.length || 0, 'items')}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <h2 className="text-lg font-semibold">🏗️ Structure Proposals</h2>

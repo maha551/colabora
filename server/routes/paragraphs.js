@@ -11,6 +11,40 @@ const requireAuth = (req, res, next) => {
   next();
 };
 
+// Middleware to check for active structure proposals that would prevent modifications
+const checkNoActiveStructureProposals = (req, res, next) => {
+  const db = req.app.locals.db;
+  const documentId = req.params.documentId;
+
+  // Check if there are any active (unapplied) structure proposals for this document
+  const activeProposalQuery = `
+    SELECT COUNT(*) as count FROM structure_proposals
+    WHERE document_id = ? AND applied = 0
+  `;
+
+  db.get(activeProposalQuery, [documentId], (err, result) => {
+    if (err) {
+      // If table doesn't exist, allow the operation (table will be created on first use)
+      if (err.code === 'SQLITE_ERROR' && err.message.includes('no such table')) {
+        console.log('Structure proposals table does not exist yet, allowing paragraph modification');
+        return next();
+      }
+      console.error('Error checking for active structure proposals:', err);
+      return res.status(500).json({ error: 'Failed to check document status' });
+    }
+
+    if (result && result.count > 0) {
+      return res.status(409).json({
+        error: 'Cannot modify paragraphs while there are active structure proposals. Please resolve all pending structure proposals before making changes.',
+        activeProposals: result.count
+      });
+    }
+
+    // No active proposals, allow the operation
+    next();
+  });
+};
+
 // Middleware to check document access (owner or collaborator)
 const requireDocumentAccess = (req, res, next) => {
   const db = req.app.locals.db;
@@ -378,7 +412,7 @@ function normalizeParagraphOrder(db, documentId) {
 }
 
 // Create a new paragraph
-router.post('/', requireAuth, requireDocumentAccess, (req, res) => {
+router.post('/', requireAuth, requireDocumentAccess, checkNoActiveStructureProposals, (req, res) => {
   const db = req.app.locals.db;
   const documentId = req.params.documentId;
   const { title, text, order, order_index, asSuggestion, headingLevel } = req.body;
@@ -559,7 +593,7 @@ router.post('/', requireAuth, requireDocumentAccess, (req, res) => {
 });
 
 // Update a paragraph
-router.put('/:paragraphId', requireAuth, requireDocumentAccess, (req, res) => {
+router.put('/:paragraphId', requireAuth, requireDocumentAccess, checkNoActiveStructureProposals, (req, res) => {
   const db = req.app.locals.db;
   const documentId = req.params.documentId;
   const paragraphId = req.params.paragraphId;

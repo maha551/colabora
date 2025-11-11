@@ -6,6 +6,7 @@ const bodyParser = require('body-parser');
 const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
 const rateLimit = require('express-rate-limit');
+const { v4: uuidv4 } = require('uuid');
 
 // Security imports
 const config = require('./config');

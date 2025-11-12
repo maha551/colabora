@@ -106,11 +106,31 @@ router.get('/:organizationId/governance-rules', requireAuth, async (req, res) =>
     }
 
     const rules = await getGovernanceRules(db, organizationId);
-    if (!rules) {
-      return res.status(404).json({ error: 'Governance rules not found' });
-    }
 
-    res.json({ governanceRules: rules });
+    // If no governance rules exist yet, return default values
+    const defaultRules = {
+      id: null,
+      organizationId: organizationId,
+      representativeTermMonths: 12,
+      representativeTermLimits: null,
+      electionVotingMethod: 'simple_majority',
+      electionQuorumPercentage: 0.5,
+      electionNoticeDays: 14,
+      defaultVotingDeadlineHours: 168,
+      defaultQuorumPercentage: 0.5,
+      anonymousVotingEnabled: true,
+      voteChangeAllowed: false,
+      representativeCanCreateVotes: true,
+      representativeCanInviteMembers: true,
+      representativeCanManageDocuments: true,
+      representativeApprovalRequired: true,
+      tamperProofEnabled: true,
+      auditTrailEnabled: true,
+      createdAt: null,
+      updatedAt: null
+    };
+
+    res.json({ governanceRules: rules || defaultRules });
   } catch (error) {
     console.error('Error fetching governance rules:', error);
     res.status(500).json({ error: 'Failed to fetch governance rules' });

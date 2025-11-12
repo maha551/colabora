@@ -47,7 +47,7 @@ const config = {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
-        scriptSrc: ["'self'", "'unsafe-eval'"], // Allow eval for development
+        scriptSrc: ["'self'", "'unsafe-eval'", "'unsafe-inline'"], // Allow eval and inline scripts for development
         imgSrc: ["'self'", "data:", "https:"],
         connectSrc: ["'self'"],
       },

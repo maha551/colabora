@@ -37,6 +37,22 @@ SESSION_SECRET=$(openssl rand -base64 32)
   fly secrets set SESSION_SECRET="$SESSION_SECRET"
 fi
 
+# Check if ALLOWED_ORIGINS exists
+if fly secrets list | grep -q ALLOWED_ORIGINS; then
+  echo "✅ ALLOWED_ORIGINS already exists, keeping existing value"
+else
+  echo "🌐 Setting ALLOWED_ORIGINS..."
+  fly secrets set ALLOWED_ORIGINS="https://colabora-fresh.fly.dev"
+fi
+
+# Check if FRONTEND_URL exists
+if fly secrets list | grep -q FRONTEND_URL; then
+  echo "✅ FRONTEND_URL already exists, keeping existing value"
+else
+  echo "🌐 Setting FRONTEND_URL..."
+  fly secrets set FRONTEND_URL="https://colabora-fresh.fly.dev"
+fi
+
 # Launch fresh app
 echo "📦 Launching fresh app in EU..."
 fly launch --name colabora-fresh --region fra --no-deploy

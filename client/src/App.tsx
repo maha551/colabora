@@ -604,7 +604,6 @@ export default function App() {
           loading={loading}
           isCreateDialogOpen={isCreateDialogOpen}
           onSetCreateDialogOpen={setIsCreateDialogOpen}
-          organizations={organizations}
           currentOrganizationId={pendingOrganizationalDocument}
         />
       )}

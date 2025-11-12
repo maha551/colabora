@@ -150,8 +150,8 @@ app.use((req, res, next) => {
 // Initialize database and start server only after initialization completes
 const fs = require('fs');
 
-// Ensure data directory exists
-const dbPath = config.DATABASE_URL.startsWith('sqlite:///')
+// Ensure data directory exists with fallback handling
+let dbPath = config.DATABASE_URL.startsWith('sqlite:///')
   ? config.DATABASE_URL.replace('sqlite:///', '')
   : config.DATABASE_URL;
 
@@ -170,6 +170,30 @@ try {
 } catch (dirErr) {
   console.error('❌ Error creating database directory:', dirErr.message);
   console.error('Directory error details:', dirErr);
+
+  // In production, try alternative database path if /data is not writable
+  if (process.env.NODE_ENV === 'production') {
+    console.log('🔄 Production environment detected, trying alternative database path...');
+    const altDbPath = path.join(__dirname, '../colabora.db');
+    const altDbDir = path.dirname(altDbPath);
+
+    try {
+      if (!fs.existsSync(altDbDir)) {
+        fs.mkdirSync(altDbDir, { recursive: true });
+        console.log('✅ Created alternative database directory:', altDbDir);
+      }
+      dbPath = altDbPath;
+      console.log('✅ Using alternative database path:', dbPath);
+    } catch (altDirErr) {
+      console.error('❌ Failed to create alternative database directory:', altDirErr.message);
+      console.error('💥 Cannot create database directory in production. Exiting...');
+      process.exit(1);
+    }
+  } else {
+    // In development, exit on directory creation failure
+    console.error('💥 Cannot create database directory. Exiting...');
+    process.exit(1);
+  }
 }
 
 console.log('🔌 Attempting to connect to database...');

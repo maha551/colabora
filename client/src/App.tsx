@@ -17,7 +17,7 @@ import { CollaboratorManagement } from "./components/CollaboratorManagement";
 import { Users, FileText, Edit3, Clock, CheckCircle2 } from "lucide-react";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
-import { documentsApi, authApi, proposalsApi, votesApi, commentsApi, paragraphsApi, structureProposalsApi, structureHistoryApi, organizationsApi } from "./lib/api";
+import { documentsApi, authApi, proposalsApi, votesApi, commentsApi, paragraphsApi, structureProposalsApi, structureHistoryApi, organizationsApi, governanceApi } from "./lib/api";
 import { toast } from "sonner";
 
 export default function App() {

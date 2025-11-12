@@ -338,6 +338,149 @@ export interface OrganizationAudit {
   createdAt: string;
 }
 
+// Governance Types for Democratic Organization Features
+export interface OrganizationGovernanceRules {
+  id: string;
+  organizationId: string;
+  representativeTermMonths: number;
+  representativeTermLimits?: number;
+  electionVotingMethod: 'simple_majority' | 'ranked_choice' | 'approval';
+  electionQuorumPercentage: number;
+  electionNoticeDays: number;
+  defaultVotingDeadlineHours: number;
+  defaultQuorumPercentage: number;
+  anonymousVotingEnabled: boolean;
+  voteChangeAllowed: boolean;
+  representativeCanCreateVotes: boolean;
+  representativeCanInviteMembers: boolean;
+  representativeCanManageDocuments: boolean;
+  representativeApprovalRequired: boolean;
+  tamperProofEnabled: boolean;
+  auditTrailEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RepresentativeElection {
+  id: string;
+  organizationId: string;
+  electionTitle: string;
+  electionDescription?: string;
+  status: 'draft' | 'announced' | 'active' | 'completed' | 'cancelled';
+  positionsAvailable: number;
+  termStartDate?: string;
+  termEndDate?: string;
+  votingStartsAt?: string;
+  votingEndsAt?: string;
+  quorumRequired: number;
+  totalVoters: number;
+  votesCast: number;
+  quorumMet: boolean;
+  anonymousVoting: boolean;
+  electionCompletedAt?: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ElectionCandidate {
+  id: string;
+  electionId: string;
+  userId: string;
+  candidateStatement?: string;
+  acceptedNomination: boolean;
+  nominatedBy?: string;
+  nominationAcceptedAt?: string;
+  votesReceived: number;
+  elected: boolean;
+  electedPosition?: number;
+  createdAt: string;
+  updatedAt: string;
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+    avatar?: string;
+  };
+}
+
+export interface VotingSession {
+  id: string;
+  organizationId: string;
+  sessionType: 'election' | 'policy' | 'document' | 'membership' | 'dissolution' | 'other';
+  relatedEntityId?: string;
+  title: string;
+  description?: string;
+  status: 'draft' | 'pending_approval' | 'announced' | 'active' | 'completed' | 'cancelled' | 'failed';
+  anonymousVoting: boolean;
+  deadlineHours: number;
+  quorumPercentage: number;
+  requiredMajority: number;
+  votingStartsAt?: string;
+  votingEndsAt?: string;
+  announcedAt?: string;
+  completedAt?: string;
+  eligibleVotersCount: number;
+  votesCastCount: number;
+  quorumMet: boolean;
+  yesVotes: number;
+  noVotes: number;
+  abstainVotes: number;
+  result?: 'pending' | 'approved' | 'rejected' | 'tied' | 'quorum_not_met' | 'cancelled';
+  createdBy: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VoterToken {
+  id: string;
+  votingSessionId: string;
+  userId: string;
+  anonymousToken: string;
+  tokenIssuedAt: string;
+  tokenUsed: boolean;
+  tokenUsedAt?: string;
+}
+
+export interface RepresentativeTerm {
+  id: string;
+  organizationId: string;
+  userId: string;
+  termNumber: number;
+  electedInElectionId?: string;
+  termStartDate: string;
+  termEndDate: string;
+  termStatus: 'active' | 'completed' | 'removed' | 'resigned';
+  removedBy?: string;
+  removedAt?: string;
+  removalReason?: string;
+  resignedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VotingAnalytics {
+  id: string;
+  organizationId: string;
+  periodStart: string;
+  periodEnd: string;
+  totalMembers: number;
+  activeVoters: number;
+  totalVotesCast: number;
+  averageVotesPerMember: number;
+  electionsHeld: number;
+  averageElectionTurnout: number;
+  quorumAchievedPercentage: number;
+  totalDecisionsMade: number;
+  decisionsPassed: number;
+  decisionsFailed: number;
+  averageDecisionTimeHours: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Alias types for backward compatibility with existing components
 export type Suggestion = Proposal;
 export type Suggestions = Proposal[];

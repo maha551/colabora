@@ -581,6 +581,85 @@ export const organizationsApi = {
   },
 }
 
+// Governance API functions for democratic organization features
+export const governanceApi = {
+  // Governance Rules
+  async getGovernanceRules(organizationId: string) {
+    return apiRequest(`/api/governance/${organizationId}/governance-rules`)
+  },
+
+  async updateGovernanceRules(organizationId: string, updates: any) {
+    return apiRequest(`/api/governance/${organizationId}/governance-rules`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    })
+  },
+
+  // Elections
+  async createElection(organizationId: string, electionData: {
+    title: string;
+    description?: string;
+    positionsAvailable: number;
+    termMonths?: number;
+  }) {
+    return apiRequest(`/api/governance/${organizationId}/elections`, {
+      method: 'POST',
+      body: JSON.stringify(electionData),
+    })
+  },
+
+  async getElections(organizationId: string) {
+    return apiRequest(`/api/governance/${organizationId}/elections`)
+  },
+
+  async startElection(organizationId: string, electionId: string, votingData: {
+    votingStartDate?: string;
+    votingEndDate: string;
+  }) {
+    return apiRequest(`/api/governance/${organizationId}/elections/${electionId}/start`, {
+      method: 'POST',
+      body: JSON.stringify(votingData),
+    })
+  },
+
+  async nominateCandidate(organizationId: string, electionId: string, nominationData: {
+    candidateUserId: string;
+    nominationStatement?: string;
+  }) {
+    return apiRequest(`/api/governance/${organizationId}/elections/${electionId}/candidates`, {
+      method: 'POST',
+      body: JSON.stringify(nominationData),
+    })
+  },
+
+  async acceptNomination(organizationId: string, electionId: string, candidateId: string) {
+    return apiRequest(`/api/governance/${organizationId}/elections/${electionId}/candidates/${candidateId}/accept`, {
+      method: 'POST',
+    })
+  },
+
+  async castElectionVote(organizationId: string, electionId: string, voteData: {
+    candidateRanking: string[]; // Array of candidate IDs in order of preference
+  }) {
+    return apiRequest(`/api/governance/${organizationId}/elections/${electionId}/vote`, {
+      method: 'POST',
+      body: JSON.stringify(voteData),
+    })
+  },
+
+  async completeElection(organizationId: string, electionId: string) {
+    return apiRequest(`/api/governance/${organizationId}/elections/${electionId}/complete`, {
+      method: 'POST',
+    })
+  },
+
+  // Analytics
+  async getVotingAnalytics(organizationId: string, period?: 'month' | 'quarter' | 'year') {
+    const query = period ? `?period=${period}` : '';
+    return apiRequest(`/api/governance/${organizationId}/analytics${query}`)
+  },
+}
+
 // Auth API functions
 export const authApi = {
   // Login

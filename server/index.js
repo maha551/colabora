@@ -31,6 +31,7 @@ const pendingVotesRoutes = require('./routes/pending-votes');
 const debatedProposalsRoutes = require('./routes/debated-proposals');
 const agreedVersionsRoutes = require('./routes/agreed-versions');
 const organizationRoutes = require('./routes/organizations');
+const governanceRoutes = require('./routes/governance');
 
 // Initialize Express app
 const app = express();
@@ -368,6 +369,7 @@ function registerRoutes() {
   // Routes
   app.use('/api/auth', authRoutes);
   app.use('/api/organizations', organizationRoutes);
+  app.use('/api/governance', governanceRoutes);
   app.use('/api/pending-votes', pendingVotesRoutes);
   app.use('/api/debated-proposals', debatedProposalsRoutes);
   app.use('/api/agreed-versions', agreedVersionsRoutes);
@@ -1072,6 +1074,179 @@ function initializeDatabase(db) {
       FOREIGN KEY (document_id) REFERENCES documents(id),
       FOREIGN KEY (version_id) REFERENCES document_structure_versions(id),
       FOREIGN KEY (paragraph_id) REFERENCES paragraphs(id)
+    )`,
+
+    // Governance Tables for Democratic Organizations
+    `CREATE TABLE IF NOT EXISTS organization_governance_rules (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      representative_term_months INTEGER DEFAULT 12,
+      representative_term_limits INTEGER DEFAULT NULL,
+      election_voting_method TEXT CHECK(election_voting_method IN ('simple_majority', 'ranked_choice', 'approval')) DEFAULT 'simple_majority',
+      election_quorum_percentage REAL DEFAULT 0.5,
+      election_notice_days INTEGER DEFAULT 14,
+      default_voting_deadline_hours INTEGER DEFAULT 168,
+      default_quorum_percentage REAL DEFAULT 0.5,
+      anonymous_voting_enabled BOOLEAN DEFAULT 1,
+      vote_change_allowed BOOLEAN DEFAULT 0,
+      representative_can_create_votes BOOLEAN DEFAULT 1,
+      representative_can_invite_members BOOLEAN DEFAULT 1,
+      representative_can_manage_documents BOOLEAN DEFAULT 1,
+      representative_approval_required BOOLEAN DEFAULT 1,
+      tamper_proof_enabled BOOLEAN DEFAULT 1,
+      audit_trail_enabled BOOLEAN DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+      UNIQUE(organization_id)
+    )`,
+
+    `CREATE TABLE IF NOT EXISTS representative_elections (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      election_title TEXT NOT NULL,
+      election_description TEXT,
+      status TEXT CHECK(status IN ('draft', 'announced', 'active', 'completed', 'cancelled')) DEFAULT 'draft',
+      positions_available INTEGER NOT NULL,
+      term_start_date DATETIME,
+      term_end_date DATETIME,
+      voting_starts_at DATETIME,
+      voting_ends_at DATETIME,
+      quorum_required INTEGER,
+      anonymous_voting BOOLEAN DEFAULT 1,
+      total_voters INTEGER DEFAULT 0,
+      votes_cast INTEGER DEFAULT 0,
+      quorum_met BOOLEAN DEFAULT 0,
+      election_completed_at DATETIME,
+      created_by TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by) REFERENCES users(id)
+    )`,
+
+    `CREATE TABLE IF NOT EXISTS election_candidates (
+      id TEXT PRIMARY KEY,
+      election_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      candidate_statement TEXT,
+      accepted_nomination BOOLEAN DEFAULT 0,
+      nominated_by TEXT,
+      nomination_accepted_at DATETIME,
+      votes_received INTEGER DEFAULT 0,
+      elected BOOLEAN DEFAULT 0,
+      elected_position INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (election_id) REFERENCES representative_elections(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (nominated_by) REFERENCES users(id),
+      UNIQUE(election_id, user_id)
+    )`,
+
+    `CREATE TABLE IF NOT EXISTS voting_sessions (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      session_type TEXT CHECK(session_type IN ('election', 'policy', 'document', 'membership', 'dissolution', 'other')) NOT NULL,
+      related_entity_id TEXT,
+      title TEXT NOT NULL,
+      description TEXT,
+      status TEXT CHECK(status IN ('draft', 'pending_approval', 'announced', 'active', 'completed', 'cancelled', 'failed')) DEFAULT 'draft',
+      anonymous_voting BOOLEAN DEFAULT 1,
+      deadline_hours INTEGER DEFAULT 168,
+      quorum_percentage REAL DEFAULT 0.5,
+      required_majority REAL DEFAULT 0.5,
+      voting_starts_at DATETIME,
+      voting_ends_at DATETIME,
+      announced_at DATETIME,
+      completed_at DATETIME,
+      eligible_voters_count INTEGER DEFAULT 0,
+      votes_cast_count INTEGER DEFAULT 0,
+      quorum_met BOOLEAN DEFAULT 0,
+      yes_votes INTEGER DEFAULT 0,
+      no_votes INTEGER DEFAULT 0,
+      abstain_votes INTEGER DEFAULT 0,
+      result TEXT CHECK(result IN ('pending', 'approved', 'rejected', 'tied', 'quorum_not_met', 'cancelled')),
+      created_by TEXT NOT NULL,
+      approved_by TEXT,
+      approved_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by) REFERENCES users(id),
+      FOREIGN KEY (approved_by) REFERENCES users(id)
+    )`,
+
+    `CREATE TABLE IF NOT EXISTS anonymous_vote_ballots (
+      id TEXT PRIMARY KEY,
+      voting_session_id TEXT NOT NULL,
+      voter_token TEXT NOT NULL,
+      vote_choice TEXT CHECK(vote_choice IN ('yes', 'no', 'abstain')) NOT NULL,
+      vote_weight INTEGER DEFAULT 1,
+      voted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      vote_hash TEXT,
+      ip_address TEXT,
+      user_agent_hash TEXT,
+      FOREIGN KEY (voting_session_id) REFERENCES voting_sessions(id) ON DELETE CASCADE,
+      UNIQUE(voting_session_id, voter_token)
+    )`,
+
+    `CREATE TABLE IF NOT EXISTS voter_tokens (
+      id TEXT PRIMARY KEY,
+      voting_session_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      anonymous_token TEXT NOT NULL,
+      token_issued_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      token_used BOOLEAN DEFAULT 0,
+      token_used_at DATETIME,
+      FOREIGN KEY (voting_session_id) REFERENCES voting_sessions(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      UNIQUE(voting_session_id, user_id),
+      UNIQUE(voting_session_id, anonymous_token)
+    )`,
+
+    `CREATE TABLE IF NOT EXISTS representative_terms (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      term_number INTEGER NOT NULL,
+      elected_in_election_id TEXT,
+      term_start_date DATETIME NOT NULL,
+      term_end_date DATETIME NOT NULL,
+      term_status TEXT CHECK(term_status IN ('active', 'completed', 'removed', 'resigned')) DEFAULT 'active',
+      removed_by TEXT,
+      removed_at DATETIME,
+      removal_reason TEXT,
+      resigned_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (elected_in_election_id) REFERENCES representative_elections(id),
+      FOREIGN KEY (removed_by) REFERENCES users(id),
+      UNIQUE(organization_id, user_id, term_number)
+    )`,
+
+    `CREATE TABLE IF NOT EXISTS voting_analytics (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      period_start DATE NOT NULL,
+      period_end DATE NOT NULL,
+      total_members INTEGER DEFAULT 0,
+      active_voters INTEGER DEFAULT 0,
+      total_votes_cast INTEGER DEFAULT 0,
+      average_votes_per_member REAL DEFAULT 0,
+      elections_held INTEGER DEFAULT 0,
+      average_election_turnout REAL DEFAULT 0,
+      quorum_achieved_percentage REAL DEFAULT 0,
+      total_decisions_made INTEGER DEFAULT 0,
+      decisions_passed INTEGER DEFAULT 0,
+      decisions_failed INTEGER DEFAULT 0,
+      average_decision_time_hours REAL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+      UNIQUE(organization_id, period_start, period_end)
     )`
   ];
 

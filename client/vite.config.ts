@@ -15,13 +15,6 @@
     build: {
       target: 'esnext',
       outDir: 'build',
-      rollupOptions: {
-        output: {
-          assetFileNames: 'assets/[name]-[hash]-[ext]',
-          chunkFileNames: 'assets/[name]-[hash].js',
-          entryFileNames: 'assets/[name]-[hash].js',
-        },
-      },
     },
     server: {
       port: 3001,

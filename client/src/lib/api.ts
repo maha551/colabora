@@ -180,22 +180,27 @@ export const documentsApi = {
 
   // Create a new document
   async createDocument(
-    title: string, 
-    description?: string, 
+    title: string,
+    description?: string,
     contributors?: string[],
     options?: {
       acceptanceThreshold?: number;
       votingAnonymous?: boolean;
       votingAnonymityLocked?: boolean;
       voteChangeAllowed?: boolean;
-    }
+      structureProposalsEnabled?: boolean;
+    },
+    ownershipType?: 'personal' | 'shared' | 'organizational',
+    organizationId?: string
   ) {
     return apiRequest('/api/documents', {
       method: 'POST',
-      body: JSON.stringify({ 
-        title, 
+      body: JSON.stringify({
+        title,
         description,
-        options 
+        options,
+        ownershipType: ownershipType || 'personal',
+        organizationId
       }),
     })
   },
@@ -472,6 +477,11 @@ export const organizationsApi = {
   // Get organization details
   async getOrganization(organizationId: string) {
     return apiRequest(`/api/organizations/${organizationId}`)
+  },
+
+  // Get organization documents
+  async getOrganizationDocuments(organizationId: string) {
+    return apiRequest(`/api/documents/organization/${organizationId}`)
   },
 
   // Create organization (admin only)

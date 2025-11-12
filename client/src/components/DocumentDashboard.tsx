@@ -56,8 +56,8 @@ interface DocumentDashboardProps {
   currentUser: User;
   onSelectDocument: (document: Document) => void;
   onCreateDocument: (
-    title: string, 
-    description?: string, 
+    title: string,
+    description?: string,
     contributors?: string[],
     options?: {
       acceptanceThreshold?: number;
@@ -65,12 +65,17 @@ interface DocumentDashboardProps {
       votingAnonymityLocked?: boolean;
       voteChangeAllowed?: boolean;
       structureProposalsEnabled?: boolean;
-    }
+    },
+    ownershipType?: 'personal' | 'shared' | 'organizational',
+    organizationId?: string
   ) => void;
   onDeleteDocument: (documentId: string) => void;
   loading?: boolean;
   isCreateDialogOpen?: boolean;
   onSetCreateDialogOpen?: (open: boolean) => void;
+  // New props for organizational context
+  organizations?: any[];
+  currentOrganizationId?: string;
 }
 
 export function DocumentDashboard({
@@ -82,6 +87,8 @@ export function DocumentDashboard({
   loading = false,
   isCreateDialogOpen: externalIsCreateDialogOpen,
   onSetCreateDialogOpen: externalSetCreateDialogOpen,
+  organizations = [],
+  currentOrganizationId,
 }: DocumentDashboardProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [internalIsCreateDialogOpen, setInternalIsCreateDialogOpen] = useState(false);
@@ -92,6 +99,10 @@ export function DocumentDashboard({
   const [newDocumentTitle, setNewDocumentTitle] = useState("");
   const [newDocumentDescription, setNewDocumentDescription] = useState("");
   const [selectedContributors, setSelectedContributors] = useState<string[]>([]);
+
+  // New state for ownership type
+  const [ownershipType, setOwnershipType] = useState<'personal' | 'shared' | 'organizational'>('personal');
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState<string>(currentOrganizationId || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("modified");
@@ -160,6 +171,12 @@ export function DocumentDashboard({
       return;
     }
 
+    // Validate organizational ownership
+    if (ownershipType === 'organizational' && !selectedOrganizationId) {
+      toast.error("Please select an organization for organizational documents");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await onCreateDocument(
@@ -172,7 +189,9 @@ export function DocumentDashboard({
           votingAnonymityLocked,
           voteChangeAllowed,
           structureProposalsEnabled
-        }
+        },
+        ownershipType,
+        ownershipType === 'organizational' ? selectedOrganizationId : undefined
       );
       setNewDocumentTitle("");
       setNewDocumentDescription("");
@@ -182,6 +201,8 @@ export function DocumentDashboard({
       setVotingAnonymityLocked(false);
       setVoteChangeAllowed(true);
       setStructureProposalsEnabled(false);
+      setOwnershipType('personal');
+      setSelectedOrganizationId('');
       setIsCreateDialogOpen(false);
       toast.success("Document created successfully!");
     } catch (error) {
@@ -327,6 +348,67 @@ export function DocumentDashboard({
                     onChange={(e) => setNewDocumentDescription(e.target.value)}
                     rows={3}
                   />
+                </div>
+
+                {/* Ownership Type Selection */}
+                <div className="space-y-4 border-t pt-4">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                    <span>🏢</span>
+                    <span>Ownership Type</span>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Document Ownership</Label>
+                    <RadioGroup value={ownershipType} onValueChange={(value) => setOwnershipType(value as 'personal' | 'shared' | 'organizational')}>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="personal" id="personal" />
+                        <Label htmlFor="personal" className="font-normal cursor-pointer">
+                          Personal - Owned by you individually
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="shared" id="shared" />
+                        <Label htmlFor="shared" className="font-normal cursor-pointer">
+                          Shared - Owned by multiple creators
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="organizational" id="organizational" />
+                        <Label htmlFor="organizational" className="font-normal cursor-pointer">
+                          Organizational - Owned by an organization
+                        </Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+
+                  {/* Organization Selection (only show for organizational ownership) */}
+                  {ownershipType === 'organizational' && (
+                    <div className="space-y-2">
+                      <Label>Select Organization</Label>
+                      <Select value={selectedOrganizationId} onValueChange={setSelectedOrganizationId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose an organization..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {organizations
+                            .filter(org => org.representatives?.includes(currentUser.id))
+                            .map((org) => (
+                              <SelectItem key={org.id} value={org.id}>
+                                <div className="flex items-center gap-2">
+                                  <span>🏢</span>
+                                  <span>{org.name}</span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                      {organizations.filter(org => org.representatives?.includes(currentUser.id)).length === 0 && (
+                        <p className="text-sm text-gray-500">
+                          You are not a representative of any organizations. Only representatives can create organizational documents.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Document Options */}

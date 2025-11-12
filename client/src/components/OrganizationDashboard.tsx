@@ -16,9 +16,10 @@ import { OrganizationManagement } from "./OrganizationManagement";
 
 interface OrganizationDashboardProps {
   currentUser: User;
+  onCreateOrganizationalDocument?: (organizationId: string) => void;
 }
 
-export function OrganizationDashboard({ currentUser }: OrganizationDashboardProps) {
+export function OrganizationDashboard({ currentUser, onCreateOrganizationalDocument }: OrganizationDashboardProps) {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [selectedOrganization, setSelectedOrganization] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
@@ -138,6 +139,7 @@ export function OrganizationDashboard({ currentUser }: OrganizationDashboardProp
         organization={selectedOrganization}
         currentUser={currentUser}
         onBack={() => setSelectedOrganization(null)}
+        onCreateOrganizationalDocument={onCreateOrganizationalDocument}
       />
     );
   }

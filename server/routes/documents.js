@@ -924,4 +924,107 @@ router.delete('/:id/collaborators/:userId', requireAuth, (req, res) => {
   });
 });
 
+// Get all documents owned by a specific organization
+router.get('/organization/:organizationId', requireAuth, (req, res) => {
+  const db = req.app.locals.db;
+  const { organizationId } = req.params;
+  const userId = req.user.id;
+
+  // First check if user is a member of the organization
+  const membershipQuery = `
+    SELECT om.status, o.is_active
+    FROM organization_members om
+    JOIN organizations o ON om.organization_id = o.id
+    WHERE om.organization_id = ? AND om.user_id = ? AND om.status = 'active' AND o.is_active = 1
+  `;
+
+  db.get(membershipQuery, [organizationId, userId], (err, membership) => {
+    if (err) {
+      console.error('Error checking organization membership:', err);
+      return res.status(500).json({ error: 'Failed to verify organization access' });
+    }
+
+    if (!membership) {
+      return res.status(403).json({ error: 'Access denied: not a member of this organization' });
+    }
+
+    // Get all organizational documents
+    const documentsQuery = `
+      SELECT d.*,
+             u.name as owner_name,
+             u.email as owner_email,
+             o.name as organization_name
+      FROM documents d
+      JOIN users u ON d.owner_id = u.id
+      JOIN organizations o ON d.organization_id = o.id
+      WHERE d.ownership_type = 'organizational'
+        AND d.organization_id = ?
+        AND o.is_active = 1
+      ORDER BY d.updated_at DESC
+    `;
+
+    db.all(documentsQuery, [organizationId], (err, documents) => {
+      if (err) {
+        console.error('Error fetching organization documents:', err);
+        return res.status(500).json({
+          error: 'Failed to fetch organization documents',
+          details: err.message
+        });
+      }
+
+      console.log(`Found ${documents ? documents.length : 0} documents for organization ${organizationId}`);
+
+      // Process documents with collaborators (similar to main documents endpoint)
+      const documentsWithCollaborators = documents.map(doc => {
+        return new Promise((resolve) => {
+          db.all(`
+            SELECT u.id, u.name, u.email, u.avatar
+            FROM document_collaborators dc
+            JOIN users u ON dc.user_id = u.id
+            WHERE dc.document_id = ?
+            ORDER BY u.name
+          `, [doc.id], (err, collaborators) => {
+            if (err) {
+              console.error('Error fetching collaborators for document:', doc.id, err);
+              resolve({
+                ...doc,
+                collaborators: [],
+                options: {
+                  acceptanceThreshold: doc.acceptance_threshold,
+                  votingAnonymous: doc.voting_anonymous === 1,
+                  votingAnonymityLocked: doc.voting_anonymity_locked === 1,
+                  voteChangeAllowed: doc.vote_change_allowed === 1,
+                  structureProposalsEnabled: doc.structure_proposals_enabled === 1
+                }
+              });
+            } else {
+              resolve({
+                ...doc,
+                collaborators: collaborators || [],
+                options: {
+                  acceptanceThreshold: doc.acceptance_threshold,
+                  votingAnonymous: doc.voting_anonymous === 1,
+                  votingAnonymityLocked: doc.voting_anonymity_locked === 1,
+                  voteChangeAllowed: doc.vote_change_allowed === 1,
+                  structureProposalsEnabled: doc.structure_proposals_enabled === 1
+                }
+              });
+            }
+          });
+        });
+      });
+
+      Promise.all(documentsWithCollaborators).then(processedDocuments => {
+        res.json({
+          documents: processedDocuments,
+          organizationId: organizationId
+        });
+      }).catch(err => {
+        console.error('Error processing documents:', err);
+        res.status(500).json({ error: 'Failed to process documents' });
+      });
+    });
+  });
+});
+
 module.exports = router;

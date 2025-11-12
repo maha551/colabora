@@ -33,7 +33,7 @@ if fly secrets list | grep -q SESSION_SECRET; then
   echo "✅ SESSION_SECRET already exists, keeping existing value"
 else
   echo "🔑 Generating new SESSION_SECRET..."
-  SESSION_SECRET=$(openssl rand -base64 32)
+SESSION_SECRET=$(openssl rand -base64 32)
   fly secrets set SESSION_SECRET="$SESSION_SECRET"
 fi
 

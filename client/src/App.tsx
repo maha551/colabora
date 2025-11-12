@@ -29,6 +29,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [currentView, setCurrentView] = useState<'documents' | 'activity' | 'document' | 'profile' | 'organizations'>('documents');
+  const [pendingOrganizationalDocument, setPendingOrganizationalDocument] = useState<string | null>(null);
   const [documentLoadKey, setDocumentLoadKey] = useState<number>(Date.now());
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [structureProposals, setStructureProposals] = useState<StructureProposal[]>([]);
@@ -303,20 +304,36 @@ export default function App() {
     }
   };
 
+  const handleCreateOrganizationalDocument = (organizationId: string) => {
+    setPendingOrganizationalDocument(organizationId);
+    setCurrentView('documents');
+    setIsCreateDialogOpen(true);
+  };
+
+  // Reset pending organizational document when dialog closes
+  useEffect(() => {
+    if (!isCreateDialogOpen) {
+      setPendingOrganizationalDocument(null);
+    }
+  }, [isCreateDialogOpen]);
+
   const handleCreateDocument = async (
-    title: string, 
-    _description?: string, 
+    title: string,
+    _description?: string,
     contributors?: string[],
     options?: {
       acceptanceThreshold?: number;
       votingAnonymous?: boolean;
       votingAnonymityLocked?: boolean;
       voteChangeAllowed?: boolean;
-    }
+      structureProposalsEnabled?: boolean;
+    },
+    ownershipType?: 'personal' | 'shared' | 'organizational',
+    organizationId?: string
   ) => {
     try {
-      console.log('Creating document:', title, 'with contributors:', contributors, 'with options:', options);
-      const response = await documentsApi.createDocument(title, _description, contributors, options);
+      console.log('Creating document:', title, 'with contributors:', contributors, 'with options:', options, 'ownership:', ownershipType, 'org:', organizationId);
+      const response = await documentsApi.createDocument(title, _description, contributors, options, ownershipType, organizationId);
       console.log('Document creation response:', response);
 
       // Add collaborators if specified
@@ -587,6 +604,8 @@ export default function App() {
           loading={loading}
           isCreateDialogOpen={isCreateDialogOpen}
           onSetCreateDialogOpen={setIsCreateDialogOpen}
+          organizations={organizations}
+          currentOrganizationId={pendingOrganizationalDocument}
         />
       )}
 
@@ -634,7 +653,10 @@ export default function App() {
       )}
 
       {currentView === 'organizations' && (
-        <OrganizationDashboard currentUser={currentUser!} />
+        <OrganizationDashboard
+          currentUser={currentUser!}
+          onCreateOrganizationalDocument={handleCreateOrganizationalDocument}
+        />
       )}
 
       {currentView === 'document' && currentDocument && (
@@ -672,10 +694,10 @@ export default function App() {
                 )}
               </TabsTrigger>
               {currentDocument?.structureProposalsEnabled && (
-                <TabsTrigger value="history" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm">
-                  <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
-                  <span className="hidden xs:inline">History</span>
-                </TabsTrigger>
+              <TabsTrigger value="history" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm">
+                <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden xs:inline">History</span>
+              </TabsTrigger>
               )}
             </TabsList>
           </div>
@@ -795,12 +817,12 @@ export default function App() {
           </TabsContent>
 
           {currentDocument?.structureProposalsEnabled && (
-            <TabsContent value="history" className="mt-0">
-              <StructureHistory
-                documentId={currentDocument.id}
-                currentUserId={currentUser.id}
-              />
-            </TabsContent>
+          <TabsContent value="history" className="mt-0">
+            <StructureHistory
+              documentId={currentDocument.id}
+              currentUserId={currentUser.id}
+            />
+          </TabsContent>
           )}
         </Tabs>
 

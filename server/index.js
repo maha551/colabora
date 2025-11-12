@@ -211,23 +211,23 @@ function initializeDatabaseAndStartServer(db, forceRecreate = false) {
   const checkInterval = setInterval(() => {
     checkCount++;
     if (config.NODE_ENV !== 'test') {
-      console.log(`🔍 Database readiness check #${checkCount}...`);
+    console.log(`🔍 Database readiness check #${checkCount}...`);
     }
 
     db.get('SELECT COUNT(*) as count FROM paragraphs WHERE document_id = ?', ['demo-doc-1'], (err, row) => {
       if (err) {
         if (config.NODE_ENV !== 'test') {
-          console.log('❌ Database check failed:', err.message);
+        console.log('❌ Database check failed:', err.message);
         }
         return;
       }
 
       if (config.NODE_ENV !== 'test') {
-        console.log(`✅ Database check: found ${row.count} paragraphs for demo-doc-1`);
+      console.log(`✅ Database check: found ${row.count} paragraphs for demo-doc-1`);
       }
       if (row && row.count > 0) {
         if (config.NODE_ENV !== 'test') {
-          console.log('🎉 Database initialization complete!');
+        console.log('🎉 Database initialization complete!');
         }
         clearInterval(checkInterval);
       }
@@ -238,7 +238,7 @@ function initializeDatabaseAndStartServer(db, forceRecreate = false) {
   setTimeout(() => {
     clearInterval(checkInterval);
     if (config.NODE_ENV !== 'test') {
-      console.log('✅ Database initialization check completed');
+    console.log('✅ Database initialization check completed');
     }
   }, 30000);
 }
@@ -1086,26 +1086,26 @@ function initializeDatabase(db) {
       console.log('All tables created, waiting for SQLite to commit before adding columns...');
       setTimeout(() => {
                console.log('Ensuring new columns exist...');
-               ensureColumn(db, 'users', 'avatar', 'TEXT');
-               ensureColumn(db, 'users', 'bio', 'TEXT');
+      ensureColumn(db, 'users', 'avatar', 'TEXT');
+      ensureColumn(db, 'users', 'bio', 'TEXT');
                ensureColumn(db, 'users', 'role', 'TEXT CHECK(role IN (\'user\', \'admin\')) DEFAULT \'user\'');
+      
+      // Ensure documents table has new option columns
+      ensureColumn(db, 'documents', 'acceptance_threshold', 'REAL DEFAULT 75.0 NOT NULL');
+      ensureColumn(db, 'documents', 'voting_anonymous', 'BOOLEAN DEFAULT 0 NOT NULL');
+      ensureColumn(db, 'documents', 'voting_anonymity_locked', 'BOOLEAN DEFAULT 0 NOT NULL');
+      ensureColumn(db, 'documents', 'vote_change_allowed', 'BOOLEAN DEFAULT 1 NOT NULL');
+      ensureColumn(db, 'documents', 'structure_proposals_enabled', 'BOOLEAN DEFAULT 0 NOT NULL');
 
-        // Ensure documents table has new option columns
-        ensureColumn(db, 'documents', 'acceptance_threshold', 'REAL DEFAULT 75.0 NOT NULL');
-        ensureColumn(db, 'documents', 'voting_anonymous', 'BOOLEAN DEFAULT 0 NOT NULL');
-        ensureColumn(db, 'documents', 'voting_anonymity_locked', 'BOOLEAN DEFAULT 0 NOT NULL');
-        ensureColumn(db, 'documents', 'vote_change_allowed', 'BOOLEAN DEFAULT 1 NOT NULL');
-        ensureColumn(db, 'documents', 'structure_proposals_enabled', 'BOOLEAN DEFAULT 0 NOT NULL');
-
-        // Ensure history table has accepted_at column
-        ensureHistoryAcceptedAt(db).catch(err => {
-          console.error('Error ensuring history table schema:', err);
-        });
-
-        // Wait a bit for column additions to complete, then insert demo data
-        setTimeout(async () => {
+      // Ensure history table has accepted_at column
+      ensureHistoryAcceptedAt(db).catch(err => {
+        console.error('Error ensuring history table schema:', err);
+      });
+      
+      // Wait a bit for column additions to complete, then insert demo data
+      setTimeout(async () => {
           console.log('Starting demo data insertion...');
-          await insertDemoData(db);
+        await insertDemoData(db);
         }, 1000);
       }, 200); // Wait 200ms for SQLite to fully commit table creation
       return;
@@ -1161,8 +1161,8 @@ async function insertDemoData(db) {
       };
 
       const insertWithoutRole = () => {
-        db.run(`
-          INSERT OR IGNORE INTO users (id, name, email, password_hash) VALUES (?, ?, ?, ?)
+      db.run(`
+        INSERT OR IGNORE INTO users (id, name, email, password_hash) VALUES (?, ?, ?, ?)
         `, [user.id, user.name, user.email, passwordHash], handleInsertResult);
       };
 

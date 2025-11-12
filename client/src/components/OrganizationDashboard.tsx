@@ -210,27 +210,6 @@ export function OrganizationDashboard({ currentUser, onCreateOrganizationalDocum
                     </div>
                   </div>
 
-                  {/* Representatives */}
-                  <div>
-                    <div className="text-sm font-medium mb-2">Representatives</div>
-                    <div className="flex -space-x-2">
-                      {org.representatives?.slice(0, 3).map((repId, index) => (
-                        <Avatar key={repId} className="h-8 w-8 border-2 border-white">
-                          <AvatarFallback className="text-xs">
-                            R{index + 1}
-                          </AvatarFallback>
-                        </Avatar>
-                      ))}
-                      {(org.representatives?.length || 0) > 3 && (
-                        <Avatar className="h-8 w-8 border-2 border-white">
-                          <AvatarFallback className="text-xs bg-gray-100">
-                            +{(org.representatives?.length || 0) - 3}
-                          </AvatarFallback>
-                        </Avatar>
-                      )}
-                    </div>
-                  </div>
-
                   {/* Current Representatives */}
                   <div>
                     <div className="text-sm font-medium mb-2">Current Representatives</div>

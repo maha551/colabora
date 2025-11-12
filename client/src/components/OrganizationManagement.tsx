@@ -48,6 +48,7 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
   const [showElectionVotingDialog, setShowElectionVotingDialog] = useState(false);
   const [showElectionResultsDialog, setShowElectionResultsDialog] = useState(false);
   const [showInviteDialog, setShowInviteDialog] = useState(false);
+  const [showAuditDialog, setShowAuditDialog] = useState(false);
 
   const handleUpdate = () => {
     setRefreshKey(prev => prev + 1);
@@ -864,7 +865,10 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
-                  Rule Change Proposals
+                  <span className="flex items-center gap-2">
+                    <Settings className="h-5 w-5" />
+                    Rule Change Proposals
+                  </span>
                   {isRepresentative && (
                     <Button variant="outline" size="sm">
                       <Plus className="h-4 w-4 mr-2" />
@@ -872,12 +876,47 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
                     </Button>
                   )}
                 </CardTitle>
+                <CardDescription>
+                  Propose and vote on changes to organization governance rules
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-8 text-gray-500">
+                  <Settings className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  <p>No rule change proposals</p>
+                  <p className="text-sm">Organization rules are current</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Governance Audit Logs */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <FileText className="h-5 w-5" />
+                    Governance Audit Log
+                  </span>
+                  {isRepresentative && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowAuditDialog(true)}
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      View Logs
+                    </Button>
+                  )}
+                </CardTitle>
+                <CardDescription>
+                  Complete audit trail of all governance activities and decisions
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="text-center py-8 text-gray-500">
                   <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p>No rule change proposals</p>
-                  <p className="text-sm">Organization rules are current</p>
+                  <p>Governance audit logs available to representatives</p>
+                  <p className="text-sm">Track all election, voting, and rule change activities</p>
                 </div>
               </CardContent>
             </Card>

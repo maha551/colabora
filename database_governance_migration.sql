@@ -45,12 +45,14 @@ CREATE TABLE IF NOT EXISTS representative_elections (
     election_description TEXT,
 
     -- Election Configuration
-    status TEXT CHECK(status IN ('draft', 'announced', 'active', 'completed', 'cancelled')) DEFAULT 'draft',
+    status TEXT CHECK(status IN ('draft', 'nomination', 'voting', 'completed', 'cancelled')) DEFAULT 'draft',
     positions_available INTEGER NOT NULL, -- How many representatives to elect
     term_start_date DATETIME, -- When elected representatives take office
     term_end_date DATETIME, -- When their term expires
 
-    -- Voting Configuration
+    -- Election Phases
+    nomination_starts_at DATETIME,
+    nomination_ends_at DATETIME,
     voting_starts_at DATETIME,
     voting_ends_at DATETIME,
     quorum_required INTEGER, -- Minimum number of voters needed
@@ -338,9 +340,84 @@ CREATE INDEX IF NOT EXISTS idx_policy_votes_org ON policy_votes(organization_id,
 CREATE INDEX IF NOT EXISTS idx_policy_votes_document ON policy_votes(document_id);
 CREATE INDEX IF NOT EXISTS idx_policy_vote_responses_vote ON policy_vote_responses(policy_vote_id, vote);
 
+-- Rule Change Proposals
+CREATE TABLE IF NOT EXISTS governance_rule_proposals (
+    id TEXT PRIMARY KEY,
+    organization_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    current_rule_field TEXT NOT NULL, -- Which governance rule field is being changed
+    current_rule_value TEXT, -- Current value as JSON string
+    proposed_rule_value TEXT NOT NULL, -- Proposed new value as JSON string
+
+    -- Proposal Status
+    status TEXT CHECK(status IN ('draft', 'active', 'approved', 'rejected', 'cancelled')) DEFAULT 'draft',
+
+    -- Voting Configuration
+    voting_starts_at DATETIME,
+    voting_ends_at DATETIME,
+    threshold_percentage REAL DEFAULT 66.0, -- Higher threshold for rule changes
+    anonymous_voting BOOLEAN DEFAULT 1,
+
+    -- Voting Results
+    votes_yes INTEGER DEFAULT 0,
+    votes_no INTEGER DEFAULT 0,
+    votes_abstain INTEGER DEFAULT 0,
+    total_voters INTEGER DEFAULT 0,
+    votes_cast INTEGER DEFAULT 0,
+
+    -- Metadata
+    created_by TEXT NOT NULL,
+    approved_at DATETIME,
+    implemented_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Rule Proposal Voting Options (for complex proposals with multiple choices)
+CREATE TABLE IF NOT EXISTS governance_rule_proposal_options (
+    id TEXT PRIMARY KEY,
+    proposal_id TEXT NOT NULL,
+    option_title TEXT NOT NULL,
+    option_description TEXT,
+    proposed_value TEXT NOT NULL, -- The specific value for this option
+
+    -- Voting for this option
+    votes_received INTEGER DEFAULT 0,
+
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (proposal_id) REFERENCES governance_rule_proposals(id) ON DELETE CASCADE
+);
+
+-- Rule Proposal Votes
+CREATE TABLE IF NOT EXISTS governance_rule_proposal_votes (
+    id TEXT PRIMARY KEY,
+    proposal_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    selected_option_id TEXT, -- For multi-option proposals
+    vote_choice TEXT CHECK(vote_choice IN ('yes', 'no', 'abstain')), -- For simple yes/no/abstain
+    voted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (proposal_id) REFERENCES governance_rule_proposals(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (selected_option_id) REFERENCES governance_rule_proposal_options(id) ON DELETE CASCADE,
+    UNIQUE(proposal_id, user_id)
+);
+
 -- Trigger for Policy Votes Updated At
 CREATE TRIGGER IF NOT EXISTS update_policy_votes_updated_at
     AFTER UPDATE ON policy_votes
 BEGIN
     UPDATE policy_votes SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+END;
+
+-- Triggers for Rule Proposals
+CREATE TRIGGER IF NOT EXISTS update_governance_rule_proposals_updated_at
+    AFTER UPDATE ON governance_rule_proposals
+BEGIN
+    UPDATE governance_rule_proposals SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;

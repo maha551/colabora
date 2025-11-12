@@ -689,6 +689,98 @@ export const governanceApi = {
             body: JSON.stringify({ vote: voteChoice }),
           })
         },
+      },
+
+      // Rule Proposals API
+      ruleProposalsApi: {
+        async getRuleProposals(organizationId: string) {
+          return apiRequest(`/api/governance/${organizationId}/rule-proposals`)
+        },
+
+        async createRuleProposal(organizationId: string, proposalData: {
+          title: string;
+          description?: string;
+          ruleField: string;
+          proposedValue: any;
+          options?: Array<{
+            optionTitle: string;
+            optionDescription?: string;
+            proposedValue: any;
+          }>;
+        }) {
+          return apiRequest(`/api/governance/${organizationId}/rule-proposals`, {
+            method: 'POST',
+            body: JSON.stringify(proposalData),
+          })
+        },
+
+        async startRuleProposalVoting(organizationId: string, proposalId: string) {
+          return apiRequest(`/api/governance/${organizationId}/rule-proposals/${proposalId}/start-voting`, {
+            method: 'POST',
+          })
+        },
+
+        async voteOnRuleProposal(organizationId: string, proposalId: string, voteData: {
+          selectedOptionId?: string;
+          voteChoice?: 'yes' | 'no' | 'abstain';
+        }) {
+          return apiRequest(`/api/governance/${organizationId}/rule-proposals/${proposalId}/vote`, {
+            method: 'POST',
+            body: JSON.stringify(voteData),
+          })
+        },
+
+        async completeRuleProposal(organizationId: string, proposalId: string) {
+          return apiRequest(`/api/governance/${organizationId}/rule-proposals/${proposalId}/complete`, {
+            method: 'POST',
+          })
+        },
+      },
+
+      // Audit Logs API
+      auditLogsApi: {
+        async getAuditLogs(organizationId: string, filters?: {
+          actionType?: string;
+          performedBy?: string;
+          affectedUser?: string;
+          startDate?: string;
+          endDate?: string;
+          limit?: number;
+          offset?: number;
+        }) {
+          const queryParams = new URLSearchParams();
+          if (filters) {
+            Object.entries(filters).forEach(([key, value]) => {
+              if (value !== undefined && value !== null) {
+                queryParams.append(key, value.toString());
+              }
+            });
+          }
+          const query = queryParams.toString();
+          return apiRequest(`/api/governance/${organizationId}/audit-logs${query ? `?${query}` : ''}`)
+        },
+
+        async getAuditStats(organizationId: string, days?: number) {
+          const query = days ? `?days=${days}` : '';
+          return apiRequest(`/api/governance/${organizationId}/audit-stats${query}`)
+        },
+
+        async exportAuditLogs(organizationId: string, filters?: {
+          startDate?: string;
+          endDate?: string;
+          format?: 'csv' | 'json';
+        }) {
+          const queryParams = new URLSearchParams();
+          if (filters) {
+            Object.entries(filters).forEach(([key, value]) => {
+              if (value !== undefined && value !== null) {
+                queryParams.append(key, value.toString());
+              }
+            });
+          }
+          const query = queryParams.toString();
+          return apiRequest(`/api/governance/${organizationId}/audit-export${query ? `?${query}` : ''}`)
+        },
       }
     }
 

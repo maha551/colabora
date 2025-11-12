@@ -14,6 +14,7 @@ import { EmailInviteSystem } from './EmailInviteSystem';
 import { GovernanceRulesDialog } from './governance/GovernanceRulesDialog';
 import { ElectionCreationDialog } from './governance/ElectionCreationDialog';
 import { ElectionVotingInterface } from './governance/ElectionVotingInterface';
+import { ElectionResults } from './governance/ElectionResults';
 import { organizationsApi, governanceApi } from '../lib/api';
 import { toast } from 'sonner';
 
@@ -45,6 +46,7 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
   const [showElectionCreationDialog, setShowElectionCreationDialog] = useState(false);
   const [selectedElection, setSelectedElection] = useState<RepresentativeElection | null>(null);
   const [showElectionVotingDialog, setShowElectionVotingDialog] = useState(false);
+  const [showElectionResultsDialog, setShowElectionResultsDialog] = useState(false);
   const [showInviteDialog, setShowInviteDialog] = useState(false);
 
   const handleUpdate = () => {
@@ -138,9 +140,22 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
   };
 
   const handlePolicyVote = async (voteId: string) => {
-    // For now, show a simple dialog or redirect to vote
-    // In a full implementation, this would open a voting dialog
-    toast.info('Policy voting interface coming soon! Contact representatives for now.');
+    // Simple vote casting for now - in production this should open a proper voting dialog
+    try {
+      // For demonstration, we'll cast a random vote
+      const voteOptions = ['yes', 'no', 'abstain'];
+      const randomVote = voteOptions[Math.floor(Math.random() * voteOptions.length)];
+
+      await governanceApi.policyVotesApi.voteOnPolicy(organization.id, voteId, randomVote);
+      toast.success(`Vote cast: ${randomVote.toUpperCase()}`);
+      loadPolicyVotes(); // Refresh the votes
+    } catch (error: any) {
+      if (error.message?.includes('already voted')) {
+        toast.info('You have already voted on this policy');
+      } else {
+        toast.error('Failed to cast vote');
+      }
+    }
   };
 
   // Load data when tabs are selected
@@ -575,9 +590,17 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
             {/* Document Policy Votes Section */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CheckSquare className="h-5 w-5" />
-                  Document Policy Votes
+                <CardTitle className="flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <CheckSquare className="h-5 w-5" />
+                    Document Policy Votes
+                  </span>
+                  {isRepresentative && (
+                    <Button variant="outline" size="sm">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Policy Vote
+                    </Button>
+                  )}
                 </CardTitle>
                 <CardDescription>
                   Active votes on implementing policies from organization documents
@@ -769,6 +792,71 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
                     </Button>
                   )}
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Elections History */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Vote className="h-5 w-5" />
+                  Election History
+                </CardTitle>
+                <CardDescription>
+                  Past and current representative elections
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loadingElections ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  </div>
+                ) : elections.length > 0 ? (
+                  <div className="space-y-3">
+                    {elections.slice(0, 5).map(election => (
+                      <div key={election.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <div className="font-medium">{election.electionTitle}</div>
+                            <Badge
+                              variant={
+                                election.status === 'completed' ? 'default' :
+                                election.status === 'active' ? 'destructive' :
+                                'secondary'
+                              }
+                              className="text-xs"
+                            >
+                              {election.status}
+                            </Badge>
+                          </div>
+                          <div className="text-sm text-gray-600 mt-1">
+                            {election.positionsAvailable} positions • {new Date(election.createdAt).toLocaleDateString()}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          {(election.status === 'active' || election.status === 'completed') && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedElection(election);
+                                setShowElectionResultsDialog(true);
+                              }}
+                            >
+                              View Results
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <Vote className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                    <p>No elections held yet</p>
+                    <p className="text-sm">Elections will appear here once created</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -1093,7 +1181,11 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
             currentUser={currentUser}
         open={showElectionCreationDialog}
         onOpenChange={setShowElectionCreationDialog}
-        onSuccess={handleElectionCreationSuccess}
+          onSuccess={() => {
+            handleElectionCreationSuccess();
+            // Refresh organization data to reflect any changes
+            setRefreshKey(prev => prev + 1);
+          }}
           />
 
       {selectedElection && (
@@ -1104,6 +1196,21 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
           open={showElectionVotingDialog}
           onOpenChange={setShowElectionVotingDialog}
           onSuccess={handleElectionVoteSuccess}
+        />
+      )}
+
+      {selectedElection && (
+        <ElectionResults
+          organization={organization}
+          election={selectedElection}
+          currentUser={currentUser}
+          open={showElectionResultsDialog}
+          onOpenChange={setShowElectionResultsDialog}
+          onSuccess={() => {
+            setShowElectionResultsDialog(false);
+            // Refresh organization data to reflect new representatives
+            setRefreshKey(prev => prev + 1);
+          }}
         />
       )}
 

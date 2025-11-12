@@ -53,6 +53,14 @@ else
   fly secrets set FRONTEND_URL="https://colabora-fresh.fly.dev"
 fi
 
+# Check if DATABASE_URL exists
+if fly secrets list | grep -q DATABASE_URL; then
+  echo "✅ DATABASE_URL already exists, keeping existing value"
+else
+  echo "💾 Setting DATABASE_URL..."
+  fly secrets set DATABASE_URL="/data/colabora.db"
+fi
+
 # Launch fresh app
 echo "📦 Launching fresh app in EU..."
 fly launch --name colabora-fresh --region fra --no-deploy

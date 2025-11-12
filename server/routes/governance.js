@@ -678,7 +678,7 @@ router.post('/:organizationId/rule-proposals/:proposalId/complete', requireAuth,
 
       const totalVotes = proposal.votes_yes + proposal.votes_no + proposal.votes_abstain;
       const approvalRate = totalVotes > 0 ? (proposal.votes_yes / totalVotes) * 100 : 0;
-      const threshold = proposal.threshold_percentage || 66.0;
+      const threshold = proposal.threshold_percentage || 75.0;
 
       const approved = approvalRate >= threshold;
       const now = new Date();
@@ -1619,6 +1619,7 @@ router.post('/:organizationId/elections/:electionId/complete', requireAuth, asyn
               });
             });
       });
+    });
   } catch (error) {
     console.error('Error completing election:', error);
     res.status(500).json({ error: 'Failed to complete election' });

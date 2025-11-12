@@ -356,7 +356,7 @@ CREATE TABLE IF NOT EXISTS governance_rule_proposals (
     -- Voting Configuration
     voting_starts_at DATETIME,
     voting_ends_at DATETIME,
-    threshold_percentage REAL DEFAULT 66.0, -- Higher threshold for rule changes
+    threshold_percentage REAL DEFAULT 75.0, -- Higher threshold for rule changes
     anonymous_voting BOOLEAN DEFAULT 1,
 
     -- Voting Results

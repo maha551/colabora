@@ -159,6 +159,7 @@ router.get('/', requireAuth, (req, res) => {
       description: row.description,
       representatives: JSON.parse(row.representatives || '[]'),
       membershipPolicy: row.membership_policy,
+      votingEnabled: row.voting_enabled === 1,
       votingThreshold: row.voting_threshold,
       isActive: row.is_active === 1,
       membershipStatus: row.membership_status,

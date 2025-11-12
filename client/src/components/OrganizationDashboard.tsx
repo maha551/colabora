@@ -31,6 +31,7 @@ export function OrganizationDashboard({ currentUser, onCreateOrganizationalDocum
   const [orgDescription, setOrgDescription] = useState('');
   const [representatives, setRepresentatives] = useState<string[]>([]);
   const [membershipPolicy, setMembershipPolicy] = useState<'open' | 'invitation'>('invitation');
+  const [votingEnabled, setVotingEnabled] = useState(false);
   const [votingThreshold, setVotingThreshold] = useState(0.5);
   const [creatingOrg, setCreatingOrg] = useState(false);
 
@@ -75,6 +76,7 @@ export function OrganizationDashboard({ currentUser, onCreateOrganizationalDocum
         orgDescription.trim() || undefined,
         representatives,
         membershipPolicy,
+        votingEnabled,
         votingThreshold
       );
 
@@ -86,6 +88,7 @@ export function OrganizationDashboard({ currentUser, onCreateOrganizationalDocum
       setOrgDescription('');
       setRepresentatives([]);
       setMembershipPolicy('invitation');
+      setVotingEnabled(false);
       setVotingThreshold(0.5);
 
       // Reload organizations to show the new one
@@ -194,9 +197,17 @@ export function OrganizationDashboard({ currentUser, onCreateOrganizationalDocum
                   {/* Status */}
                   <div className="flex items-center justify-between text-sm text-gray-600">
                     <span>Status: {getMembershipStatus(org)}</span>
-                    <Badge variant={org.isActive ? "default" : "secondary"}>
-                      {org.isActive ? "Active" : "Inactive"}
-                    </Badge>
+                    <div className="flex gap-1">
+                      <Badge variant={org.isActive ? "default" : "secondary"}>
+                        {org.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                      {org.votingEnabled && (
+                        <Badge variant="outline" className="text-green-600 border-green-600">
+                          <Vote className="h-3 w-3 mr-1" />
+                          Voting
+                        </Badge>
+                      )}
+                    </div>
                   </div>
 
                   {/* Representatives */}
@@ -313,21 +324,34 @@ export function OrganizationDashboard({ currentUser, onCreateOrganizationalDocum
               </select>
             </div>
 
-            <div>
-              <Label htmlFor="votingThreshold">Voting Threshold</Label>
-              <Input
-                id="votingThreshold"
-                type="number"
-                min="0.1"
-                max="1.0"
-                step="0.1"
-                value={votingThreshold}
-                onChange={(e) => setVotingThreshold(parseFloat(e.target.value))}
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="votingEnabled"
+                checked={votingEnabled}
+                onChange={(e) => setVotingEnabled(e.target.checked)}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
               />
-              <p className="text-sm text-gray-600 mt-1">
-                Percentage of votes needed to pass proposals (0.1 = 10%, 1.0 = 100%)
-              </p>
+              <Label htmlFor="votingEnabled">Enable Voting</Label>
             </div>
+
+            {votingEnabled && (
+              <div>
+                <Label htmlFor="votingThreshold">Voting Threshold</Label>
+                <Input
+                  id="votingThreshold"
+                  type="number"
+                  min="0.1"
+                  max="1.0"
+                  step="0.1"
+                  value={votingThreshold}
+                  onChange={(e) => setVotingThreshold(parseFloat(e.target.value))}
+                />
+                <p className="text-sm text-gray-600 mt-1">
+                  Percentage of votes needed to pass proposals (0.1 = 10%, 1.0 = 100%)
+                </p>
+              </div>
+            )}
 
             <RepresentativeSelector
               selectedRepresentatives={representatives}

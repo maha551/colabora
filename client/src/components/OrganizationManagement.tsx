@@ -11,6 +11,9 @@ import { Organization, User, Document, OrganizationGovernanceRules, Representati
 import { RepresentativeManager } from './RepresentativeManager';
 import { VotingInterface } from './VotingInterface';
 import { EmailInviteSystem } from './EmailInviteSystem';
+import { GovernanceRulesDialog } from './governance/GovernanceRulesDialog';
+import { ElectionCreationDialog } from './governance/ElectionCreationDialog';
+import { ElectionVotingInterface } from './governance/ElectionVotingInterface';
 import { organizationsApi, governanceApi } from '../lib/api';
 import { toast } from 'sonner';
 
@@ -35,8 +38,34 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
   const [loadingElections, setLoadingElections] = useState(false);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
 
+  // Dialog states
+  const [showGovernanceRulesDialog, setShowGovernanceRulesDialog] = useState(false);
+  const [showElectionCreationDialog, setShowElectionCreationDialog] = useState(false);
+  const [selectedElection, setSelectedElection] = useState<RepresentativeElection | null>(null);
+  const [showElectionVotingDialog, setShowElectionVotingDialog] = useState(false);
+
   const handleUpdate = () => {
     setRefreshKey(prev => prev + 1);
+  };
+
+  const handleGovernanceRulesSuccess = () => {
+    loadGovernanceRules();
+    setShowGovernanceRulesDialog(false);
+  };
+
+  const handleElectionCreationSuccess = () => {
+    loadElections();
+    setShowElectionCreationDialog(false);
+  };
+
+  const handleElectionVoteSuccess = () => {
+    loadElections();
+    setShowElectionVotingDialog(false);
+  };
+
+  const handleOpenElectionVoting = (election: RepresentativeElection) => {
+    setSelectedElection(election);
+    setShowElectionVotingDialog(true);
   };
 
   const loadOrganizationDocuments = async () => {
@@ -278,7 +307,10 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
                         </div>
 
                         {isActiveMember && (
-                          <Button className="w-full">
+                          <Button
+                            className="w-full"
+                            onClick={() => handleOpenElectionVoting(elections.find(e => e.status === 'active')!)}
+                          >
                             Vote in Election
                           </Button>
                         )}
@@ -321,13 +353,21 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
                 <CardContent className="space-y-2">
                   {isRepresentative && (
                     <>
-                      <Button variant="outline" className="w-full justify-start gap-2" onClick={() => setActiveTab('governance')}>
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start gap-2"
+                        onClick={() => setShowGovernanceRulesDialog(true)}
+                      >
                         <Shield className="h-4 w-4" />
                         Configure Governance Rules
                       </Button>
-                      <Button variant="outline" className="w-full justify-start gap-2" onClick={() => setActiveTab('documents')}>
-                        <Plus className="h-4 w-4" />
-                        Create Organization Document
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start gap-2"
+                        onClick={() => setShowElectionCreationDialog(true)}
+                      >
+                        <Vote className="h-4 w-4" />
+                        Call Election
                       </Button>
                     </>
                   )}
@@ -847,6 +887,34 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
         </TabsContent>
 
       </Tabs>
+
+      {/* Governance Dialogs */}
+      <GovernanceRulesDialog
+        organization={organization}
+        currentUser={currentUser}
+        open={showGovernanceRulesDialog}
+        onOpenChange={setShowGovernanceRulesDialog}
+        onSuccess={handleGovernanceRulesSuccess}
+      />
+
+      <ElectionCreationDialog
+            organization={organization}
+            currentUser={currentUser}
+        open={showElectionCreationDialog}
+        onOpenChange={setShowElectionCreationDialog}
+        onSuccess={handleElectionCreationSuccess}
+      />
+
+      {selectedElection && (
+        <ElectionVotingInterface
+          organization={organization}
+          election={selectedElection}
+          currentUser={currentUser}
+          open={showElectionVotingDialog}
+          onOpenChange={setShowElectionVotingDialog}
+          onSuccess={handleElectionVoteSuccess}
+        />
+      )}
     </div>
   );
 }

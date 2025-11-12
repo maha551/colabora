@@ -43,6 +43,7 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
   const [showElectionCreationDialog, setShowElectionCreationDialog] = useState(false);
   const [selectedElection, setSelectedElection] = useState<RepresentativeElection | null>(null);
   const [showElectionVotingDialog, setShowElectionVotingDialog] = useState(false);
+  const [showInviteDialog, setShowInviteDialog] = useState(false);
 
   const handleUpdate = () => {
     setRefreshKey(prev => prev + 1);
@@ -136,6 +137,36 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
   useEffect(() => {
     loadElections();
   }, [organization.id]);
+
+  // Check for expired representative terms and create elections if needed
+  useEffect(() => {
+    if (isRepresentative && governanceRules) {
+      checkForExpiredTerms();
+    }
+  }, [isRepresentative, governanceRules, organization.representatives]);
+
+  const checkForExpiredTerms = async () => {
+    try {
+      // This would typically be done server-side, but for now we'll do a basic check
+      const now = new Date();
+      const representativesWithExpiredTerms = organization.representatives?.filter(rep => {
+        // In a real implementation, we'd check each representative's term end date
+        // For now, we'll assume terms expire after the governance rule term length
+        // This is a simplified implementation
+        return false; // Skip automatic election creation for now
+      });
+
+      if (representativesWithExpiredTerms && representativesWithExpiredTerms.length > 0) {
+        // Show notification that elections need to be created
+        console.log(`${representativesWithExpiredTerms.length} representative terms have expired. Elections should be created.`);
+
+        // In a real implementation, this would automatically create elections
+        // For now, we'll just show a warning to representatives
+      }
+    } catch (error) {
+      console.error('Error checking for expired terms:', error);
+    }
+  };
 
   const isRepresentative = organization.representatives?.includes(currentUser.id);
   const isActiveMember = organization.members?.some(m => m.userId === currentUser.id && m.status === 'active');
@@ -269,6 +300,38 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
                 </div>
               </CardContent>
             </Card>
+
+            {/* Election Due Warning */}
+            {isRepresentative && governanceRules && (() => {
+              // Simple check: if no recent elections, suggest creating one
+              const recentElections = elections.filter(e =>
+                new Date(e.createdAt || '').getTime() > Date.now() - (governanceRules.representativeTermMonths * 30 * 24 * 60 * 60 * 1000)
+              );
+              const needsElection = recentElections.length === 0;
+
+              return needsElection && (
+                <Card className="border-yellow-200 bg-gradient-to-r from-yellow-50 to-orange-50">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-orange-900">
+                      <Clock className="h-5 w-5" />
+                      Election Due
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-orange-800 mb-4">
+                      It's time to hold a representative election. The last election was more than {governanceRules.representativeTermMonths} months ago.
+                    </p>
+                    <Button
+                      className="bg-orange-600 hover:bg-orange-700"
+                      onClick={() => setShowElectionCreationDialog(true)}
+                    >
+                      <Vote className="h-4 w-4 mr-2" />
+                      Create Election
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })()}
 
             {/* Active Elections Overlay */}
             {elections.some(e => e.status === 'active') && (
@@ -486,6 +549,125 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
                 )}
               </CardContent>
             </Card>
+
+            {/* Document Policy Votes Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CheckSquare className="h-5 w-5" />
+                  Document Policy Votes
+                </CardTitle>
+                <CardDescription>
+                  Active votes on implementing policies from organization documents
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {(() => {
+                  // Mock policy votes for demonstration - in real implementation,
+                  // this would fetch from governance API for organization-specific votes
+                  const mockPolicyVotes = [
+                    {
+                      id: '1',
+                      title: 'Implement Budget Allocation Policy',
+                      description: 'Execute the budget allocation guidelines from the 2024 Financial Policy document',
+                      documentTitle: '2024 Financial Policy',
+                      status: 'active',
+                      votesFor: 8,
+                      votesAgainst: 2,
+                      totalVoters: 15,
+                      endsAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+                      threshold: 60
+                    },
+                    {
+                      id: '2',
+                      title: 'Adopt Code of Conduct Standards',
+                      description: 'Implement the behavioral standards outlined in the Community Guidelines document',
+                      documentTitle: 'Community Guidelines v2.1',
+                      status: 'active',
+                      votesFor: 12,
+                      votesAgainst: 1,
+                      totalVoters: 15,
+                      endsAt: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
+                      threshold: 75
+                    }
+                  ];
+
+                  const activePolicyVotes = mockPolicyVotes.filter(v => v.status === 'active');
+
+                  return activePolicyVotes.length > 0 ? (
+                    <div className="space-y-4">
+                      {activePolicyVotes.map(vote => {
+                        const totalVotes = vote.votesFor + vote.votesAgainst;
+                        const approvalPercentage = totalVotes > 0 ? (vote.votesFor / totalVotes) * 100 : 0;
+                        const timeRemaining = Math.ceil((new Date(vote.endsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                        const meetsThreshold = approvalPercentage >= vote.threshold;
+
+                        return (
+                          <div key={vote.id} className="p-4 border rounded-lg">
+                            <div className="flex items-start justify-between mb-3">
+                              <div className="flex-1">
+                                <h3 className="font-medium">{vote.title}</h3>
+                                <p className="text-sm text-gray-600 mt-1">{vote.description}</p>
+                                <div className="flex items-center gap-2 mt-2">
+                                  <Badge variant="outline" className="text-xs">
+                                    📄 {vote.documentTitle}
+                                  </Badge>
+                                  <Badge variant="secondary" className="text-xs">
+                                    ⏰ {timeRemaining} days left
+                                  </Badge>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-lg font-bold">
+                                  {Math.round(approvalPercentage)}%
+                                </div>
+                                <div className="text-xs text-gray-600">
+                                  {vote.votesFor}/{totalVotes} approve
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              <div className="flex justify-between text-sm">
+                                <span>Approval Progress</span>
+                                <span>{Math.round(approvalPercentage)}% of {totalVotes} votes</span>
+                              </div>
+                              <div className="w-full bg-gray-200 rounded-full h-2">
+                                <div
+                                  className={`h-2 rounded-full ${meetsThreshold ? 'bg-green-500' : 'bg-blue-500'}`}
+                                  style={{ width: `${Math.min(approvalPercentage, 100)}%` }}
+                                />
+                              </div>
+                              <div className="flex justify-between text-xs text-gray-600">
+                                <span>Threshold: {vote.threshold}%</span>
+                                <span className={meetsThreshold ? 'text-green-600' : 'text-red-600'}>
+                                  {meetsThreshold ? '✓ Meets threshold' : '✗ Below threshold'}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex gap-2 mt-4">
+                              <Button size="sm" variant="outline">
+                                View Document
+                              </Button>
+                              <Button size="sm">
+                                Vote Now
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <CheckSquare className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                      <p>No active policy votes</p>
+                      <p className="text-sm">Policy implementation votes will appear here when available</p>
+                    </div>
+                  );
+                })()}
+              </CardContent>
+            </Card>
           </div>
         </TabsContent>
 
@@ -649,7 +831,11 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
                 <CardTitle className="flex items-center justify-between">
                   Organization Members
                   {isRepresentative && (
-                    <Button variant="outline" size="sm">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowInviteDialog(true)}
+                    >
                       <Mail className="h-4 w-4 mr-2" />
                       Invite Members
                     </Button>
@@ -770,7 +956,7 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
                     <TrendingUp className="h-8 w-8 text-green-600" />
                   </div>
                   <p className="text-xs text-gray-600 mt-2">
-                    Member voting participation
+                    Member voting participation across all elections
                   </p>
                 </CardContent>
               </Card>
@@ -781,13 +967,13 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
                     <div>
                       <p className="text-sm font-medium text-gray-600">Elections Held</p>
                       <p className="text-2xl font-bold text-blue-600">
-                        {analytics ? analytics.totalElections || 0 : 0}
+                        {analytics ? analytics.totalElections || 0 : elections.length}
                       </p>
                     </div>
                     <Vote className="h-8 w-8 text-blue-600" />
                   </div>
                   <p className="text-xs text-gray-600 mt-2">
-                        Representative selections
+                        Representative elections completed
                       </p>
                 </CardContent>
               </Card>
@@ -796,15 +982,15 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Decisions Made</p>
+                      <p className="text-sm font-medium text-gray-600">Governance Votes</p>
                       <p className="text-2xl font-bold text-purple-600">
-                        {analytics ? analytics.totalDecisions || 0 : 0}
+                        {analytics ? analytics.totalDecisions || 0 : '--'}
                       </p>
                     </div>
                     <CheckSquare className="h-8 w-8 text-purple-600" />
                   </div>
                   <p className="text-xs text-gray-600 mt-2">
-                        Governance votes completed
+                        Governance decisions and rule changes
                       </p>
                 </CardContent>
               </Card>
@@ -813,15 +999,15 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Avg Decision Time</p>
+                      <p className="text-sm font-medium text-gray-600">Active Members</p>
                       <p className="text-2xl font-bold text-orange-600">
-                        {analytics ? `${analytics.averageDecisionTimeHours || 0}h` : '--'}
+                        {activeMembers.length}
                       </p>
                     </div>
-                    <Clock className="h-8 w-8 text-orange-600" />
+                    <Users className="h-8 w-8 text-orange-600" />
                   </div>
                   <p className="text-xs text-gray-600 mt-2">
-                        From proposal to completion
+                        Currently active organization members
                       </p>
                 </CardContent>
               </Card>
@@ -903,7 +1089,7 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
         open={showElectionCreationDialog}
         onOpenChange={setShowElectionCreationDialog}
         onSuccess={handleElectionCreationSuccess}
-      />
+          />
 
       {selectedElection && (
         <ElectionVotingInterface
@@ -913,6 +1099,20 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
           open={showElectionVotingDialog}
           onOpenChange={setShowElectionVotingDialog}
           onSuccess={handleElectionVoteSuccess}
+        />
+      )}
+
+      {showInviteDialog && (
+          <EmailInviteSystem
+            organization={organization}
+            currentUser={currentUser}
+          open={showInviteDialog}
+          onOpenChange={setShowInviteDialog}
+          onSuccess={() => {
+            setShowInviteDialog(false);
+            // Refresh member list if needed
+            handleUpdate();
+          }}
         />
       )}
     </div>

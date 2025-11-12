@@ -34,13 +34,26 @@ function authenticateToken(req, res, next) {
       audience: config.JWT_CONFIG.audience
     });
 
-    req.user = {
-      id: decoded.userId,
-      email: decoded.email,
-      name: decoded.name
-    };
+    // Fetch user role from database
+    req.app.locals.db.get('SELECT role FROM users WHERE id = ?', [decoded.userId], (err, row) => {
+      if (err) {
+        console.error('Error fetching user role:', err);
+        return res.status(500).json({ error: 'Authentication failed' });
+      }
 
-    next();
+      if (!row) {
+        return res.status(401).json({ error: 'User not found' });
+      }
+
+      req.user = {
+        id: decoded.userId,
+        email: decoded.email,
+        name: decoded.name,
+        role: row.role || 'user'
+      };
+
+      next();
+    });
   } catch (error) {
     console.error('JWT verification failed:', error.message);
     return res.status(401).json({ error: 'Invalid or expired token' });
@@ -84,16 +97,15 @@ function requireAuth(req, res, next) {
   return authenticateSession(req, res, next);
 }
 
-// Admin role check (for future use)
+// Admin role check
 function requireAdmin(req, res, next) {
   if (!req.user) {
     return res.status(401).json({ error: 'Authentication required' });
   }
 
-  // TODO: Implement role checking when user roles are added
-  // if (req.user.role !== 'admin') {
-  //   return res.status(403).json({ error: 'Admin access required' });
-  // }
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
 
   next();
 }

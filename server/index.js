@@ -10,7 +10,7 @@ const { v4: uuidv4 } = require('uuid');
 
 // Security imports
 const config = require('./config');
-const { requireAuth, generateToken, hashPassword, verifyPassword } = require('./middleware/auth');
+const { requireAuth, requireAdmin, generateToken, hashPassword, verifyPassword } = require('./middleware/auth');
 const { requestLogger, errorLogger, securityLogger } = require('./middleware/logger');
 const { metricsCollector, requestMetrics } = require('./middleware/monitoring');
 
@@ -455,9 +455,7 @@ app.get('/api/test', (req, res) => {
 
 
 // Metrics endpoint (admin only)
-app.get('/api/metrics', requireAuth, (req, res) => {
-  // TODO: Add admin role check when roles are implemented
-  // For now, return basic metrics for authenticated users
+app.get('/api/metrics', requireAuth, requireAdmin, (req, res) => {
 
   const metrics = metricsCollector.getMetricsSummary();
 
@@ -683,6 +681,16 @@ app.post('/api/admin/create-tables', requireAuth, (req, res) => {
 
 
 function ensureColumn(db, tableName, columnName, columnDefinition) {
+  // SECURITY: Validate table and column names to prevent SQL injection
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(tableName)) {
+    console.error(`Invalid table name: ${tableName}`);
+    return;
+  }
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(columnName)) {
+    console.error(`Invalid column name: ${columnName}`);
+    return;
+  }
+
   db.all(`PRAGMA table_info(${tableName})`, (err, columns) => {
     if (err) {
       console.error(`Error inspecting table ${tableName}:`, err.message);

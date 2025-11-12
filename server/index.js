@@ -1104,8 +1104,9 @@ function initializeDatabase(db) {
 
         // Wait a bit for column additions to complete, then insert demo data
         setTimeout(async () => {
+          console.log('Starting demo data insertion...');
           await insertDemoData(db);
-        }, 500);
+        }, 1000);
       }, 200); // Wait 200ms for SQLite to fully commit table creation
       return;
     }
@@ -1144,18 +1145,56 @@ async function insertDemoData(db) {
       // Make Diana Prince an admin, others are regular users
       const role = user.name === 'Diana Prince' ? 'admin' : 'user';
 
-      db.run(`
-        INSERT OR IGNORE INTO users (id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)
-      `, [user.id, user.name, user.email, passwordHash, role], (err) => {
+      // First try to insert with role column, fallback to without if column doesn't exist
+      const insertWithRole = () => {
+        db.run(`
+          INSERT OR IGNORE INTO users (id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)
+        `, [user.id, user.name, user.email, passwordHash, role], (err) => {
+          if (err && err.message.includes('no such column: role')) {
+            // Role column doesn't exist yet, insert without it
+            console.log(`Role column not ready for ${user.name}, inserting without role...`);
+            insertWithoutRole();
+          } else {
+            handleInsertResult(err);
+          }
+        });
+      };
+
+      const insertWithoutRole = () => {
+        db.run(`
+          INSERT OR IGNORE INTO users (id, name, email, password_hash) VALUES (?, ?, ?, ?)
+        `, [user.id, user.name, user.email, passwordHash], handleInsertResult);
+      };
+
+      const handleInsertResult = (err) => {
         if (err) {
           console.error('Error inserting user:', err);
         }
         usersInserted++;
         if (usersInserted === demoUsers.length) {
-          console.log('Users inserted, inserting document...');
-          insertDocument(db);
+          console.log('Users inserted, updating roles and inserting document...');
+
+          // Update user roles (in case role column was added after insertion)
+          demoUsers.forEach(user => {
+            const userRole = user.name === 'Diana Prince' ? 'admin' : 'user';
+            db.run('UPDATE users SET role = ? WHERE id = ?', [userRole, user.id], (err) => {
+              if (err) {
+                console.log(`Note: Could not update role for ${user.name} (role column may not exist yet):`, err.message);
+              } else {
+                console.log(`Set ${user.name} role to ${userRole}`);
+              }
+            });
+          });
+
+          // Wait a bit for role updates, then insert document
+          setTimeout(() => {
+            insertDocument(db);
+          }, 100);
         }
-      });
+      };
+
+      // Start the insertion process
+      insertWithRole();
     } catch (error) {
       console.error('Error hashing password for demo user:', error);
       usersInserted++;

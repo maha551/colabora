@@ -137,6 +137,245 @@ router.get('/:organizationId/governance-rules', requireAuth, async (req, res) =>
   }
 });
 
+// Get policy votes for organization
+router.get('/:organizationId/policy-votes', requireAuth, async (req, res) => {
+  const db = req.app.locals.db;
+  const { organizationId } = req.params;
+  const userId = req.user.id;
+
+  try {
+    // Check if user has access
+    const hasAccess = await isRepresentative(db, userId, organizationId) ||
+                     await isActiveMember(db, userId, organizationId);
+
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Get all policy votes for this organization
+    db.all(`
+      SELECT pv.*, u.name as created_by_name
+      FROM policy_votes pv
+      LEFT JOIN users u ON pv.created_by = u.id
+      WHERE pv.organization_id = ?
+      ORDER BY pv.created_at DESC
+    `, [organizationId], (err, votes) => {
+      if (err) {
+        console.error('Error fetching policy votes:', err);
+        return res.status(500).json({ error: 'Failed to fetch policy votes' });
+      }
+
+      res.json({ policyVotes: votes || [] });
+    });
+
+  } catch (error) {
+    console.error('Error fetching policy votes:', error);
+    res.status(500).json({ error: 'Failed to fetch policy votes' });
+  }
+});
+
+// Create policy vote
+router.post('/:organizationId/policy-votes', requireAuth, async (req, res) => {
+  const db = req.app.locals.db;
+  const { organizationId } = req.params;
+  const userId = req.user.id;
+  const { title, description, documentId, threshold, deadlineHours } = req.body;
+
+  try {
+    // Check if user is representative
+    const isRep = await isRepresentative(db, userId, organizationId);
+    if (!isRep) {
+      return res.status(403).json({ error: 'Only representatives can create policy votes' });
+    }
+
+    const voteId = uuidv4();
+    const now = new Date();
+    const deadline = new Date(now.getTime() + (deadlineHours || 168) * 60 * 60 * 1000); // Default 7 days
+
+    db.run(`
+      INSERT INTO policy_votes (
+        id, organization_id, title, description, document_id,
+        threshold_percentage, deadline_at, created_by, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      voteId, organizationId, title, description, documentId,
+      threshold || 50, deadline.toISOString(), userId, now.toISOString()
+    ], function(err) {
+      if (err) {
+        console.error('Error creating policy vote:', err);
+        return res.status(500).json({ error: 'Failed to create policy vote' });
+      }
+
+      // Log audit event
+      logAudit(db, organizationId, 'policy_vote_created', userId, null, { voteId, title }, req);
+
+      res.json({
+        policyVote: {
+          id: voteId,
+          organizationId,
+          title,
+          description,
+          documentId,
+          thresholdPercentage: threshold || 50,
+          deadlineAt: deadline.toISOString(),
+          createdBy: userId,
+          createdAt: now.toISOString()
+        }
+      });
+    });
+
+  } catch (error) {
+    console.error('Error creating policy vote:', error);
+    res.status(500).json({ error: 'Failed to create policy vote' });
+  }
+});
+
+// Vote on policy vote
+router.post('/:organizationId/policy-votes/:voteId/vote', requireAuth, async (req, res) => {
+  const db = req.app.locals.db;
+  const { organizationId, voteId } = req.params;
+  const userId = req.user.id;
+  const { vote } = req.body; // 'yes', 'no', 'abstain'
+
+  try {
+    // Check if user is active member
+    const isMember = await isActiveMember(db, userId, organizationId);
+    if (!isMember) {
+      return res.status(403).json({ error: 'Only active members can vote' });
+    }
+
+    // Check if vote exists and is active
+    db.get(`
+      SELECT * FROM policy_votes
+      WHERE id = ? AND organization_id = ? AND status = 'active'
+    `, [voteId, organizationId], (err, policyVote) => {
+      if (err || !policyVote) {
+        return res.status(404).json({ error: 'Policy vote not found or not active' });
+      }
+
+      // Check if user already voted
+      db.get(`
+        SELECT * FROM policy_vote_responses
+        WHERE policy_vote_id = ? AND user_id = ?
+      `, [voteId, userId], (err, existingVote) => {
+        if (err) {
+          console.error('Error checking existing vote:', err);
+          return res.status(500).json({ error: 'Failed to check vote status' });
+        }
+
+        if (existingVote) {
+          return res.status(400).json({ error: 'You have already voted on this policy' });
+        }
+
+        // Record the vote
+        const responseId = uuidv4();
+        db.run(`
+          INSERT INTO policy_vote_responses (
+            id, policy_vote_id, user_id, vote, voted_at
+          ) VALUES (?, ?, ?, ?, ?)
+        `, [
+          responseId, voteId, userId, vote, new Date().toISOString()
+        ], function(err) {
+          if (err) {
+            console.error('Error recording vote:', err);
+            return res.status(500).json({ error: 'Failed to record vote' });
+          }
+
+          // Update vote counts
+          updatePolicyVoteCounts(db, voteId);
+
+          // Log audit event
+          logAudit(db, organizationId, 'policy_vote_cast', userId, null, { voteId, vote }, req);
+
+          res.json({ success: true, message: 'Vote recorded successfully' });
+        });
+      });
+    });
+
+  } catch (error) {
+    console.error('Error voting on policy:', error);
+    res.status(500).json({ error: 'Failed to cast vote' });
+  }
+});
+
+// Get election results
+router.get('/:organizationId/elections/:electionId/results', requireAuth, async (req, res) => {
+  const db = req.app.locals.db;
+  const { organizationId, electionId } = req.params;
+  const userId = req.user.id;
+
+  try {
+    // Check if user has access
+    const hasAccess = await isRepresentative(db, userId, organizationId) ||
+                     await isActiveMember(db, userId, organizationId);
+
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Get election details
+    db.get(`
+      SELECT re.*, COUNT(ec.id) as candidate_count
+      FROM representative_elections re
+      LEFT JOIN election_candidates ec ON re.id = ec.election_id
+      WHERE re.id = ? AND re.organization_id = ?
+      GROUP BY re.id
+    `, [electionId, organizationId], (err, election) => {
+      if (err || !election) {
+        return res.status(404).json({ error: 'Election not found' });
+      }
+
+      // Get candidates with vote counts, sorted by votes
+      db.all(`
+        SELECT ec.*, u.name as user_name, u.email as user_email
+        FROM election_candidates ec
+        LEFT JOIN users u ON ec.user_id = u.id
+        WHERE ec.election_id = ?
+        ORDER BY ec.votes_received DESC, ec.nominated_at ASC
+      `, [electionId], (err, candidates) => {
+        if (err) {
+          console.error('Error fetching candidates:', err);
+          return res.status(500).json({ error: 'Failed to fetch election results' });
+        }
+
+        // Calculate totals
+        const totalVotes = candidates.reduce((sum, c) => sum + (c.votes_received || 0), 0);
+        const activeMembers = 0; // Would need to get from organization_members count
+        const quorumPercentage = election.quorum_required > 0 ? (election.votes_cast / election.quorum_required) * 100 : 0;
+
+        res.json({
+          election,
+          candidates,
+          stats: {
+            totalVotes,
+            votesCast: election.votes_cast || 0,
+            quorumRequired: election.quorum_required || 0,
+            quorumPercentage,
+            quorumReached: (election.votes_cast || 0) >= (election.quorum_required || 0),
+            positionsAvailable: election.positions_available || 1
+          }
+        });
+      });
+    });
+
+  } catch (error) {
+    console.error('Error fetching election results:', error);
+    res.status(500).json({ error: 'Failed to fetch election results' });
+  }
+});
+
+// Helper function to update policy vote counts
+function updatePolicyVoteCounts(db, voteId) {
+  db.run(`
+    UPDATE policy_votes SET
+      votes_yes = (SELECT COUNT(*) FROM policy_vote_responses WHERE policy_vote_id = ? AND vote = 'yes'),
+      votes_no = (SELECT COUNT(*) FROM policy_vote_responses WHERE policy_vote_id = ? AND vote = 'no'),
+      votes_abstain = (SELECT COUNT(*) FROM policy_vote_responses WHERE policy_vote_id = ? AND vote = 'abstain'),
+      updated_at = ?
+    WHERE id = ?
+  `, [voteId, voteId, voteId, new Date().toISOString(), voteId]);
+}
+
 // Update governance rules (representatives only)
 router.put('/:organizationId/governance-rules', requireAuth, async (req, res) => {
   const db = req.app.locals.db;
@@ -711,8 +950,9 @@ router.post('/:organizationId/elections/:electionId/complete', requireAuth, asyn
               return res.status(500).json({ error: 'Failed to complete election' });
             }
 
-            // Mark top candidates as elected
+            // Mark top candidates as elected and collect elected user IDs
             const positionsAvailable = election.positions_available;
+            const electedUserIds = [];
             let position = 1;
 
             candidates.forEach((candidate, index) => {
@@ -721,6 +961,7 @@ router.post('/:organizationId/elections/:electionId/complete', requireAuth, asyn
                 [elected ? 1 : 0, elected ? position : null, candidate.id]);
 
               if (elected) {
+                electedUserIds.push(candidate.user_id);
                 position++;
 
                 // Create representative term
@@ -738,25 +979,41 @@ router.post('/:organizationId/elections/:electionId/complete', requireAuth, asyn
               }
             });
 
-            // Update election status
-            db.run('UPDATE representative_elections SET status = "completed", quorum_met = 1, election_completed_at = CURRENT_TIMESTAMP WHERE id = ?',
-              [electionId]);
+            // Update organization's representatives array
+            const representativesJson = JSON.stringify(electedUserIds);
+            db.run('UPDATE organizations SET representatives = ? WHERE id = ?',
+              [representativesJson, organizationId], (err) => {
+              if (err) {
+                console.error('Error updating organization representatives:', err);
+                return res.status(500).json({ error: 'Failed to update organization representatives' });
+              }
 
-            // Log audit event
-            logAudit(db, organizationId, 'election_completed', userId, null, {
-              electionId, positionsFilled: Math.min(positionsAvailable, candidates.length)
-            }, req);
+              // Update election status after representatives are updated
+              db.run('UPDATE representative_elections SET status = "completed", quorum_met = 1, election_completed_at = CURRENT_TIMESTAMP WHERE id = ?',
+                [electionId], (err) => {
+                if (err) {
+                  console.error('Error updating election status:', err);
+                  return res.status(500).json({ error: 'Failed to complete election' });
+                }
 
-            res.json({
-              success: true,
-              message: 'Election completed successfully',
-              electedCandidates: candidates.slice(0, positionsAvailable).map(c => ({
-                userId: c.user_id,
-                votesReceived: c.votes_received,
-                position: candidates.indexOf(c) + 1
-              }))
+                // Log audit event
+                logAudit(db, organizationId, 'election_completed', userId, null, {
+                  electionId,
+                  positionsFilled: electedUserIds.length,
+                  electedUserIds
+                }, req);
+
+                res.json({
+                  success: true,
+                  message: 'Election completed successfully',
+                  electedCandidates: candidates.slice(0, positionsAvailable).map(c => ({
+                    userId: c.user_id,
+                    votesReceived: c.votes_received,
+                    position: candidates.indexOf(c) + 1
+                  }))
+                });
+              });
             });
-          });
       });
   } catch (error) {
     console.error('Error completing election:', error);

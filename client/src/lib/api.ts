@@ -653,12 +653,44 @@ export const governanceApi = {
     })
   },
 
-  // Analytics
-  async getVotingAnalytics(organizationId: string, period?: 'month' | 'quarter' | 'year') {
-    const query = period ? `?period=${period}` : '';
-    return apiRequest(`/api/governance/${organizationId}/analytics${query}`)
-  },
-}
+      // Analytics
+      async getVotingAnalytics(organizationId: string, period?: 'month' | 'quarter' | 'year') {
+        const query = period ? `?period=${period}` : '';
+        return apiRequest(`/api/governance/${organizationId}/analytics${query}`)
+      },
+
+      // Election Results
+      async getElectionResults(organizationId: string, electionId: string) {
+        return apiRequest(`/api/governance/${organizationId}/elections/${electionId}/results`)
+      },
+
+      // Policy Votes API
+      policyVotesApi: {
+        async getPolicyVotes(organizationId: string) {
+          return apiRequest(`/api/governance/${organizationId}/policy-votes`)
+        },
+
+        async createPolicyVote(organizationId: string, voteData: {
+          title: string;
+          description?: string;
+          documentId?: string;
+          threshold?: number;
+          deadlineHours?: number;
+        }) {
+          return apiRequest(`/api/governance/${organizationId}/policy-votes`, {
+            method: 'POST',
+            body: JSON.stringify(voteData),
+          })
+        },
+
+        async voteOnPolicy(organizationId: string, voteId: string, voteChoice: 'yes' | 'no' | 'abstain') {
+          return apiRequest(`/api/governance/${organizationId}/policy-votes/${voteId}/vote`, {
+            method: 'POST',
+            body: JSON.stringify({ vote: voteChoice }),
+          })
+        },
+      }
+    }
 
 // Auth API functions
 export const authApi = {

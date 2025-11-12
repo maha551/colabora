@@ -37,6 +37,8 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
   const [loadingGovernance, setLoadingGovernance] = useState(false);
   const [loadingElections, setLoadingElections] = useState(false);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+  const [policyVotes, setPolicyVotes] = useState<any[]>([]);
+  const [loadingPolicyVotes, setLoadingPolicyVotes] = useState(false);
 
   // Dialog states
   const [showGovernanceRulesDialog, setShowGovernanceRulesDialog] = useState(false);
@@ -122,10 +124,30 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
     }
   };
 
+  const loadPolicyVotes = async () => {
+    setLoadingPolicyVotes(true);
+    try {
+      const response = await governanceApi.policyVotesApi.getPolicyVotes(organization.id);
+      setPolicyVotes(response.policyVotes || []);
+    } catch (error) {
+      console.error('Failed to load policy votes:', error);
+      setPolicyVotes([]);
+    } finally {
+      setLoadingPolicyVotes(false);
+    }
+  };
+
+  const handlePolicyVote = async (voteId: string) => {
+    // For now, show a simple dialog or redirect to vote
+    // In a full implementation, this would open a voting dialog
+    toast.info('Policy voting interface coming soon! Contact representatives for now.');
+  };
+
   // Load data when tabs are selected
   useEffect(() => {
     if (activeTab === 'documents') {
       loadOrganizationDocuments();
+      loadPolicyVotes();
     } else if (activeTab === 'governance') {
       loadGovernanceRules();
     } else if (activeTab === 'analytics') {
@@ -563,57 +585,33 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
               </CardHeader>
               <CardContent>
                 {(() => {
-                  // Mock policy votes for demonstration - in real implementation,
-                  // this would fetch from governance API for organization-specific votes
-                  const mockPolicyVotes = [
-                    {
-                      id: '1',
-                      title: 'Implement Budget Allocation Policy',
-                      description: 'Execute the budget allocation guidelines from the 2024 Financial Policy document',
-                      documentTitle: '2024 Financial Policy',
-                      status: 'active',
-                      votesFor: 8,
-                      votesAgainst: 2,
-                      totalVoters: 15,
-                      endsAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-                      threshold: 60
-                    },
-                    {
-                      id: '2',
-                      title: 'Adopt Code of Conduct Standards',
-                      description: 'Implement the behavioral standards outlined in the Community Guidelines document',
-                      documentTitle: 'Community Guidelines v2.1',
-                      status: 'active',
-                      votesFor: 12,
-                      votesAgainst: 1,
-                      totalVoters: 15,
-                      endsAt: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
-                      threshold: 75
-                    }
-                  ];
-
-                  const activePolicyVotes = mockPolicyVotes.filter(v => v.status === 'active');
+                  // Get active policy votes from real data
+                  const activePolicyVotes = policyVotes?.filter(v => v.status === 'active') || [];
 
                   return activePolicyVotes.length > 0 ? (
                     <div className="space-y-4">
                       {activePolicyVotes.map(vote => {
-                        const totalVotes = vote.votesFor + vote.votesAgainst;
-                        const approvalPercentage = totalVotes > 0 ? (vote.votesFor / totalVotes) * 100 : 0;
-                        const timeRemaining = Math.ceil((new Date(vote.endsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-                        const meetsThreshold = approvalPercentage >= vote.threshold;
+                        const totalVotes = (vote.votes_yes || 0) + (vote.votes_no || 0) + (vote.votes_abstain || 0);
+                        const approvalPercentage = totalVotes > 0 ? ((vote.votes_yes || 0) / totalVotes) * 100 : 0;
+                        const timeRemaining = vote.deadline_at ? Math.ceil((new Date(vote.deadline_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 7;
+                        const meetsThreshold = approvalPercentage >= (vote.threshold_percentage || 50);
 
                         return (
                           <div key={vote.id} className="p-4 border rounded-lg">
                             <div className="flex items-start justify-between mb-3">
                               <div className="flex-1">
                                 <h3 className="font-medium">{vote.title}</h3>
-                                <p className="text-sm text-gray-600 mt-1">{vote.description}</p>
+                                {vote.description && (
+                                  <p className="text-sm text-gray-600 mt-1">{vote.description}</p>
+                                )}
                                 <div className="flex items-center gap-2 mt-2">
-                                  <Badge variant="outline" className="text-xs">
-                                    📄 {vote.documentTitle}
-                                  </Badge>
+                                  {vote.document_id && (
+                                    <Badge variant="outline" className="text-xs">
+                                      📄 Document Policy
+                                    </Badge>
+                                  )}
                                   <Badge variant="secondary" className="text-xs">
-                                    ⏰ {timeRemaining} days left
+                                    ⏰ {timeRemaining > 0 ? `${timeRemaining} days left` : 'Ended'}
                                   </Badge>
                                 </div>
                               </div>
@@ -622,7 +620,7 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
                                   {Math.round(approvalPercentage)}%
                                 </div>
                                 <div className="text-xs text-gray-600">
-                                  {vote.votesFor}/{totalVotes} approve
+                                  {vote.votes_yes || 0}/{totalVotes} approve
                                 </div>
                               </div>
                             </div>
@@ -639,7 +637,7 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
                                 />
                               </div>
                               <div className="flex justify-between text-xs text-gray-600">
-                                <span>Threshold: {vote.threshold}%</span>
+                                <span>Threshold: {vote.threshold_percentage || 50}%</span>
                                 <span className={meetsThreshold ? 'text-green-600' : 'text-red-600'}>
                                   {meetsThreshold ? '✓ Meets threshold' : '✗ Below threshold'}
                                 </span>
@@ -647,12 +645,19 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
                             </div>
 
                             <div className="flex gap-2 mt-4">
-                              <Button size="sm" variant="outline">
-                                View Document
-                              </Button>
-                              <Button size="sm">
-                                Vote Now
-                              </Button>
+                              {vote.document_id && (
+                                <Button size="sm" variant="outline">
+                                  View Document
+                                </Button>
+                              )}
+                              {isActiveMember && timeRemaining > 0 && (
+                                <Button
+                                  size="sm"
+                                  onClick={() => handlePolicyVote(vote.id)}
+                                >
+                                  Vote Now
+                                </Button>
+                              )}
                             </div>
                           </div>
                         );
@@ -662,7 +667,7 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
                     <div className="text-center py-8 text-gray-500">
                       <CheckSquare className="h-12 w-12 mx-auto mb-3 opacity-50" />
                       <p>No active policy votes</p>
-                      <p className="text-sm">Policy implementation votes will appear here when available</p>
+                      <p className="text-sm">Policy implementation votes will appear here when representatives create them</p>
                     </div>
                   );
                 })()}

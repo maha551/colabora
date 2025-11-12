@@ -290,3 +290,57 @@ CREATE TRIGGER IF NOT EXISTS update_analytics_updated_at
 BEGIN
     UPDATE voting_analytics SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;
+
+-- Policy Votes for Document Implementation
+CREATE TABLE IF NOT EXISTS policy_votes (
+    id TEXT PRIMARY KEY,
+    organization_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    document_id TEXT, -- Reference to documents table
+    status TEXT CHECK(status IN ('draft', 'active', 'completed', 'cancelled')) DEFAULT 'draft',
+
+    -- Voting parameters
+    threshold_percentage REAL DEFAULT 50.0, -- Percentage needed to pass
+    deadline_at DATETIME,
+    anonymous_voting BOOLEAN DEFAULT 0,
+
+    -- Vote counts
+    votes_yes INTEGER DEFAULT 0,
+    votes_no INTEGER DEFAULT 0,
+    votes_abstain INTEGER DEFAULT 0,
+
+    -- Metadata
+    created_by TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+    FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE SET NULL,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Policy Vote Responses
+CREATE TABLE IF NOT EXISTS policy_vote_responses (
+    id TEXT PRIMARY KEY,
+    policy_vote_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    vote TEXT CHECK(vote IN ('yes', 'no', 'abstain')) NOT NULL,
+    voted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (policy_vote_id) REFERENCES policy_votes(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(policy_vote_id, user_id) -- One vote per user per policy vote
+);
+
+-- Indexes for Policy Votes
+CREATE INDEX IF NOT EXISTS idx_policy_votes_org ON policy_votes(organization_id, status);
+CREATE INDEX IF NOT EXISTS idx_policy_votes_document ON policy_votes(document_id);
+CREATE INDEX IF NOT EXISTS idx_policy_vote_responses_vote ON policy_vote_responses(policy_vote_id, vote);
+
+-- Trigger for Policy Votes Updated At
+CREATE TRIGGER IF NOT EXISTS update_policy_votes_updated_at
+    AFTER UPDATE ON policy_votes
+BEGIN
+    UPDATE policy_votes SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+END;

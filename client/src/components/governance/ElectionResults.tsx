@@ -54,53 +54,34 @@ export function ElectionResults({
   const loadElectionResults = async () => {
     setLoading(true);
     try {
-      // This would need a new API endpoint to get election results
-      // For now, we'll simulate results based on the election data
-      const mockResults: ElectionResult[] = [
-        {
-          candidate: {
-            id: '1',
-            electionId: election.id,
-            userId: 'user1',
-            user: { name: 'Alice Johnson' },
-            nominatedAt: new Date().toISOString(),
-            nominationStatement: 'I want to serve the community',
-            status: 'approved'
-          } as ElectionCandidate,
-          votesReceived: 45,
-          votePercentage: 60,
-          elected: true,
-          position: 1
-        },
-        {
-          candidate: {
-            id: '2',
-            electionId: election.id,
-            userId: 'user2',
-            user: { name: 'Bob Smith' },
-            nominatedAt: new Date().toISOString(),
-            nominationStatement: 'Experience in governance',
-            status: 'approved'
-          } as ElectionCandidate,
-          votesReceived: 30,
-          votePercentage: 40,
-          elected: false
-        }
-      ];
+      const response = await governanceApi.getElectionResults(organization.id, election.id);
 
-      setResults(mockResults);
+      const { election: electionData, candidates, stats } = response;
 
-      // Calculate stats
-      const totalVotes = mockResults.reduce((sum, result) => sum + result.votesReceived, 0);
-      const turnoutPercentage = totalVotes > 0 ? (totalVotes / (organization.members?.length || 1)) * 100 : 0;
-      const quorumReached = turnoutPercentage >= (election.quorumPercentage || 50);
-      const canComplete = election.status === 'active' && quorumReached;
+      // Convert candidates to ElectionResult format
+      const results: ElectionResult[] = candidates.map((candidate: any, index: number) => ({
+        candidate: {
+          id: candidate.id,
+          electionId: election.id,
+          userId: candidate.user_id,
+          user: { name: candidate.user_name || 'Unknown' },
+          nominatedAt: candidate.nominated_at,
+          nominationStatement: candidate.nomination_statement,
+          status: candidate.status || 'approved'
+        } as ElectionCandidate,
+        votesReceived: candidate.votes_received || 0,
+        votePercentage: stats.totalVotes > 0 ? ((candidate.votes_received || 0) / stats.totalVotes) * 100 : 0,
+        elected: (candidate.elected_position && candidate.elected_position <= stats.positionsAvailable),
+        position: candidate.elected_position
+      }));
+
+      setResults(results);
 
       setElectionStats({
-        totalVotes,
-        turnoutPercentage,
-        quorumReached,
-        canComplete
+        totalVotes: stats.totalVotes,
+        turnoutPercentage: stats.quorumPercentage,
+        quorumReached: stats.quorumReached,
+        canComplete: electionData.status === 'active' && stats.quorumReached
       });
 
     } catch (error) {

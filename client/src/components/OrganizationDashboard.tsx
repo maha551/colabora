@@ -10,6 +10,7 @@ import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Label } from "./ui/label";
 import { Users, Vote, FileText, Settings, Plus, ArrowRight } from "lucide-react";
+import { RepresentativeSelector } from "./RepresentativeSelector";
 import { toast } from "sonner";
 import { OrganizationManagement } from "./OrganizationManagement";
 
@@ -58,6 +59,11 @@ export function OrganizationDashboard({ currentUser }: OrganizationDashboardProp
 
     if (representatives.length < 3) {
       toast.error('At least 3 representatives are required');
+      return;
+    }
+
+    if (representatives.length > 10) {
+      toast.error('Maximum 10 representatives allowed');
       return;
     }
 
@@ -321,44 +327,12 @@ export function OrganizationDashboard({ currentUser }: OrganizationDashboardProp
               </p>
             </div>
 
-            <div>
-              <Label>Initial Representatives *</Label>
-              <p className="text-sm text-gray-600 mb-2">
-                At least 3 representatives are required to start the organization.
-              </p>
-              <div className="border rounded-md p-3 min-h-[100px]">
-                {representatives.length === 0 ? (
-                  <p className="text-gray-500 text-sm">No representatives selected</p>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {representatives.map((repId) => (
-                      <Badge key={repId} variant="secondary">
-                        {repId}
-                        <button
-                          onClick={() => setRepresentatives(representatives.filter(id => id !== repId))}
-                          className="ml-1 text-xs"
-                        >
-                          ×
-                        </button>
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <Input
-                placeholder="Add representative user ID"
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
-                    const newRep = e.currentTarget.value.trim();
-                    if (newRep && !representatives.includes(newRep)) {
-                      setRepresentatives([...representatives, newRep]);
-                      e.currentTarget.value = '';
-                    }
-                  }
-                }}
-                className="mt-2"
-              />
-            </div>
+            <RepresentativeSelector
+              selectedRepresentatives={representatives}
+              onRepresentativesChange={setRepresentatives}
+              minRequired={3}
+              maxAllowed={10}
+            />
           </div>
 
           <div className="flex justify-end gap-2 mt-6">

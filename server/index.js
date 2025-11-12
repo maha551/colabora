@@ -544,6 +544,7 @@ app.post('/api/admin/create-tables', requireAuth, (req, res) => {
       description TEXT,
       representatives TEXT NOT NULL, -- JSON array of user IDs
       membership_policy TEXT CHECK(membership_policy IN ('open', 'invitation')) DEFAULT 'invitation',
+      voting_enabled BOOLEAN DEFAULT false,
       voting_threshold REAL DEFAULT 0.5,
       is_active BOOLEAN DEFAULT true,
       created_by_admin_id TEXT NOT NULL,
@@ -791,6 +792,7 @@ function initializeDatabase(db) {
       description TEXT,
       representatives TEXT NOT NULL, -- JSON array of user IDs
       membership_policy TEXT CHECK(membership_policy IN ('open', 'invitation')) DEFAULT 'invitation',
+      voting_enabled BOOLEAN DEFAULT false,
       voting_threshold REAL DEFAULT 0.5,
       is_active BOOLEAN DEFAULT true,
       created_by_admin_id TEXT NOT NULL,

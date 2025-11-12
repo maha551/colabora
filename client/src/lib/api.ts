@@ -485,7 +485,7 @@ export const organizationsApi = {
   },
 
   // Create organization (admin only)
-  async createOrganization(name: string, description?: string, representatives: string[], membershipPolicy?: 'open' | 'invitation', votingThreshold?: number) {
+  async createOrganization(name: string, description?: string, representatives: string[], membershipPolicy?: 'open' | 'invitation', votingEnabled?: boolean, votingThreshold?: number) {
     return apiRequest('/api/organizations', {
       method: 'POST',
       body: JSON.stringify({
@@ -493,6 +493,7 @@ export const organizationsApi = {
         description,
         representatives,
         membershipPolicy,
+        votingEnabled,
         votingThreshold
       }),
     })
@@ -550,14 +551,16 @@ export const organizationsApi = {
   },
 
   // Create organization vote
-  async createOrganizationVote(organizationId: string, title: string, description?: string, voteType?: string, targetDocumentId?: string) {
+  async createOrganizationVote(organizationId: string, title: string, description?: string, voteType?: string, targetDocumentId?: string, votingStartDate?: string, votingEndDate?: string) {
     return apiRequest(`/api/organizations/${organizationId}/votes`, {
       method: 'POST',
       body: JSON.stringify({
         title,
         description,
         voteType,
-        targetDocumentId
+        targetDocumentId,
+        votingStartDate,
+        votingEndDate
       }),
     })
   },

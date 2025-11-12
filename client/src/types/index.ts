@@ -279,6 +279,7 @@ export interface Organization {
   description?: string;
   representatives: string[];
   membershipPolicy: 'open' | 'invitation';
+  votingEnabled: boolean;
   votingThreshold: number;
   isActive: boolean;
   createdAt: string;

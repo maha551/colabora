@@ -89,7 +89,7 @@ function logAudit(db, organizationId, actionType, performedByUserId, affectedUse
 // Create organization (admin only)
 router.post('/', requireAdmin, (req, res) => {
   const db = req.app.locals.db;
-  const { name, description, representatives, membershipPolicy, votingThreshold } = req.body;
+  const { name, description, representatives, membershipPolicy, votingEnabled, votingThreshold } = req.body;
   const adminId = req.user.id;
 
   if (!name || !representatives || representatives.length < 3) {
@@ -102,10 +102,10 @@ router.post('/', requireAdmin, (req, res) => {
   const repsJson = JSON.stringify(representatives);
 
   db.run(`INSERT INTO organizations (
-    id, name, description, representatives, membership_policy, voting_threshold, created_by_admin_id
-  ) VALUES (?, ?, ?, ?, ?, ?, ?)`, [
+    id, name, description, representatives, membership_policy, voting_enabled, voting_threshold, created_by_admin_id
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [
     orgId, name, description || '', repsJson,
-    membershipPolicy || 'invitation', votingThreshold || 0.5, adminId
+    membershipPolicy || 'invitation', votingEnabled ? 1 : 0, votingThreshold || 0.5, adminId
   ], function(err) {
     if (err) {
       console.error('Error creating organization:', err);
@@ -122,6 +122,7 @@ router.post('/', requireAdmin, (req, res) => {
         description,
         representatives,
         membershipPolicy: membershipPolicy || 'invitation',
+        votingEnabled: votingEnabled || false,
         votingThreshold: votingThreshold || 0.5,
         isActive: true,
         createdAt: new Date().toISOString()
@@ -543,22 +544,58 @@ router.post('/:organizationId/votes', requireAuth, async (req, res) => {
   const db = req.app.locals.db;
   const { organizationId } = req.params;
   const userId = req.user.id;
-  const { title, description, voteType, targetDocumentId } = req.body;
+  const { title, description, voteType, targetDocumentId, votingStartDate, votingEndDate } = req.body;
 
   try {
-    const isMember = await isActiveMember(db, userId, organizationId);
-    if (!isMember) {
-      return res.status(403).json({ error: 'Only active members can propose votes' });
+    const isRep = await isRepresentative(db, userId, organizationId);
+    if (!isRep) {
+      return res.status(403).json({ error: 'Only representatives can create votes' });
+    }
+
+    // Check if voting is enabled for this organization
+    const org = await new Promise((resolve, reject) => {
+      db.get('SELECT voting_enabled, voting_threshold FROM organizations WHERE id = ?', [organizationId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (!org || !org.voting_enabled) {
+      return res.status(403).json({ error: 'Voting is not enabled for this organization' });
     }
 
     const voteId = uuidv4();
-    const threshold = 0.5; // Default, could be configurable per org
+    const threshold = org.voting_threshold || 0.5;
+
+    // Validate voting dates if provided
+    let votingStartsAt = null;
+    let votingEndsAt = null;
+
+    if (votingStartDate) {
+      votingStartsAt = new Date(votingStartDate);
+      if (isNaN(votingStartsAt.getTime())) {
+        return res.status(400).json({ error: 'Invalid voting start date' });
+      }
+    }
+
+    if (votingEndDate) {
+      votingEndsAt = new Date(votingEndDate);
+      if (isNaN(votingEndsAt.getTime())) {
+        return res.status(400).json({ error: 'Invalid voting end date' });
+      }
+      if (votingStartsAt && votingEndsAt <= votingStartsAt) {
+        return res.status(400).json({ error: 'Voting end date must be after start date' });
+      }
+    }
 
     db.run(`INSERT INTO organization_votes (
       id, organization_id, title, description, vote_type, proposed_by_user_id,
-      threshold, status, target_document_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'proposed', ?)`, [
-      voteId, organizationId, title, description, voteType, userId, threshold, targetDocumentId
+      threshold, status, voting_starts_at, voting_ends_at, target_document_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'proposed', ?, ?, ?)`, [
+      voteId, organizationId, title, description, voteType, userId, threshold,
+      votingStartsAt ? votingStartsAt.toISOString() : null,
+      votingEndsAt ? votingEndsAt.toISOString() : null,
+      targetDocumentId
     ], function(err) {
       if (err) {
         console.error('Error creating vote:', err);
@@ -576,6 +613,8 @@ router.post('/:organizationId/votes', requireAuth, async (req, res) => {
           proposedBy: userId,
           threshold,
           status: 'proposed',
+          votingStartsAt: votingStartsAt ? votingStartsAt.toISOString() : null,
+          votingEndsAt: votingEndsAt ? votingEndsAt.toISOString() : null,
           createdAt: new Date().toISOString()
         }
       });

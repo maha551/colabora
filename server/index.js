@@ -1085,9 +1085,10 @@ function initializeDatabase(db) {
       // All tables created, wait a bit for SQLite to fully commit, then ensure new columns exist
       console.log('All tables created, waiting for SQLite to commit before adding columns...');
       setTimeout(() => {
-        console.log('Ensuring new columns exist...');
-        ensureColumn(db, 'users', 'avatar', 'TEXT');
-        ensureColumn(db, 'users', 'bio', 'TEXT');
+               console.log('Ensuring new columns exist...');
+               ensureColumn(db, 'users', 'avatar', 'TEXT');
+               ensureColumn(db, 'users', 'bio', 'TEXT');
+               ensureColumn(db, 'users', 'role', 'TEXT CHECK(role IN (\'user\', \'admin\')) DEFAULT \'user\'');
 
         // Ensure documents table has new option columns
         ensureColumn(db, 'documents', 'acceptance_threshold', 'REAL DEFAULT 75.0 NOT NULL');

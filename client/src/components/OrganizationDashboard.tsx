@@ -231,28 +231,27 @@ export function OrganizationDashboard({ currentUser, onCreateOrganizationalDocum
                     </div>
                   </div>
 
-                  {/* Stats */}
-                  <div className="grid grid-cols-3 gap-4 text-center">
-                    <div>
-                      <div className="text-lg font-semibold text-blue-600">
-                        {/* This would come from API */}
-                        12
-                      </div>
-                      <div className="text-xs text-gray-600">Members</div>
+                  {/* Current Representatives */}
+                  <div>
+                    <div className="text-sm font-medium mb-2">Current Representatives</div>
+                    <div className="flex -space-x-2">
+                      {org.representatives?.slice(0, 3).map((repId, index) => (
+                        <Avatar key={repId} className="h-8 w-8 border-2 border-white">
+                          <AvatarFallback className="text-xs">
+                            R{index + 1}
+                          </AvatarFallback>
+                        </Avatar>
+                      ))}
+                      {(org.representatives?.length || 0) > 3 && (
+                        <Avatar className="h-8 w-8 border-2 border-white">
+                          <AvatarFallback className="text-xs bg-gray-100">
+                            +{(org.representatives?.length || 0) - 3}
+                          </AvatarFallback>
+                        </Avatar>
+                      )}
                     </div>
-                    <div>
-                      <div className="text-lg font-semibold text-green-600">
-                        {/* This would come from API */}
-                        3
-                      </div>
-                      <div className="text-xs text-gray-600">Active Votes</div>
-                    </div>
-                    <div>
-                      <div className="text-lg font-semibold text-purple-600">
-                        {/* This would come from API */}
-                        8
-                      </div>
-                      <div className="text-xs text-gray-600">Documents</div>
+                    <div className="text-xs text-gray-600 mt-2">
+                      Next election: Dec 2024
                     </div>
                   </div>
 

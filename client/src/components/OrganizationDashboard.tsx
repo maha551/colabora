@@ -16,11 +16,10 @@ import { OrganizationManagement } from "./OrganizationManagement/OrganizationMan
 
 interface OrganizationDashboardProps {
   currentUser: User;
-  onCreateOrganizationalDocument?: (organizationId: string) => void;
   onSelectOrganization: (organization: Organization) => void;
 }
 
-export function OrganizationDashboard({ currentUser, onCreateOrganizationalDocument, onSelectOrganization }: OrganizationDashboardProps) {
+export function OrganizationDashboard({ currentUser, onSelectOrganization }: OrganizationDashboardProps) {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

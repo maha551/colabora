@@ -650,7 +650,6 @@ export default function App() {
       {currentView === 'organizations' && (
         <OrganizationDashboard
           currentUser={currentUser!}
-          onCreateOrganizationalDocument={handleCreateOrganizationalDocument}
           onSelectOrganization={(org) => {
             setSelectedOrganization(org);
             setCurrentView('organization');

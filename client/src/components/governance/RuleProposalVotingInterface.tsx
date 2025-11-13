@@ -31,7 +31,7 @@ interface RuleProposal {
     optionDescription?: string;
     proposedValue: any;
   }>;
-  status: 'pending' | 'voting' | 'completed' | 'rejected';
+      status: 'draft' | 'active' | 'completed' | 'approved' | 'rejected';
   createdBy: {
     id: string;
     name: string;
@@ -321,7 +321,7 @@ export function RuleProposalVotingInterface({
       </Card>
 
       {/* Voting Section */}
-      {proposal.status === 'voting' && (
+      {proposal.status === 'active' && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

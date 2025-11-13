@@ -203,20 +203,38 @@ export function GovernanceRulesVotingInterface({
   const getActiveProposalForRule = (ruleField: string) => {
     return ruleProposals.find(proposal =>
       proposal.ruleField === ruleField &&
-      (proposal.status === 'pending' || proposal.status === 'voting')
+      proposal.status === 'active'
     );
   };
 
   const handleRuleClick = (ruleField: string) => {
     const activeProposal = getActiveProposalForRule(ruleField);
+    const draftProposal = ruleProposals.find(proposal =>
+      proposal.ruleField === ruleField && proposal.status === 'draft'
+    );
+
     if (activeProposal) {
       // Show voting interface for this proposal
       setSelectedProposalId(activeProposal.id);
       setShowRuleVotingInterface(true);
+    } else if (draftProposal && isRepresentative) {
+      // Show start voting option for draft proposals (representatives only)
+      handleStartVoting(draftProposal.id);
     } else {
       // Show proposal dialog
       setSelectedRuleField(ruleField);
       setShowRuleProposalDialog(true);
+    }
+  };
+
+  const handleStartVoting = async (proposalId: string) => {
+    try {
+      await governanceApi.ruleProposalsApi.startRuleProposalVoting(organization.id, proposalId);
+      toast.success('Voting started successfully');
+      loadData(); // Refresh to show updated status
+    } catch (error) {
+      console.error('Failed to start voting:', error);
+      toast.error('Failed to start voting');
     }
   };
 
@@ -228,11 +246,23 @@ export function GovernanceRulesVotingInterface({
 
   const getRuleStatusBadge = (ruleField: string) => {
     const activeProposal = getActiveProposalForRule(ruleField);
+    const draftProposal = ruleProposals.find(proposal =>
+      proposal.ruleField === ruleField && proposal.status === 'draft'
+    );
+
     if (activeProposal) {
       return (
         <Badge variant="secondary" className="bg-orange-100 text-orange-800">
           <Vote className="h-3 w-3 mr-1" />
           Voting Active
+        </Badge>
+      );
+    }
+    if (draftProposal) {
+      return (
+        <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
+          <Settings className="h-3 w-3 mr-1" />
+          Awaiting Approval
         </Badge>
       );
     }
@@ -382,13 +412,53 @@ export function GovernanceRulesVotingInterface({
         </Card>
       ))}
 
+      {/* Draft Proposals (Representatives Only) */}
+      {isRepresentative && ruleProposals.filter(p => p.status === 'draft').length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Settings className="h-5 w-5" />
+              Pending Proposals ({ruleProposals.filter(p => p.status === 'draft').length})
+            </CardTitle>
+            <CardDescription>
+              Rule change proposals awaiting your approval to start voting
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {ruleProposals.filter(p => p.status === 'draft').map(proposal => (
+                <div key={proposal.id} className="flex items-center justify-between p-3 border rounded">
+                  <div className="flex-1">
+                    <h4 className="font-medium">{proposal.title}</h4>
+                    <p className="text-sm text-gray-600">
+                      Proposed by {proposal.createdBy.name} • {getRuleDisplayInfo(proposal.ruleField).label}
+                    </p>
+                    <p className="text-sm text-gray-500 mt-1">{proposal.description}</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleStartVoting(proposal.id);
+                    }}
+                  >
+                    <Vote className="h-4 w-4 mr-1" />
+                    Start Voting
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Active Proposals Summary */}
-      {ruleProposals.filter(p => p.status === 'voting').length > 0 && (
+      {ruleProposals.filter(p => p.status === 'active').length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Vote className="h-5 w-5" />
-              Active Proposals ({ruleProposals.filter(p => p.status === 'voting').length})
+              Active Proposals ({ruleProposals.filter(p => p.status === 'active').length})
             </CardTitle>
             <CardDescription>
               Rule changes currently being voted on by members
@@ -396,7 +466,7 @@ export function GovernanceRulesVotingInterface({
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {ruleProposals.filter(p => p.status === 'voting').map(proposal => (
+              {ruleProposals.filter(p => p.status === 'active').map(proposal => (
                 <div key={proposal.id} className="flex items-center justify-between p-3 border rounded">
                   <div>
                     <h4 className="font-medium">{proposal.title}</h4>
@@ -404,7 +474,10 @@ export function GovernanceRulesVotingInterface({
                       Proposed by {proposal.createdBy.name} • {getRuleDisplayInfo(proposal.ruleField).label}
                     </p>
                   </div>
-                  <Button size="sm">
+                  <Button size="sm" onClick={() => {
+                    setSelectedProposalId(proposal.id);
+                    setShowRuleVotingInterface(true);
+                  }}>
                     <Vote className="h-4 w-4 mr-1" />
                     Vote
                   </Button>

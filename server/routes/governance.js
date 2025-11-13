@@ -381,7 +381,7 @@ router.get('/:organizationId/rule-proposals', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    // Get all rule proposals
+    // Get all rule proposals with their votes
     db.all(`
       SELECT grp.*, u.name as created_by_name
       FROM governance_rule_proposals grp
@@ -394,7 +394,56 @@ router.get('/:organizationId/rule-proposals', requireAuth, async (req, res) => {
         return res.status(500).json({ error: 'Failed to fetch rule proposals' });
       }
 
-      res.json({ ruleProposals: proposals || [] });
+      if (!proposals || proposals.length === 0) {
+        return res.json({ ruleProposals: [] });
+      }
+
+      // Get votes for all proposals
+      const proposalIds = proposals.map(p => p.id);
+      const placeholders = proposalIds.map(() => '?').join(',');
+      db.all(`
+        SELECT
+          grpv.*,
+          u.name as voter_name,
+          u.email as voter_email
+        FROM governance_rule_proposal_votes grpv
+        LEFT JOIN users u ON grpv.user_id = u.id
+        WHERE grpv.proposal_id IN (${placeholders})
+        ORDER BY grpv.voted_at ASC
+      `, proposalIds, (err, votes) => {
+        if (err) {
+          console.error('Error fetching proposal votes:', err);
+          return res.status(500).json({ error: 'Failed to fetch proposal votes' });
+        }
+
+        // Group votes by proposal
+        const votesByProposal = {};
+        votes.forEach(vote => {
+          if (!votesByProposal[vote.proposal_id]) {
+            votesByProposal[vote.proposal_id] = [];
+          }
+          votesByProposal[vote.proposal_id].push({
+            id: vote.id,
+            userId: vote.user_id,
+            selectedOptionId: vote.selected_option_id,
+            voteChoice: vote.vote_choice,
+            votedAt: vote.voted_at,
+            user: {
+              id: vote.user_id,
+              name: vote.voter_name,
+              email: vote.voter_email
+            }
+          });
+        });
+
+        // Attach votes to proposals
+        const proposalsWithVotes = proposals.map(proposal => ({
+          ...proposal,
+          votes: votesByProposal[proposal.id] || []
+        }));
+
+        res.json({ ruleProposals: proposalsWithVotes });
+      });
     });
 
   } catch (error) {

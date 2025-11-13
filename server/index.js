@@ -396,6 +396,13 @@ function startServer() {
 
   console.log('Starting HTTP server...');
 
+  // Run organization migrations if needed
+  runOrganizationMigrations(db).then(() => {
+    console.log('✅ Organization migrations completed');
+  }).catch(err => {
+    console.error('❌ Organization migration failed:', err);
+  });
+
   // Register routes
   registerRoutes();
 
@@ -789,6 +796,99 @@ function ensureDocumentTitleParagraph(db, documentId, documentTitle) {
     if (err) {
       console.error('Error ensuring document title paragraph (update):', err.message);
     }
+  });
+}
+
+// Run organization migrations on deployed databases
+function runOrganizationMigrations(db) {
+  return new Promise((resolve, reject) => {
+    console.log('🔄 Running organization migrations...');
+
+    const migrations = [
+      // Create documents table if it doesn't exist
+      `CREATE TABLE IF NOT EXISTS documents (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        description TEXT,
+        owner_id TEXT NOT NULL,
+        collaborators TEXT,
+        organization_id TEXT,
+        ownership_type TEXT CHECK(ownership_type IN ('personal', 'shared', 'organizational')) DEFAULT 'personal',
+        acceptance_threshold REAL DEFAULT 75.0,
+        voting_anonymous BOOLEAN DEFAULT false,
+        voting_anonymity_locked BOOLEAN DEFAULT false,
+        vote_change_allowed BOOLEAN DEFAULT true,
+        structure_proposals_enabled BOOLEAN DEFAULT false,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (owner_id) REFERENCES users(id),
+        FOREIGN KEY (organization_id) REFERENCES organizations(id)
+      )`,
+
+      // Create document proposals table
+      `CREATE TABLE IF NOT EXISTS document_proposals (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT,
+        proposed_by_user_id TEXT NOT NULL,
+        contributors TEXT,
+        document_options TEXT,
+        approved BOOLEAN DEFAULT false,
+        applied BOOLEAN DEFAULT false,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (organization_id) REFERENCES organizations(id),
+        FOREIGN KEY (proposed_by_user_id) REFERENCES users(id)
+      )`,
+
+      // Create document proposal votes table
+      `CREATE TABLE IF NOT EXISTS document_proposal_votes (
+        id TEXT PRIMARY KEY,
+        document_proposal_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        vote TEXT CHECK(vote IN ('PRO', 'NEUTRAL', 'CONTRA')) NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (document_proposal_id) REFERENCES document_proposals(id),
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        UNIQUE(document_proposal_id, user_id)
+      )`,
+
+      // Create indexes
+      `CREATE INDEX IF NOT EXISTS idx_document_proposals_org_status
+       ON document_proposals(organization_id, approved, created_at DESC)`,
+
+      `CREATE INDEX IF NOT EXISTS idx_document_proposal_votes_proposal_vote
+       ON document_proposal_votes(document_proposal_id, vote)`
+    ];
+
+    let completed = 0;
+    const total = migrations.length;
+
+    function runNext() {
+      if (completed >= total) {
+        console.log('✅ All organization migrations completed');
+        resolve();
+        return;
+      }
+
+      const migration = migrations[completed];
+      console.log(`🔄 Running migration ${completed + 1}/${total}`);
+
+      db.run(migration, (err) => {
+        if (err) {
+          console.error(`❌ Migration ${completed + 1} failed:`, err);
+          reject(err);
+          return;
+        }
+
+        console.log(`✅ Migration ${completed + 1} completed`);
+        completed++;
+        runNext();
+      });
+    }
+
+    runNext();
   });
 }
 

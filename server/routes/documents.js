@@ -1001,33 +1001,36 @@ router.get('/organization/:organizationId', requireAuth, (req, res) => {
 
       console.log(`Found ${documents ? documents.length : 0} documents for organization ${organizationId}`);
 
-      // Process documents with collaborators (similar to main documents endpoint)
+      // Process documents with collaborators (matching main documents API structure)
       const documentsWithCollaborators = documents.map(doc => {
         return new Promise((resolve) => {
+          // Fetch collaborators
           db.all(`
-            SELECT u.id, u.name, u.email, u.avatar
+            SELECT
+              dc.id as collaborator_id,
+              dc.document_id,
+              dc.user_id,
+              dc.created_at,
+              u.name as user_name,
+              u.email as user_email
             FROM document_collaborators dc
             JOIN users u ON dc.user_id = u.id
             WHERE dc.document_id = ?
-            ORDER BY u.name
           `, [doc.id], (err, collaborators) => {
             if (err) {
               console.error('Error fetching collaborators for document:', doc.id, err);
-              resolve({
+              return resolve({
                 ...doc,
+                owner: {
+                  id: doc.owner_id,
+                  name: doc.owner_name,
+                  email: doc.owner_email
+                },
                 collaborators: [],
-                options: {
-                  acceptanceThreshold: doc.acceptance_threshold,
-                  votingAnonymous: doc.voting_anonymous === 1,
-                  votingAnonymityLocked: doc.voting_anonymity_locked === 1,
-                  voteChangeAllowed: doc.vote_change_allowed === 1,
-                  structureProposalsEnabled: doc.structure_proposals_enabled === 1
-                }
-              });
-            } else {
-              resolve({
-                ...doc,
-                collaborators: collaborators || [],
+                organization: {
+                  id: doc.organization_id,
+                  name: doc.organization_name
+                },
                 options: {
                   acceptanceThreshold: doc.acceptance_threshold,
                   votingAnonymous: doc.voting_anonymous === 1,
@@ -1037,6 +1040,34 @@ router.get('/organization/:organizationId', requireAuth, (req, res) => {
                 }
               });
             }
+
+            // Transform collaborators to match expected format
+            const transformedCollaborators = (collaborators || []).map(collab => ({
+              id: collab.user_id,
+              name: collab.user_name,
+              email: collab.user_email
+            }));
+
+            resolve({
+              ...doc,
+              owner: {
+                id: doc.owner_id,
+                name: doc.owner_name,
+                email: doc.owner_email
+              },
+              collaborators: transformedCollaborators,
+              organization: {
+                id: doc.organization_id,
+                name: doc.organization_name
+              },
+              options: {
+                acceptanceThreshold: doc.acceptance_threshold,
+                votingAnonymous: doc.voting_anonymous === 1,
+                votingAnonymityLocked: doc.voting_anonymity_locked === 1,
+                voteChangeAllowed: doc.vote_change_allowed === 1,
+                structureProposalsEnabled: doc.structure_proposals_enabled === 1
+              }
+            });
           });
         });
       });

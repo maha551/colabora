@@ -146,6 +146,18 @@ export function DocumentsTab({
     }))
   ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
+  // Debug logging
+  console.log('DocumentsTab Debug:', {
+    documentsCount: documents.length,
+    proposalsCount: documentProposals.length,
+    allItemsCount: allItems.length,
+    loading,
+    permissions: {
+      canCreateDocuments: permissions.canCreateDocuments,
+      isRepresentative: permissions.isRepresentative
+    }
+  });
+
   // Generate hierarchical numbering
   const generateNumbering = (index: number, level: number): string => {
     return `${index + 1}${level > 1 ? '.1'.repeat(level - 1) : ''}`;

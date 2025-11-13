@@ -101,7 +101,9 @@ export function DocumentsTab({
 
       // Refresh the data to show the new proposal
       if (onRefreshDocumentProposals) {
+        console.log('Refreshing document proposals after creation...');
         await onRefreshDocumentProposals();
+        console.log('Document proposals refreshed');
       }
 
       // Reset form

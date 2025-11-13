@@ -242,7 +242,7 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
     setErrorState('analytics', null);
 
     try {
-      const response = await governanceApi.getAnalytics(organizationId);
+      const response = await governanceApi.getVotingAnalytics(organizationId);
       setAnalytics(response.analytics);
     } catch (error) {
       console.error('Failed to load analytics:', error);

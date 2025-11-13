@@ -561,39 +561,39 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
       // For shared documents, store creator IDs as JSON
       sql = `
         INSERT INTO documents (
-          id, title, owner_id, ownership_type, creator_ids, organization_id,
+          id, title, description, owner_id, ownership_type, creator_ids, organization_id,
           acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed,
           structure_proposals_enabled, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       `;
       params = [
-        documentId, trimmedTitle, userId, ownershipType, JSON.stringify(creatorIds), null,
+        documentId, trimmedTitle, trimmedDescription, userId, ownershipType, JSON.stringify(creatorIds), null,
         acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
       ];
     } else if (ownershipType === 'organizational') {
       // For organizational documents, set organization_id
       sql = `
         INSERT INTO documents (
-          id, title, owner_id, ownership_type, creator_ids, organization_id,
+          id, title, description, owner_id, ownership_type, creator_ids, organization_id,
           acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed,
           structure_proposals_enabled, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       `;
       params = [
-        documentId, trimmedTitle, userId, ownershipType, null, organizationId,
+        documentId, trimmedTitle, trimmedDescription, userId, ownershipType, null, organizationId,
         acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
       ];
     } else {
       // For personal documents (default)
       sql = `
         INSERT INTO documents (
-          id, title, owner_id, ownership_type, creator_ids, organization_id,
+          id, title, description, owner_id, ownership_type, creator_ids, organization_id,
           acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed,
           structure_proposals_enabled, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       `;
       params = [
-        documentId, trimmedTitle, userId, ownershipType, null, null,
+        documentId, trimmedTitle, trimmedDescription, userId, ownershipType, null, null,
         acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
       ];
     }

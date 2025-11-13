@@ -1033,6 +1033,7 @@ function initializeDatabase(db) {
     `CREATE TABLE IF NOT EXISTS documents (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
+      description TEXT,
       owner_id TEXT NOT NULL,
       ownership_type TEXT CHECK(ownership_type IN ('personal', 'shared', 'organizational')) DEFAULT 'personal',
       creator_ids TEXT, -- JSON array for shared docs

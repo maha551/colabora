@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Document, OrganizationGovernanceRules, RepresentativeElection, VotingAnalytics } from '../types';
+import { Document, OrganizationGovernanceRules, RepresentativeElection, VotingAnalytics, DocumentProposal } from '../types';
 import { organizationsApi, governanceApi } from '../lib/api';
 import { toast } from 'sonner';
 
 export interface OrganizationData {
   // Documents data
   documents: Document[];
+  documentProposals: DocumentProposal[];
   policyVotes: any[];
 
   // Governance data
@@ -18,6 +19,7 @@ export interface OrganizationData {
   // Loading states
   loading: {
     documents: boolean;
+    documentProposals: boolean;
     governance: boolean;
     elections: boolean;
     analytics: boolean;
@@ -27,6 +29,7 @@ export interface OrganizationData {
   // Error states
   errors: {
     documents: string | null;
+    documentProposals: string | null;
     governance: string | null;
     elections: string | null;
     analytics: string | null;
@@ -37,6 +40,9 @@ export interface OrganizationData {
 export interface OrganizationActions {
   // Document actions
   refreshDocuments: () => Promise<void>;
+  createDocumentProposal: (title: string, description?: string, contributors?: string[], options?: any) => Promise<void>;
+  refreshDocumentProposals: () => Promise<void>;
+  voteOnDocumentProposal: (proposalId: string, vote: 'PRO' | 'NEUTRAL' | 'CONTRA') => Promise<void>;
   createDocument: (title: string, description?: string) => Promise<void>;
 
   // Governance actions
@@ -64,6 +70,7 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
 } {
   // Data state
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [documentProposals, setDocumentProposals] = useState<DocumentProposal[]>([]);
   const [policyVotes, setPolicyVotes] = useState<any[]>([]);
   const [governanceRules, setGovernanceRules] = useState<OrganizationGovernanceRules | null>(null);
   const [elections, setElections] = useState<RepresentativeElection[]>([]);
@@ -84,6 +91,7 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
   // Loading states
   const [loading, setLoading] = useState({
     documents: false,
+    documentProposals: false,
     governance: false,
     elections: false,
     analytics: false,
@@ -93,6 +101,7 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
   // Error states
   const [errors, setErrors] = useState({
     documents: null as string | null,
+    documentProposals: null as string | null,
     governance: null as string | null,
     elections: null as string | null,
     analytics: null as string | null,
@@ -141,6 +150,25 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
       setLoadingState('documents', false);
     }
   }, [organizationId, loading.documents, setLoadingState, setErrorState]);
+
+  const loadDocumentProposals = useCallback(async () => {
+    if (loading.documentProposals) return;
+
+    setLoadingState('documentProposals', true);
+    setErrorState('documentProposals', null);
+
+    try {
+      // TODO: Implement document proposals API call
+      // const response = await organizationsApi.getDocumentProposals(organizationId);
+      // setDocumentProposals(response.documentProposals || []);
+      setDocumentProposals([]); // Placeholder
+    } catch (error) {
+      console.error('Failed to load document proposals:', error);
+      setErrorState('documentProposals', 'Failed to load document proposals');
+    } finally {
+      setLoadingState('documentProposals', false);
+    }
+  }, [organizationId, loading.documentProposals, setLoadingState, setErrorState]);
 
   const loadPolicyVotes = useCallback(async () => {
     if (loading.policyVotes) return;
@@ -228,6 +256,7 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
       case 'documents':
         if (documents.length === 0 && !loading.documents && !documentsLoadedRef.current && !documentsRateLimitedRef.current) {
           loadDocuments();
+          loadDocumentProposals();
           loadPolicyVotes();
         }
         break;
@@ -269,6 +298,15 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
   // Action functions
   const actions: OrganizationActions = {
     refreshDocuments: loadDocuments,
+    createDocumentProposal: async (title: string, description?: string, contributors?: string[], options?: any) => {
+      // TODO: Implement document proposal creation
+      console.log('Creating document proposal:', title, description, contributors, options);
+    },
+    refreshDocumentProposals: loadDocumentProposals,
+    voteOnDocumentProposal: async (proposalId: string, vote: 'PRO' | 'NEUTRAL' | 'CONTRA') => {
+      // TODO: Implement document proposal voting
+      console.log('Voting on document proposal:', proposalId, vote);
+    },
     createDocument: async (title: string, description?: string) => {
       // TODO: Implement document creation
       console.log('Creating document:', title, description);
@@ -299,6 +337,7 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
 
   const data: OrganizationData = {
     documents,
+    documentProposals,
     policyVotes,
     governanceRules,
     elections,

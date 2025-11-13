@@ -82,10 +82,14 @@ export function OrganizationManagement({
             currentUser={currentUser}
             permissions={permissions}
             documents={data.documents}
+            documentProposals={data.documentProposals}
             policyVotes={data.policyVotes}
             loading={data.loading.documents}
             onCreateDocument={onCreateOrganizationalDocument}
+            onCreateDocumentProposal={actions.createDocumentProposal}
+            onVoteOnDocumentProposal={actions.voteOnDocumentProposal}
             onRefreshDocuments={actions.refreshDocuments}
+            onRefreshDocumentProposals={actions.refreshDocumentProposals}
             onRefreshPolicyVotes={actions.refreshPolicyVotes}
           />
         </TabsContent>

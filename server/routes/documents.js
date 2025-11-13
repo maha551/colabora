@@ -601,7 +601,15 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
     db.run(sql, params, function(err) {
       if (err) {
         console.error('Error creating document:', err);
-        return res.status(500).json({ error: 'Failed to create document' });
+        console.error('SQL Error details:', err.message);
+        console.error('SQL Error code:', err.code);
+        console.error('SQL:', sql);
+        console.error('Params:', params);
+        return res.status(500).json({
+          error: 'Failed to create document',
+          details: err.message,
+          code: err.code
+        });
       }
 
       console.log('Document created in database, now creating initial paragraph...');
@@ -615,6 +623,8 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
       `, [paragraphId, documentId, trimmedTitle, trimmedDescription || trimmedTitle, -1], function(err) {
         if (err) {
           console.error('Error creating title paragraph:', err);
+          console.error('Paragraph creation error details:', err.message);
+          console.error('Paragraph creation SQL error code:', err.code);
           // Don't fail the whole request if paragraph creation fails
           console.error('Title paragraph creation failed:', err);
         }

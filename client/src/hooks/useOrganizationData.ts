@@ -320,8 +320,9 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
     voteOnDocumentProposal: async (proposalId: string, vote: 'PRO' | 'NEUTRAL' | 'CONTRA') => {
       try {
         await organizationsApi.voteOnDocumentProposal(organizationId, proposalId, vote);
-        // Refresh document proposals after voting
+        // Refresh both proposals and documents after voting (voting could result in approval)
         await loadDocumentProposals();
+        await loadDocuments();
       } catch (error) {
         console.error('Failed to vote on document proposal:', error);
         throw error;

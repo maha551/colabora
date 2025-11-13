@@ -99,6 +99,11 @@ export function DocumentsTab({
         );
       }
 
+      // Refresh the data to show the new proposal
+      if (onRefreshDocumentProposals) {
+        await onRefreshDocumentProposals();
+      }
+
       // Reset form
       setProposalTitle('');
       setProposalDescription('');
@@ -178,13 +183,13 @@ export function DocumentsTab({
   return (
     <div className="space-y-6">
       {/* Header with title and create button */}
-      <div className="flex justify-between items-center">
-        <div>
+        <div className="flex justify-between items-center">
+          <div>
           <h3 className="text-lg font-semibold">Organization Document Structure</h3>
-          <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-600">
             Table of contents for {organization.name} documents
-          </p>
-        </div>
+            </p>
+          </div>
         {permissions.canCreateDocuments && (
           <div className="relative">
             <Button
@@ -193,10 +198,10 @@ export function DocumentsTab({
               className="gap-2 hover:bg-gray-50"
               onClick={handleSuggestDocumentClick}
             >
-              <Plus className="h-4 w-4" />
-              Create Document
-            </Button>
-          </div>
+            <Plus className="h-4 w-4" />
+            Create Document
+          </Button>
+        </div>
         )}
       </div>
 
@@ -493,8 +498,8 @@ export function DocumentsTab({
                         <span className="text-orange-600">
                           {item.openProposals} open proposal{item.openProposals !== 1 ? 's' : ''}
                         </span>
-                      )}
-                    </div>
+                          )}
+                        </div>
 
                     {/* Voting interface for proposals */}
                     {item.type === 'proposal' && !item.approved && onVoteOnDocumentProposal && (
@@ -542,7 +547,7 @@ export function DocumentsTab({
                     {item.type === 'document' && permissions.canCreateDocuments && (
                       <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Add sub-document">
                         <Plus className="h-4 w-4" />
-                      </Button>
+                    </Button>
                     )}
                   </div>
                 </div>

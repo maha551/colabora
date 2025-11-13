@@ -60,7 +60,7 @@ describe('Governance API Integration Tests', () => {
       const orgData = {
         name: 'Democratic Council',
         description: 'A test organization for democratic governance',
-        representatives: ['test-user-id-1', 'test-user-id-2', 'test-user-id-3'],
+        representatives: ['cmgxlfj9z0000orjgnfy3revt', 'cmgxlfj9z0000orjgnfy3revu', 'cmgxlfj9z0000orjgnfy3revv'], // Alice, Bob, Charlie
         membershipPolicy: 'invitation',
         votingEnabled: true,
         votingThreshold: 0.6
@@ -81,12 +81,28 @@ describe('Governance API Integration Tests', () => {
       // Verify governance rules were created
       const rulesResponse = await request(server)
         .get(`/api/governance/${organizationId}/governance-rules`)
-        .set('Authorization', `Bearer ${regularToken}`)
+        .set('Authorization', `Bearer ${repToken}`) // Use representative token
         .expect(200);
 
       expect(rulesResponse.body).toHaveProperty('governanceRules');
       expect(rulesResponse.body.governanceRules.representativeTermMonths).toBe(12);
       expect(rulesResponse.body.governanceRules.anonymousVotingEnabled).toBe(true);
+
+      // Add organization members so membership checks work
+      await request(server)
+        .post(`/api/organizations/${organizationId}/members`)
+        .set('Authorization', `Bearer ${repToken}`)
+        .send({ userId: 'cmgxlfj9z0000orjgnfy3revt', status: 'active' }); // Alice
+
+      await request(server)
+        .post(`/api/organizations/${organizationId}/members`)
+        .set('Authorization', `Bearer ${repToken}`)
+        .send({ userId: 'cmgxlfj9z0000orjgnfy3revu', status: 'active' }); // Bob
+
+      await request(server)
+        .post(`/api/organizations/${organizationId}/members`)
+        .set('Authorization', `Bearer ${repToken}`)
+        .send({ userId: 'cmgxlfj9z0000orjgnfy3revv', status: 'active' }); // Charlie
     });
 
     test('should allow representatives to update governance rules', async () => {
@@ -98,7 +114,7 @@ describe('Governance API Integration Tests', () => {
 
       const response = await request(server)
         .put(`/api/governance/${organizationId}/governance-rules`)
-        .set('Authorization', `Bearer ${regularToken}`)
+        .set('Authorization', `Bearer ${repToken}`) // Use Bob's token (representative)
         .send(updates)
         .expect(200);
 
@@ -139,7 +155,7 @@ describe('Governance API Integration Tests', () => {
 
       const response = await request(server)
         .post(`/api/governance/${organizationId}/elections`)
-        .set('Authorization', `Bearer ${regularToken}`)
+        .set('Authorization', `Bearer ${repToken}`)
         .send(electionData)
         .expect(200);
 

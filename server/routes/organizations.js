@@ -116,7 +116,7 @@ router.post('/', requireAdmin, (req, res) => {
     // Log audit event
     logAudit(db, orgId, 'org_created', adminId, null, { name, representatives }, req);
 
-    res.json({
+    res.status(201).json({
       organization: {
         id: orgId,
         name,

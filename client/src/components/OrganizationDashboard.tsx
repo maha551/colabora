@@ -12,7 +12,7 @@ import { Label } from "./ui/label";
 import { Users, Vote, FileText, Settings, Plus, ArrowRight } from "lucide-react";
 import { RepresentativeSelector } from "./RepresentativeSelector";
 import { toast } from "sonner";
-import { OrganizationManagement } from "./OrganizationManagement";
+import { OrganizationManagement } from "./OrganizationManagement/OrganizationManagement";
 
 interface OrganizationDashboardProps {
   currentUser: User;
@@ -137,25 +137,13 @@ export function OrganizationDashboard({ currentUser, onCreateOrganizationalDocum
 
   // Show organization management if one is manually selected
   if (selectedOrganization) {
-    // Temporarily use a simple placeholder to test if OrganizationManagement is causing the error
     return (
-      <div className="max-w-6xl mx-auto p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold">Organization: {selectedOrganization.name}</h1>
-            <p className="text-gray-600">Managing organization</p>
-          </div>
-          <Button onClick={() => setSelectedOrganization(null)}>
-            Back to Organizations
-          </Button>
-        </div>
-        <Card>
-          <CardContent className="p-6">
-            <p>Organization management would go here...</p>
-            <p>Organization ID: {selectedOrganization.id}</p>
-          </CardContent>
-        </Card>
-      </div>
+      <OrganizationManagement
+        organization={selectedOrganization}
+        currentUser={currentUser}
+        onBack={() => setSelectedOrganization(null)}
+        onCreateOrganizationalDocument={onCreateOrganizationalDocument}
+      />
     );
   }
 

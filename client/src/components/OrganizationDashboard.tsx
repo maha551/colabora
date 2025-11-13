@@ -135,19 +135,17 @@ export function OrganizationDashboard({ currentUser, onCreateOrganizationalDocum
     );
   }
 
-  // For now, always show the organization list to avoid rendering issues
-  // TODO: Re-enable auto-navigation after fixing the JavaScript error
-  // const isAdmin = currentUser.role === 'admin';
-  // if (organizations.length === 1 && !isAdmin && organizations[0]) {
-  //   return (
-  //     <OrganizationManagement
-  //       organization={organizations[0]}
-  //       currentUser={currentUser}
-  //       onBack={() => setSelectedOrganization(null)}
-  //       onCreateOrganizationalDocument={onCreateOrganizationalDocument}
-  //     />
-  //   );
-  // }
+  // Show organization management if one is manually selected
+  if (selectedOrganization) {
+    return (
+      <OrganizationManagement
+        organization={selectedOrganization}
+        currentUser={currentUser}
+        onBack={() => setSelectedOrganization(null)}
+        onCreateOrganizationalDocument={onCreateOrganizationalDocument}
+      />
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto p-6">

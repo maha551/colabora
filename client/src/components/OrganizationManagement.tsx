@@ -16,6 +16,7 @@ import { ElectionCreationDialog } from './governance/ElectionCreationDialog';
 import { ElectionVotingInterface } from './governance/ElectionVotingInterface';
 import { ElectionResults } from './governance/ElectionResults';
 import { RuleProposalDialog } from './governance/RuleProposalDialog';
+import { PublicGovernanceDashboard } from './governance/PublicGovernanceDashboard';
 import { organizationsApi, governanceApi } from '../lib/api';
 import { toast } from 'sonner';
 
@@ -590,6 +591,36 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
               </CardContent>
             </Card>
 
+            {/* Member Initiatives Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <Settings className="h-5 w-5" />
+                    Member Initiatives
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowRuleProposalDialog(true)}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Propose Rule Change
+                  </Button>
+                </CardTitle>
+                <CardDescription>
+                  Propose changes to governance rules. {isRepresentative ? 'Your proposals go directly to voting.' : 'Your proposals need representative approval first.'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-8 text-gray-500">
+                  <Settings className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  <p>Member-driven governance proposals</p>
+                  <p className="text-sm">Click "Propose Rule Change" to suggest improvements to organization rules</p>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Document Policy Votes Section */}
             <Card>
               <CardHeader>
@@ -702,9 +733,14 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
           </div>
         </TabsContent>
 
-        {/* Governance Tab - Internal Rules Management */}
+        {/* Governance Tab - Public Transparency and Rules */}
         <TabsContent value="governance" className="mt-6">
           <div className="space-y-6">
+            {/* Public Governance Dashboard */}
+            <PublicGovernanceDashboard
+              organization={organization}
+              currentUser={currentUser}
+            />
             {/* Current Rules Overview */}
             <Card>
               <CardHeader>

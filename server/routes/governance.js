@@ -1628,43 +1628,54 @@ router.post('/:organizationId/elections/:electionId/complete', requireAuth, asyn
 
 // Governance Audit Log System
 
-// Get audit logs for organization
-router.get('/:organizationId/audit-logs', requireAuth, async (req, res) => {
+// Get public audit logs for organization (accessible to all members)
+router.get('/:organizationId/public-audit-logs', requireAuth, async (req, res) => {
   const db = req.app.locals.db;
   const { organizationId } = req.params;
   const userId = req.user.id;
-  const { actionType, performedBy, affectedUser, startDate, endDate, limit = 50, offset = 0 } = req.query;
+  const { actionType, startDate, endDate, limit = 20, offset = 0 } = req.query;
 
   try {
-    // Check if user has access (representatives only for audit logs)
-    const isRep = await isRepresentative(db, userId, organizationId);
-    if (!isRep) {
-      return res.status(403).json({ error: 'Only representatives can access audit logs' });
+    // Check if user is a member (not just representative)
+    const hasAccess = await isRepresentative(db, userId, organizationId) ||
+                     await isActiveMember(db, userId, organizationId);
+
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' });
     }
 
-    // Build query with filters
+    // Build query with filters - limit sensitive actions for public access
     let query = `
-      SELECT oal.*, u1.name as performed_by_name, u2.name as affected_user_name
+      SELECT
+        oal.id,
+        oal.action_type,
+        oal.created_at,
+        u1.name as performed_by_name,
+        u2.name as affected_user_name,
+        CASE
+          WHEN oal.action_type IN ('rep_added', 'rep_removed', 'member_invited', 'member_added', 'member_left') THEN
+            oal.details
+          ELSE
+            NULL
+        END as details
       FROM organization_audit oal
       LEFT JOIN users u1 ON oal.performed_by_user_id = u1.id
       LEFT JOIN users u2 ON oal.affected_user_id = u2.id
       WHERE oal.organization_id = ?
+        AND oal.action_type IN (
+          'org_created', 'rep_added', 'rep_removed', 'member_invited',
+          'member_joined', 'member_left', 'member_bulk_added', 'vote_proposed',
+          'vote_approved', 'vote_started', 'vote_completed', 'doc_created',
+          'dissolution_proposed', 'org_dissolved', 'rule_proposal_created',
+          'rule_proposal_approved', 'rule_proposal_rejected', 'election_created',
+          'election_started', 'election_completed'
+        )
     `;
     const params = [organizationId];
 
     if (actionType) {
       query += ' AND oal.action_type = ?';
       params.push(actionType);
-    }
-
-    if (performedBy) {
-      query += ' AND oal.performed_by_user_id = ?';
-      params.push(performedBy);
-    }
-
-    if (affectedUser) {
-      query += ' AND oal.affected_user_id = ?';
-      params.push(affectedUser);
     }
 
     if (startDate) {
@@ -1682,30 +1693,35 @@ router.get('/:organizationId/audit-logs', requireAuth, async (req, res) => {
 
     db.all(query, params, (err, logs) => {
       if (err) {
-        console.error('Error fetching audit logs:', err);
+        console.error('Error fetching public audit logs:', err);
         return res.status(500).json({ error: 'Failed to fetch audit logs' });
       }
 
-      // Get total count for pagination
-      let countQuery = 'SELECT COUNT(*) as total FROM organization_audit WHERE organization_id = ?';
+      // Get total count for pagination (same filters)
+      let countQuery = `
+        SELECT COUNT(*) as total FROM organization_audit
+        WHERE organization_id = ?
+          AND action_type IN (
+            'org_created', 'rep_added', 'rep_removed', 'member_invited',
+            'member_joined', 'member_left', 'member_bulk_added', 'vote_proposed',
+            'vote_approved', 'vote_started', 'vote_completed', 'doc_created',
+            'dissolution_proposed', 'org_dissolved', 'rule_proposal_created',
+            'rule_proposal_approved', 'rule_proposal_rejected', 'election_created',
+            'election_started', 'election_completed'
+          )
+      `;
       const countParams = [organizationId];
 
       if (actionType) {
         countQuery += ' AND action_type = ?';
         countParams.push(actionType);
       }
-      if (performedBy) {
-        countQuery += ' AND performed_by_user_id = ?';
-        countParams.push(performedBy);
-      }
-      if (affectedUser) {
-        countQuery += ' AND affected_user_id = ?';
-        countParams.push(affectedUser);
-      }
+
       if (startDate) {
         countQuery += ' AND created_at >= ?';
         countParams.push(startDate);
       }
+
       if (endDate) {
         countQuery += ' AND created_at <= ?';
         countParams.push(endDate);
@@ -1713,7 +1729,7 @@ router.get('/:organizationId/audit-logs', requireAuth, async (req, res) => {
 
       db.get(countQuery, countParams, (err, countResult) => {
         if (err) {
-          console.error('Error counting audit logs:', err);
+          console.error('Error counting public audit logs:', err);
           return res.status(500).json({ error: 'Failed to count audit logs' });
         }
 

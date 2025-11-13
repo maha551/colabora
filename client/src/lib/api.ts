@@ -781,6 +781,25 @@ export const governanceApi = {
           const query = queryParams.toString();
           return apiRequest(`/api/governance/${organizationId}/audit-export${query ? `?${query}` : ''}`)
         },
+
+        async getPublicAuditLogs(organizationId: string, filters?: {
+          actionType?: string;
+          startDate?: string;
+          endDate?: string;
+          limit?: number;
+          offset?: number;
+        }) {
+          const queryParams = new URLSearchParams();
+          if (filters) {
+            Object.entries(filters).forEach(([key, value]) => {
+              if (value !== undefined && value !== null) {
+                queryParams.append(key, value.toString());
+              }
+            });
+          }
+          const query = queryParams.toString();
+          return apiRequest(`/api/governance/${organizationId}/public-audit-logs${query ? `?${query}` : ''}`)
+        },
       }
     }
 

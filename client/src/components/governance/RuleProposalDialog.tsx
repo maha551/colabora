@@ -285,9 +285,10 @@ export function RuleProposalDialog({
   };
 
   const isRepresentative = organization.representatives?.includes(currentUser.id);
+  const isActiveMember = organization.members?.some(m => m.userId === currentUser.id && m.status === 'active') || false;
 
-  if (!isRepresentative) {
-    return null; // Only representatives can access this dialog
+  if (!isRepresentative && !isActiveMember) {
+    return null; // Only members can access this dialog
   }
 
   const availableRuleFields = [
@@ -317,7 +318,7 @@ export function RuleProposalDialog({
             Propose Governance Rule Change
           </DialogTitle>
           <DialogDescription>
-            Propose a change to {organization.name}'s governance rules. The proposal will be voted on by organization members.
+            Propose a change to {organization.name}'s governance rules. {isRepresentative ? 'As a representative, your proposal can be voted on directly.' : 'As a member, your proposal will need representative approval before voting begins.'} All proposals are voted on by organization members.
           </DialogDescription>
         </DialogHeader>
 

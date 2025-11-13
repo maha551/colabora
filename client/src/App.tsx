@@ -233,27 +233,9 @@ export default function App() {
     setCurrentView('profile');
   };
 
-  const handleShowOrganizations = async () => {
+  const handleShowOrganizations = () => {
     setCurrentDocument(null);
-
-    try {
-      // Check how many organizations the user has access to
-      const response = await organizationsApi.getOrganizations();
-
-      if (response.organizations && response.organizations.length === 1) {
-        // If user has exactly one organization, navigate directly to it
-        setCurrentView('organizations');
-        // Store the single organization to be handled by OrganizationDashboard
-        // OrganizationDashboard will detect this and show OrganizationManagement directly
-      } else {
-        // If user has zero or multiple organizations, show the list
-        setCurrentView('organizations');
-      }
-    } catch (error) {
-      console.error('Failed to check user organizations:', error);
-      // Fall back to showing organizations list
-      setCurrentView('organizations');
-    }
+    setCurrentView('organizations');
   };
 
   const handleBackToDocuments = () => {

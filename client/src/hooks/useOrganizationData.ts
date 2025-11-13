@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Document, OrganizationGovernanceRules, RepresentativeElection, VotingAnalytics } from '../types';
 import { organizationsApi, governanceApi } from '../lib/api';
 import { toast } from 'sonner';
@@ -68,6 +68,14 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
   const [governanceRules, setGovernanceRules] = useState<OrganizationGovernanceRules | null>(null);
   const [elections, setElections] = useState<RepresentativeElection[]>([]);
   const [analytics, setAnalytics] = useState<VotingAnalytics | null>(null);
+
+  // Refs to track loading state to prevent infinite loops
+  const electionsLoadedRef = useRef(false);
+
+  // Reset refs when organization changes
+  useEffect(() => {
+    electionsLoadedRef.current = false;
+  }, [organizationId]);
 
   // Loading states
   const [loading, setLoading] = useState({
@@ -155,7 +163,7 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
   }, [organizationId, loading.governance, setLoadingState, setErrorState]);
 
   const loadElections = useCallback(async () => {
-    if (loading.elections || elections.length > 0) return; // Prevent duplicate calls if already loaded
+    if (loading.elections || electionsLoadedRef.current) return; // Prevent duplicate calls if already loaded
 
     setLoadingState('elections', true);
     setErrorState('elections', null);
@@ -163,6 +171,7 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
     try {
       const response = await governanceApi.getElections(organizationId);
       setElections(response.elections || []);
+      electionsLoadedRef.current = true; // Mark as loaded
       // Note: Empty elections array is normal for new organizations
     } catch (error: any) {
       console.error('Failed to load elections:', error);
@@ -174,7 +183,7 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
     } finally {
       setLoadingState('elections', false);
     }
-  }, [organizationId, loading.elections, elections.length, setLoadingState, setErrorState]);
+  }, [organizationId, loading.elections, setLoadingState, setErrorState]);
 
   // Analytics actions
   const loadAnalytics = useCallback(async () => {
@@ -208,7 +217,7 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
         if (!governanceRules && !loading.governance) {
           loadGovernanceRules();
         }
-        if (elections.length === 0 && !loading.elections) {
+        if (!electionsLoadedRef.current && !loading.elections) {
           loadElections();
         }
         break;
@@ -217,20 +226,20 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
           loadAnalytics();
         }
         // Analytics may need elections data for fallback counts
-        if (elections.length === 0 && !loading.elections) {
+        if (!electionsLoadedRef.current && !loading.elections) {
           loadElections();
         }
         break;
       case 'dashboard':
         // Dashboard needs elections for showing active elections and election warnings
-        if (elections.length === 0 && !loading.elections) {
+        if (!electionsLoadedRef.current && !loading.elections) {
           loadElections();
         }
         break;
       default:
         break;
     }
-  }, [activeTab, documents.length, governanceRules, analytics, loading.documents, loading.governance, loading.elections, loading.analytics, loadDocuments, loadPolicyVotes, loadGovernanceRules, loadAnalytics, loadElections]);
+  }, [activeTab, documents.length, governanceRules, analytics, loading.documents, loading.governance, loading.elections, loading.analytics]);
 
   // Load elections for dashboard - only when needed
   // Note: Elections may not exist for new organizations where reps are appointed

@@ -163,10 +163,14 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
     try {
       const response = await governanceApi.getElections(organizationId);
       setElections(response.elections || []);
-    } catch (error) {
+      // Note: Empty elections array is normal for new organizations
+    } catch (error: any) {
       console.error('Failed to load elections:', error);
-      setErrorState('elections', 'Failed to load elections');
-      toast.error('Failed to load elections');
+      // For rate limiting, don't set error state - let rate limiting handle it
+      if (error.name !== 'RateLimitError') {
+        setErrorState('elections', 'Failed to load elections');
+        toast.error('Failed to load elections');
+      }
     } finally {
       setLoadingState('elections', false);
     }
@@ -204,25 +208,36 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
         if (!governanceRules && !loading.governance) {
           loadGovernanceRules();
         }
-        // Elections are loaded separately for all tabs
+        if (elections.length === 0 && !loading.elections) {
+          loadElections();
+        }
         break;
       case 'analytics':
         if (!analytics && !loading.analytics) {
           loadAnalytics();
         }
+        // Analytics may need elections data for fallback counts
+        if (elections.length === 0 && !loading.elections) {
+          loadElections();
+        }
         break;
-      // Dashboard doesn't need special loading
+      case 'dashboard':
+        // Dashboard needs elections for showing active elections and election warnings
+        if (elections.length === 0 && !loading.elections) {
+          loadElections();
+        }
+        break;
       default:
         break;
     }
   }, [activeTab, documents.length, governanceRules, analytics, loading, loadDocuments, loadPolicyVotes, loadGovernanceRules, loadAnalytics]);
 
-  // Load elections for dashboard (always needed)
+  // Load elections for dashboard - only when needed
+  // Note: Elections may not exist for new organizations where reps are appointed
   useEffect(() => {
-    if (elections.length === 0 && !loading.elections) {
-      loadElections();
-    }
-  }, [organizationId, elections.length, loading.elections, loadElections]);
+    // Don't auto-load elections - let tabs/components load them when needed
+    // This prevents unnecessary API calls for organizations without elections
+  }, [organizationId]);
 
   // Action functions
   const actions: OrganizationActions = {

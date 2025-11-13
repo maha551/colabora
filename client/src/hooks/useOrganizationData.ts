@@ -204,9 +204,7 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
         if (!governanceRules && !loading.governance) {
           loadGovernanceRules();
         }
-        if (elections.length === 0 && !loading.elections) {
-          loadElections();
-        }
+        // Elections are loaded separately for all tabs
         break;
       case 'analytics':
         if (!analytics && !loading.analytics) {
@@ -217,7 +215,7 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
       default:
         break;
     }
-  }, [activeTab, documents.length, governanceRules, elections.length, analytics, loading, loadDocuments, loadPolicyVotes, loadGovernanceRules, loadElections, loadAnalytics]);
+  }, [activeTab, documents.length, governanceRules, analytics, loading, loadDocuments, loadPolicyVotes, loadGovernanceRules, loadAnalytics]);
 
   // Load elections for dashboard (always needed)
   useEffect(() => {

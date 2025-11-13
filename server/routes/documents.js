@@ -21,18 +21,23 @@ router.get('/', requireAuth, (req, res) => {
   const query = `
     SELECT DISTINCT d.*,
            u.name as owner_name,
-           u.email as owner_email
+           u.email as owner_email,
+           o.name as organization_name
     FROM documents d
     LEFT JOIN document_collaborators dc ON d.id = dc.document_id
+    LEFT JOIN organizations o ON d.organization_id = o.id
+    LEFT JOIN organization_members om ON o.id = om.organization_id AND om.user_id = ? AND om.status = 'active'
     JOIN users u ON d.owner_id = u.id
-    WHERE d.owner_id = ? OR dc.user_id = ?
+    WHERE d.owner_id = ?
+       OR dc.user_id = ?
+       OR (d.ownership_type = 'organizational' AND om.user_id IS NOT NULL)
     ORDER BY d.updated_at DESC
   `;
 
   console.log('Executing documents query for user:', userId);
   console.log('Query:', query);
 
-  db.all(query, [userId, userId], (err, documents) => {
+  db.all(query, [userId, userId, userId], (err, documents) => {
     if (err) {
       console.error('Error fetching documents:', err);
       console.error('SQL Error details:', err.message);

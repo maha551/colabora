@@ -155,7 +155,7 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
   }, [organizationId, loading.governance, setLoadingState, setErrorState]);
 
   const loadElections = useCallback(async () => {
-    if (loading.elections) return;
+    if (loading.elections || elections.length > 0) return; // Prevent duplicate calls if already loaded
 
     setLoadingState('elections', true);
     setErrorState('elections', null);
@@ -174,7 +174,7 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
     } finally {
       setLoadingState('elections', false);
     }
-  }, [organizationId, loading.elections, setLoadingState, setErrorState]);
+  }, [organizationId, loading.elections, elections.length, setLoadingState, setErrorState]);
 
   // Analytics actions
   const loadAnalytics = useCallback(async () => {
@@ -230,7 +230,7 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
       default:
         break;
     }
-  }, [activeTab, documents.length, governanceRules, analytics, loading, loadDocuments, loadPolicyVotes, loadGovernanceRules, loadAnalytics]);
+  }, [activeTab, documents.length, governanceRules, analytics, loading.documents, loading.governance, loading.elections, loading.analytics, loadDocuments, loadPolicyVotes, loadGovernanceRules, loadAnalytics, loadElections]);
 
   // Load elections for dashboard - only when needed
   // Note: Elections may not exist for new organizations where reps are appointed
@@ -262,9 +262,10 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
       await Promise.all([
         loadDocuments(),
         loadGovernanceRules(),
-        loadElections(),
         loadAnalytics(),
         loadPolicyVotes(),
+        // Note: Elections are loaded per-tab, not in refreshAll
+        // This prevents unnecessary API calls for organizations without elections
       ]);
     },
   };

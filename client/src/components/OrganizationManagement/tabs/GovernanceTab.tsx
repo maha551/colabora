@@ -6,6 +6,7 @@ import { Organization, User, OrganizationGovernanceRules, RepresentativeElection
 import { OrganizationPermissions } from '../../../hooks/useOrganizationPermissions';
 import { PublicGovernanceDashboard } from '../../governance/PublicGovernanceDashboard';
 import { GovernanceRulesDialog } from '../../governance/GovernanceRulesDialog';
+import { GovernanceRulesVotingInterface } from '../../governance/GovernanceRulesVotingInterface';
 import { ElectionCreationDialog } from '../../governance/ElectionCreationDialog';
 
 interface GovernanceTabProps {
@@ -30,6 +31,7 @@ export function GovernanceTab({
   onCreateElection,
 }: GovernanceTabProps) {
   const [showGovernanceRulesDialog, setShowGovernanceRulesDialog] = useState(false);
+  const [showGovernanceRulesVoting, setShowGovernanceRulesVoting] = useState(false);
   const [showElectionCreationDialog, setShowElectionCreationDialog] = useState(false);
 
   const handleGovernanceRulesSuccess = async () => {
@@ -42,6 +44,16 @@ export function GovernanceTab({
     setShowElectionCreationDialog(false);
   };
 
+  if (showGovernanceRulesVoting) {
+    return (
+      <GovernanceRulesVotingInterface
+        organization={organization}
+        currentUser={currentUser}
+        onClose={() => setShowGovernanceRulesVoting(false)}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Governance Actions */}
@@ -53,6 +65,14 @@ export function GovernanceTab({
               Governance Actions
             </span>
             <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowGovernanceRulesVoting(true)}
+              >
+                <Shield className="h-4 w-4 mr-2" />
+                View Rules
+              </Button>
               {permissions.canManageGovernanceRules && (
                 <Button
                   variant="outline"

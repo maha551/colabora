@@ -175,12 +175,6 @@ export function DashboardTab({
               </Button>
             )}
 
-            {permissions.canProposeRules && (
-              <Button variant="outline" className="justify-start gap-2">
-                <Vote className="h-4 w-4" />
-                Propose Rule Change
-              </Button>
-            )}
 
             {permissions.canViewAnalytics && (
               <Button variant="outline" className="justify-start gap-2">

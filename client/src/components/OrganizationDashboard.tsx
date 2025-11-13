@@ -39,13 +39,6 @@ export function OrganizationDashboard({ currentUser, onCreateOrganizationalDocum
     loadOrganizations();
   }, []);
 
-  // Auto-select single organization
-  useEffect(() => {
-    if (organizations.length === 1 && !selectedOrganization) {
-      setSelectedOrganization(organizations[0]);
-    }
-  }, [organizations, selectedOrganization]);
-
   const loadOrganizations = async () => {
     try {
       setLoading(true);
@@ -142,11 +135,11 @@ export function OrganizationDashboard({ currentUser, onCreateOrganizationalDocum
     );
   }
 
-  // Show organization management if one is selected
-  if (selectedOrganization) {
+  // Auto-show organization management if user has exactly one organization
+  if (organizations.length === 1) {
     return (
       <OrganizationManagement
-        organization={selectedOrganization}
+        organization={organizations[0]}
         currentUser={currentUser}
         onBack={() => setSelectedOrganization(null)}
         onCreateOrganizationalDocument={onCreateOrganizationalDocument}

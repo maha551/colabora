@@ -17,11 +17,11 @@ import { OrganizationManagement } from "./OrganizationManagement/OrganizationMan
 interface OrganizationDashboardProps {
   currentUser: User;
   onCreateOrganizationalDocument?: (organizationId: string) => void;
+  onSelectOrganization: (organization: Organization) => void;
 }
 
-export function OrganizationDashboard({ currentUser, onCreateOrganizationalDocument }: OrganizationDashboardProps) {
+export function OrganizationDashboard({ currentUser, onCreateOrganizationalDocument, onSelectOrganization }: OrganizationDashboardProps) {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [selectedOrganization, setSelectedOrganization] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -38,6 +38,13 @@ export function OrganizationDashboard({ currentUser, onCreateOrganizationalDocum
   useEffect(() => {
     loadOrganizations();
   }, []);
+
+  // Auto-navigate for single organization users (admins see all organizations)
+  useEffect(() => {
+    if (organizations.length === 1 && currentUser.role !== 'admin') {
+      onSelectOrganization(organizations[0]);
+    }
+  }, [organizations, currentUser.role, onSelectOrganization]);
 
   const loadOrganizations = async () => {
     try {
@@ -135,18 +142,6 @@ export function OrganizationDashboard({ currentUser, onCreateOrganizationalDocum
     );
   }
 
-  // Show organization management if one is manually selected
-  if (selectedOrganization) {
-    return (
-      <OrganizationManagement
-        organization={selectedOrganization}
-        currentUser={currentUser}
-        onBack={() => setSelectedOrganization(null)}
-        onCreateOrganizationalDocument={onCreateOrganizationalDocument}
-      />
-    );
-  }
-
   return (
     <div className="max-w-6xl mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
@@ -241,7 +236,7 @@ export function OrganizationDashboard({ currentUser, onCreateOrganizationalDocum
                       variant="default"
                       size="sm"
                       className="flex-1"
-                      onClick={() => setSelectedOrganization(org)}
+                      onClick={() => onSelectOrganization(org)}
                     >
                       <ArrowRight className="h-4 w-4 mr-2" />
                       Manage

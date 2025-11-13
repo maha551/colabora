@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Badge } from '../ui/badge';
 import { Avatar, AvatarFallback } from '../ui/avatar';
-import { ArrowLeft, Building, Users, Vote, FileText, Settings, BarChart3 } from 'lucide-react';
+import { Users, Vote, FileText, Settings, BarChart3 } from 'lucide-react';
 
 import { Organization, User } from '../../types';
 import { useOrganizationPermissions } from '../../hooks/useOrganizationPermissions';
@@ -46,33 +46,18 @@ export function OrganizationManagement({
 
   return (
     <div className="max-w-6xl mx-auto p-6">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-6">
-        <Button variant="outline" onClick={onBack} className="gap-2">
-          <ArrowLeft className="h-4 w-4" />
-          Back to Organizations
-        </Button>
-
-        <div className="flex items-center gap-3">
-          <Building className="h-8 w-8 text-blue-600" />
-          <div>
-            <h1 className="text-2xl font-bold">{organization.name}</h1>
-            <p className="text-gray-600">{organization.description}</p>
-          </div>
-        </div>
-
-        <div className="ml-auto flex gap-2">
-          {permissions.isRepresentative && (
-            <Badge variant="default" className="bg-purple-100 text-purple-800">
-              Representative
-            </Badge>
-          )}
-          {permissions.isActiveMember && (
-            <Badge variant="default" className="bg-green-100 text-green-800">
-              Active Member
-            </Badge>
-          )}
-        </div>
+      {/* User Role Badges */}
+      <div className="flex justify-end gap-2 mb-6">
+        {permissions.isRepresentative && (
+          <Badge variant="default" className="bg-purple-100 text-purple-800">
+            Representative
+          </Badge>
+        )}
+        {permissions.isActiveMember && (
+          <Badge variant="default" className="bg-green-100 text-green-800">
+            Active Member
+          </Badge>
+        )}
       </div>
 
       {/* Organization Stats */}
@@ -108,7 +93,7 @@ export function OrganizationManagement({
 
       {/* Navigation Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-5 h-auto">
           <TabsTrigger value="dashboard" className="gap-2">
             <BarChart3 className="h-4 w-4" />
             Dashboard

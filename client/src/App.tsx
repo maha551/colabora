@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Document, User, VersionHistory, ElementType, HeadingLevel, StructureProposal } from "./types";
+import { Document, User, VersionHistory, ElementType, HeadingLevel, StructureProposal, Organization } from "./types";
 import { DocumentEditor } from "./components/DocumentEditor";
 import { AgreedDocument } from "./components/AgreedDocument";
 import { DocumentDashboard } from "./components/DocumentDashboard";
@@ -28,7 +28,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<"discussion" | "agreed" | "history">("discussion");
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [currentView, setCurrentView] = useState<'documents' | 'activity' | 'document' | 'profile' | 'organizations'>('documents');
+  const [currentView, setCurrentView] = useState<'documents' | 'activity' | 'document' | 'profile' | 'organizations' | 'organization'>('documents');
+  const [selectedOrganization, setSelectedOrganization] = useState<Organization | null>(null);
   const [pendingOrganizationalDocument, setPendingOrganizationalDocument] = useState<string | null>(null);
   const [documentLoadKey, setDocumentLoadKey] = useState<number>(Date.now());
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -579,13 +580,14 @@ export default function App() {
         onShowProfile={handleShowProfile}
         onShowDocuments={handleShowDocuments}
         onShowOrganizations={handleShowOrganizations}
-        showBackButton={currentView === 'activity' || currentView === 'document' || currentView === 'profile' || currentView === 'organizations'}
+        showBackButton={currentView === 'activity' || currentView === 'document' || currentView === 'profile' || currentView === 'organizations' || currentView === 'organization'}
         onBack={handleBackToDocuments}
         title={
           currentView === 'document' && currentDocument ? currentDocument.title :
           currentView === 'activity' ? 'Activity Feed' :
           currentView === 'profile' ? 'Edit Profile' :
           currentView === 'organizations' ? 'Organizations' :
+          currentView === 'organization' && selectedOrganization ? selectedOrganization.name :
           currentView === 'documents' ? 'Documents' :
           undefined
         }
@@ -654,6 +656,22 @@ export default function App() {
       {currentView === 'organizations' && (
         <OrganizationDashboard
           currentUser={currentUser!}
+          onCreateOrganizationalDocument={handleCreateOrganizationalDocument}
+          onSelectOrganization={(org) => {
+            setSelectedOrganization(org);
+            setCurrentView('organization');
+          }}
+        />
+      )}
+
+      {currentView === 'organization' && selectedOrganization && (
+        <OrganizationManagement
+          organization={selectedOrganization}
+          currentUser={currentUser!}
+          onBack={() => {
+            setSelectedOrganization(null);
+            setCurrentView('organizations');
+          }}
           onCreateOrganizationalDocument={handleCreateOrganizationalDocument}
         />
       )}

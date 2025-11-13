@@ -39,6 +39,13 @@ export function OrganizationDashboard({ currentUser, onCreateOrganizationalDocum
     loadOrganizations();
   }, []);
 
+  // Auto-select single organization
+  useEffect(() => {
+    if (organizations.length === 1 && !selectedOrganization) {
+      setSelectedOrganization(organizations[0]);
+    }
+  }, [organizations, selectedOrganization]);
+
   const loadOrganizations = async () => {
     try {
       setLoading(true);

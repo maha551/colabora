@@ -5,10 +5,7 @@ import { Badge } from '../../ui/badge';
 import { Input } from '../../ui/input';
 import { Textarea } from '../../ui/textarea';
 import { Label } from '../../ui/label';
-import { RadioGroup, RadioGroupItem } from '../../ui/radio-group';
-import { Checkbox } from '../../ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
-import { FileText, Plus, X, Settings } from 'lucide-react';
+import { FileText, Plus, X } from 'lucide-react';
 import { Organization, User, Document, DocumentProposal } from '../../../types';
 import { OrganizationPermissions } from '../../../hooks/useOrganizationPermissions';
 import { RuleProposalDialog } from '../../governance/RuleProposalDialog';
@@ -50,14 +47,6 @@ export function DocumentsTab({
   // Form state for inline document creation
   const [proposalTitle, setProposalTitle] = useState('');
   const [proposalDescription, setProposalDescription] = useState('');
-  const [selectedContributors, setSelectedContributors] = useState<string[]>([]);
-
-  // Document options state
-  const [acceptanceThreshold, setAcceptanceThreshold] = useState(75);
-  const [votingAnonymous, setVotingAnonymous] = useState(false);
-  const [votingAnonymityLocked, setVotingAnonymityLocked] = useState(false);
-  const [voteChangeAllowed, setVoteChangeAllowed] = useState(true);
-  const [structureProposalsEnabled, setStructureProposalsEnabled] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -85,16 +74,21 @@ export function DocumentsTab({
     setIsSubmitting(true);
     try {
       if (onCreateDocumentProposal) {
+        // For organizational documents, use organization governance settings
+        // All organization members are automatically included
+        const allMemberIds = organization.members?.map(member => member.userId) || [];
+
         await onCreateDocumentProposal(
           proposalTitle.trim(),
           proposalDescription.trim() || undefined,
-          selectedContributors.length > 0 ? selectedContributors : undefined,
+          allMemberIds.length > 0 ? allMemberIds : undefined,
           {
-            acceptanceThreshold,
-            votingAnonymous,
-            votingAnonymityLocked,
-            voteChangeAllowed,
-            structureProposalsEnabled
+            // These will be overridden by organization governance rules
+            acceptanceThreshold: 75, // Default, will be overridden
+            votingAnonymous: false,  // Default, will be overridden
+            votingAnonymityLocked: false, // Default, will be overridden
+            voteChangeAllowed: true, // Default, will be overridden
+            structureProposalsEnabled: true // Default, will be overridden
           }
         );
       }
@@ -104,16 +98,10 @@ export function DocumentsTab({
         await onRefreshDocumentProposals();
       }
 
-      // Reset form
-      setProposalTitle('');
-      setProposalDescription('');
-      setSelectedContributors([]);
-      setAcceptanceThreshold(75);
-      setVotingAnonymous(false);
-      setVotingAnonymityLocked(false);
-      setVoteChangeAllowed(true);
-      setStructureProposalsEnabled(false);
-      setShowInlineCreation(false);
+              // Reset form
+              setProposalTitle('');
+              setProposalDescription('');
+              setShowInlineCreation(false);
 
       alert('Document proposal created successfully!');
     } catch (error) {
@@ -224,13 +212,13 @@ export function DocumentsTab({
               </Button>
             </div>
             <CardDescription>
-              Create a new document for this organization with custom settings and collaborators.
+              Propose a new organizational document. All organization members will be included and governance rules will be applied automatically.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-4">
               {/* Document Title */}
-              <div className="space-y-2 md:col-span-2">
+              <div className="space-y-2">
                 <Label htmlFor="proposal-title">Document Title *</Label>
                 <Input
                   id="proposal-title"
@@ -242,147 +230,30 @@ export function DocumentsTab({
               </div>
 
               {/* Description */}
-              <div className="space-y-2 md:col-span-2">
+              <div className="space-y-2">
                 <Label htmlFor="proposal-description">Description (Optional)</Label>
                 <Textarea
                   id="proposal-description"
-                  placeholder="Brief description of the proposed document"
+                  placeholder="Brief description of what this organizational document will contain"
                   value={proposalDescription}
                   onChange={(e) => setProposalDescription(e.target.value)}
-                  rows={2}
+                  rows={3}
                   className="bg-white"
                 />
               </div>
-            </div>
 
-            {/* Document Options */}
-            <div className="space-y-4 border-t pt-4">
-              <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
-                <Settings className="h-4 w-4" />
-                <span>Document Options</span>
-              </div>
-
-              {/* Acceptance Threshold */}
-              <div className="space-y-2">
-                <Label>Acceptance Threshold</Label>
-                <RadioGroup
-                  value={acceptanceThreshold.toString()}
-                  onValueChange={(value) => setAcceptanceThreshold(parseInt(value))}
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="50" id="threshold-50" />
-                    <Label htmlFor="threshold-50" className="font-normal cursor-pointer text-xs">
-                      50% - Simple majority
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="75" id="threshold-75" />
-                    <Label htmlFor="threshold-75" className="font-normal cursor-pointer text-xs">
-                      75% - Strong consensus (default)
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="90" id="threshold-90" />
-                    <Label htmlFor="threshold-90" className="font-normal cursor-pointer text-xs">
-                      90% - Near-unanimous
-                    </Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {/* Voting Anonymity */}
-              <div className="space-y-2">
-                <Label>Voting Anonymity</Label>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="anonymous-voting"
-                    checked={votingAnonymous}
-                    onCheckedChange={(checked) => setVotingAnonymous(checked === true)}
-                  />
-                  <Label htmlFor="anonymous-voting" className="font-normal cursor-pointer text-xs">
-                    Anonymous voting (votes are hidden)
-                  </Label>
+              {/* Organization Info */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-medium text-blue-900 mb-2">Organizational Document</h4>
+                <p className="text-sm text-blue-700 mb-2">
+                  This document will be owned by the entire organization and follow the governance rules established in the Governance tab.
+                </p>
+                <div className="text-xs text-blue-600 space-y-1">
+                  <p>• All active organization members will be included as collaborators</p>
+                  <p>• Voting settings will use the organization's governance configuration</p>
+                  <p>• Document requires approval through the proposal voting process</p>
                 </div>
               </div>
-
-              {/* Vote Flexibility */}
-              <div className="space-y-2">
-                <Label>Vote Flexibility</Label>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="flexible-votes"
-                    checked={voteChangeAllowed}
-                    onCheckedChange={(checked) => setVoteChangeAllowed(checked === true)}
-                  />
-                  <Label htmlFor="flexible-votes" className="font-normal cursor-pointer text-xs">
-                    Allow vote changes after casting
-                  </Label>
-                </div>
-              </div>
-
-              {/* Structure Proposals */}
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="structure-proposals"
-                    checked={structureProposalsEnabled}
-                    onCheckedChange={(checked) => setStructureProposalsEnabled(checked === true)}
-                  />
-                  <Label htmlFor="structure-proposals" className="font-normal cursor-pointer text-xs">
-                    Enable structure proposals
-                  </Label>
-                </div>
-              </div>
-            </div>
-
-            {/* Contributors */}
-            <div className="space-y-3 border-t pt-4">
-              <div className="flex items-center justify-between">
-                <Label className="text-sm font-medium">Add Contributors (Optional)</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const allSelected = selectedContributors.length === availableContributors.length;
-                    if (allSelected) {
-                      setSelectedContributors([]);
-                    } else {
-                      setSelectedContributors(availableContributors.map(user => user.id));
-                    }
-                  }}
-                  className="text-xs h-7"
-                >
-                  {selectedContributors.length === availableContributors.length ? 'Deselect All' : 'Select All'}
-                </Button>
-              </div>
-              <div className="space-y-2 max-h-32 overflow-y-auto border rounded-md p-3 bg-white">
-                {availableContributors.map((user) => (
-                  <div key={user.id} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`contributor-${user.id}`}
-                      checked={selectedContributors.includes(user.id)}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setSelectedContributors(prev => [...prev, user.id]);
-                        } else {
-                          setSelectedContributors(prev => prev.filter(id => id !== user.id));
-                        }
-                      }}
-                    />
-                    <Label
-                      htmlFor={`contributor-${user.id}`}
-                      className="text-sm flex items-center gap-2 cursor-pointer flex-1"
-                    >
-                      <span className="font-medium">{user.name}</span>
-                      <span className="text-muted-foreground">({user.email})</span>
-                    </Label>
-                  </div>
-                ))}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {selectedContributors.length} of {availableContributors.length} contributors selected
-              </p>
             </div>
 
             {/* Action Buttons */}

@@ -1084,37 +1084,46 @@ function checkProposalApproval(db, proposalId, organizationId, callback) {
 
 // Helper function to convert approved proposal to actual document
 function convertProposalToDocument(db, proposalId, callback) {
-  // Get proposal details
-  db.get('SELECT * FROM document_proposals WHERE id = ? AND approved = 1', [proposalId], (err, proposal) => {
+  // Get proposal details with organization governance rules
+  const query = `
+    SELECT dp.*, o.voting_threshold as org_threshold
+    FROM document_proposals dp
+    JOIN organizations o ON dp.organization_id = o.id
+    WHERE dp.id = ? AND dp.approved = 1
+  `;
+
+  db.get(query, [proposalId], (err, result) => {
     if (err) {
       console.error('Error fetching approved proposal:', err);
       return callback(false);
     }
 
-    if (!proposal) {
+    if (!result) {
       console.error('Approved proposal not found:', proposalId);
       return callback(false);
     }
 
+    const proposal = result;
     if (proposal.applied) {
       console.log('Proposal already applied:', proposalId);
       return callback(true); // Already applied, consider success
     }
 
     try {
-      // Parse options and contributors safely
-      let options = {};
+      // For organizational documents, use organization's governance settings
+      // Parse contributors (all organization members)
       let contributors = [];
-
       try {
-        options = proposal.document_options ? JSON.parse(proposal.document_options) : {};
         contributors = proposal.contributors ? JSON.parse(proposal.contributors) : [];
       } catch (parseErr) {
-        console.error('Error parsing proposal options/contributors:', parseErr);
-        // Continue with defaults
+        console.error('Error parsing proposal contributors:', parseErr);
+        contributors = [];
       }
 
-      // Create document from proposal
+      // Use organization's voting threshold as acceptance threshold for the document
+      const acceptanceThreshold = proposal.org_threshold || 75;
+
+      // Create organizational document with standard governance settings
       const documentId = uuidv4();
 
       db.run(`INSERT INTO documents (
@@ -1125,22 +1134,23 @@ function convertProposalToDocument(db, proposalId, callback) {
         documentId,
         proposal.title,
         proposal.description || '',
-        proposal.proposed_by_user_id,
-        JSON.stringify(contributors),
+        proposal.proposed_by_user_id, // Original proposer becomes owner
+        JSON.stringify(contributors), // All organization members
         proposal.organization_id,
-        options.acceptanceThreshold || 75,
-        options.votingAnonymous || false,
-        options.votingAnonymityLocked || false,
-        options.voteChangeAllowed || true,
-        options.structureProposalsEnabled || false,
+        acceptanceThreshold, // Use organization's voting threshold
+        0, // voting_anonymous - organizations typically have transparent voting
+        0, // voting_anonymity_locked - allow changes if governance allows
+        1, // vote_change_allowed - typically allowed in organizations
+        1, // structure_proposals_enabled - organizations usually allow structure changes
         new Date().toISOString()
       ], function(err) {
         if (err) {
-          console.error('Error creating document from proposal:', err);
+          console.error('Error creating organizational document from proposal:', err);
           return callback(false);
         }
 
-        console.log(`Created document ${documentId} from proposal ${proposalId}`);
+        console.log(`Created organizational document ${documentId} from proposal ${proposalId}`);
+        console.log(`Document settings: threshold=${acceptanceThreshold}%, collaborators=${contributors.length}`);
 
         // Mark proposal as applied
         db.run('UPDATE document_proposals SET applied = 1, updated_at = ? WHERE id = ?',

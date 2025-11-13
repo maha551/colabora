@@ -53,18 +53,38 @@ router.get('/', requireAuth, (req, res) => {
 
     const documentsWithCollaborators = documents.map(doc => {
       return new Promise((resolve) => {
-        const collabQuery = `
-          SELECT
-            dc.id as collaborator_id,
-            dc.document_id,
-            dc.user_id,
-            dc.created_at,
-            u.name as user_name,
-            u.email as user_email
-          FROM document_collaborators dc
-          JOIN users u ON dc.user_id = u.id
-          WHERE dc.document_id = ?
-        `;
+        let collabQuery, collabParams;
+
+        if (doc.ownership_type === 'organizational') {
+          // For organizational documents, all active organization members are automatically collaborators
+          collabQuery = `
+            SELECT
+              u.id as user_id,
+              u.name as user_name,
+              u.email as user_email,
+              'auto' as collaborator_type
+            FROM organization_members om
+            JOIN users u ON om.user_id = u.id
+            WHERE om.organization_id = ? AND om.status = 'active'
+            ORDER BY u.name
+          `;
+          collabParams = [doc.organization_id];
+        } else {
+          // For personal/shared documents, fetch stored collaborators
+          collabQuery = `
+            SELECT
+              dc.id as collaborator_id,
+              dc.document_id,
+              dc.user_id,
+              dc.created_at,
+              u.name as user_name,
+              u.email as user_email
+            FROM document_collaborators dc
+            JOIN users u ON dc.user_id = u.id
+            WHERE dc.document_id = ?
+          `;
+          collabParams = [doc.id];
+        }
 
         // Also fetch paragraph and proposal counts
         const statsQuery = `
@@ -77,7 +97,7 @@ router.get('/', requireAuth, (req, res) => {
         `;
 
         // Fetch collaborators
-        db.all(collabQuery, [doc.id], (err, collaborators) => {
+        db.all(collabQuery, collabParams, (err, collaborators) => {
           if (err) {
             console.error('Error fetching collaborators:', err);
             return resolve({
@@ -89,6 +109,10 @@ router.get('/', requireAuth, (req, res) => {
               },
               collaborators: [],
               paragraphs: [],
+              organization: doc.organization_id ? {
+                id: doc.organization_id,
+                name: doc.organization_name
+              } : null,
               options: {
                 acceptanceThreshold: doc.acceptance_threshold || 75.0,
                 votingAnonymous: doc.voting_anonymous === 1,
@@ -105,17 +129,35 @@ router.get('/', requireAuth, (req, res) => {
               console.error('Error fetching document stats:', statsErr);
             }
 
-            const normalizedCollaborators = (collaborators || []).map(collab => ({
-              id: collab.collaborator_id,
-              document_id: collab.document_id,
-              user_id: collab.user_id,
-              created_at: collab.created_at,
-              user: {
-                id: collab.user_id,
-                name: collab.user_name,
-                email: collab.user_email
+            // Normalize collaborators based on document type
+            const normalizedCollaborators = (collaborators || []).map(collab => {
+              if (doc.ownership_type === 'organizational') {
+                // For organizational docs, collaborators come from org members query
+                return {
+                  id: collab.user_id, // Use user_id as id for auto-collaborators
+                  user_id: collab.user_id,
+                  user: {
+                    id: collab.user_id,
+                    name: collab.user_name,
+                    email: collab.user_email
+                  },
+                  collaborator_type: 'auto'
+                };
+              } else {
+                // For personal/shared docs, collaborators come from document_collaborators table
+                return {
+                  id: collab.collaborator_id,
+                  document_id: collab.document_id,
+                  user_id: collab.user_id,
+                  created_at: collab.created_at,
+                  user: {
+                    id: collab.user_id,
+                    name: collab.user_name,
+                    email: collab.user_email
+                  }
+                };
               }
-            }));
+            });
 
             // Add paragraph and proposal counts to the document
             const paragraphCount = stats ? stats.paragraph_count : 0;
@@ -1001,32 +1043,54 @@ router.get('/organization/:organizationId', requireAuth, (req, res) => {
 
       console.log(`Found ${documents ? documents.length : 0} documents for organization ${organizationId}`);
 
-      // Process documents with collaborators (matching main documents API structure)
+      // Process documents with collaborators (for organizational docs, all org members are auto-collaborators)
       const documentsWithCollaborators = documents.map(doc => {
         return new Promise((resolve) => {
-          // Fetch collaborators
-          db.all(`
-            SELECT
-              dc.id as collaborator_id,
-              dc.document_id,
-              dc.user_id,
-              dc.created_at,
-              u.name as user_name,
-              u.email as user_email
-            FROM document_collaborators dc
-            JOIN users u ON dc.user_id = u.id
-            WHERE dc.document_id = ?
-          `, [doc.id], (err, collaborators) => {
-            if (err) {
-              console.error('Error fetching collaborators for document:', doc.id, err);
-              return resolve({
+          if (doc.ownership_type === 'organizational') {
+            // For organizational documents, all active organization members are automatically collaborators
+            db.all(`
+              SELECT
+                u.id as user_id,
+                u.name as user_name,
+                u.email as user_email,
+                'auto' as collaborator_type
+              FROM organization_members om
+              JOIN users u ON om.user_id = u.id
+              WHERE om.organization_id = ? AND om.status = 'active'
+              ORDER BY u.name
+            `, [doc.organization_id], (err, collaborators) => {
+              if (err) {
+                console.error('Error fetching organization members for document:', doc.id, err);
+                return resolve({
+                  ...doc,
+                  owner: {
+                    id: doc.owner_id,
+                    name: doc.owner_name,
+                    email: doc.owner_email
+                  },
+                  collaborators: [],
+                  organization: {
+                    id: doc.organization_id,
+                    name: doc.organization_name
+                  },
+                  options: {
+                    acceptanceThreshold: doc.acceptance_threshold,
+                    votingAnonymous: doc.voting_anonymous === 1,
+                    votingAnonymityLocked: doc.voting_anonymity_locked === 1,
+                    voteChangeAllowed: doc.vote_change_allowed === 1,
+                    structureProposalsEnabled: doc.structure_proposals_enabled === 1
+                  }
+                });
+              }
+
+              resolve({
                 ...doc,
                 owner: {
                   id: doc.owner_id,
                   name: doc.owner_name,
                   email: doc.owner_email
                 },
-                collaborators: [],
+                collaborators: collaborators || [],
                 organization: {
                   id: doc.organization_id,
                   name: doc.organization_name
@@ -1039,36 +1103,74 @@ router.get('/organization/:organizationId', requireAuth, (req, res) => {
                   structureProposalsEnabled: doc.structure_proposals_enabled === 1
                 }
               });
-            }
-
-            // Transform collaborators to match expected format
-            const transformedCollaborators = (collaborators || []).map(collab => ({
-              id: collab.user_id,
-              name: collab.user_name,
-              email: collab.user_email
-            }));
-
-            resolve({
-              ...doc,
-              owner: {
-                id: doc.owner_id,
-                name: doc.owner_name,
-                email: doc.owner_email
-              },
-              collaborators: transformedCollaborators,
-              organization: {
-                id: doc.organization_id,
-                name: doc.organization_name
-              },
-              options: {
-                acceptanceThreshold: doc.acceptance_threshold,
-                votingAnonymous: doc.voting_anonymous === 1,
-                votingAnonymityLocked: doc.voting_anonymity_locked === 1,
-                voteChangeAllowed: doc.vote_change_allowed === 1,
-                structureProposalsEnabled: doc.structure_proposals_enabled === 1
-              }
             });
-          });
+          } else {
+            // For non-organizational documents, fetch stored collaborators
+            db.all(`
+              SELECT
+                dc.id as collaborator_id,
+                dc.document_id,
+                dc.user_id,
+                dc.created_at,
+                u.name as user_name,
+                u.email as user_email
+              FROM document_collaborators dc
+              JOIN users u ON dc.user_id = u.id
+              WHERE dc.document_id = ?
+            `, [doc.id], (err, collaborators) => {
+              if (err) {
+                console.error('Error fetching collaborators for document:', doc.id, err);
+                return resolve({
+                  ...doc,
+                  owner: {
+                    id: doc.owner_id,
+                    name: doc.owner_name,
+                    email: doc.owner_email
+                  },
+                  collaborators: [],
+                  organization: doc.organization_id ? {
+                    id: doc.organization_id,
+                    name: doc.organization_name
+                  } : null,
+                  options: {
+                    acceptanceThreshold: doc.acceptance_threshold,
+                    votingAnonymous: doc.voting_anonymous === 1,
+                    votingAnonymityLocked: doc.voting_anonymity_locked === 1,
+                    voteChangeAllowed: doc.vote_change_allowed === 1,
+                    structureProposalsEnabled: doc.structure_proposals_enabled === 1
+                  }
+                });
+              }
+
+              // Transform collaborators to match expected format
+              const transformedCollaborators = (collaborators || []).map(collab => ({
+                id: collab.user_id,
+                name: collab.user_name,
+                email: collab.user_email
+              }));
+
+              resolve({
+                ...doc,
+                owner: {
+                  id: doc.owner_id,
+                  name: doc.owner_name,
+                  email: doc.owner_email
+                },
+                collaborators: transformedCollaborators,
+                organization: doc.organization_id ? {
+                  id: doc.organization_id,
+                  name: doc.organization_name
+                } : null,
+                options: {
+                  acceptanceThreshold: doc.acceptance_threshold,
+                  votingAnonymous: doc.voting_anonymous === 1,
+                  votingAnonymityLocked: doc.voting_anonymity_locked === 1,
+                  voteChangeAllowed: doc.vote_change_allowed === 1,
+                  structureProposalsEnabled: doc.structure_proposals_enabled === 1
+                }
+              });
+            });
+          }
         });
       });
 

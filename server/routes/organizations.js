@@ -1117,14 +1117,8 @@ function convertProposalToDocument(db, proposalId, callback) {
 
     try {
       // For organizational documents, use organization's governance settings
-      // Parse contributors (all organization members)
-      let contributors = [];
-      try {
-        contributors = proposal.contributors ? JSON.parse(proposal.contributors) : [];
-      } catch (parseErr) {
-        console.error('Error parsing proposal contributors:', parseErr);
-        contributors = [];
-      }
+      // For organizational documents, all organization members are automatically collaborators
+      // No need to store individual collaborators - they'll be fetched dynamically
 
       // Use organization's voting threshold as acceptance threshold for the document
       const acceptanceThreshold = proposal.org_threshold || 75;
@@ -1141,7 +1135,7 @@ function convertProposalToDocument(db, proposalId, callback) {
         proposal.title,
         proposal.description || '',
         proposal.proposed_by_user_id, // Original proposer becomes owner
-        JSON.stringify(contributors), // All organization members
+        JSON.stringify([]), // Empty array - org members are auto-collaborators
         proposal.organization_id,
         acceptanceThreshold, // Use organization's voting threshold
         0, // voting_anonymous - organizations typically have transparent voting
@@ -1156,7 +1150,7 @@ function convertProposalToDocument(db, proposalId, callback) {
         }
 
         console.log(`Created organizational document ${documentId} from proposal ${proposalId}`);
-        console.log(`Document settings: threshold=${acceptanceThreshold}%, collaborators=${contributors.length}`);
+        console.log(`Document settings: threshold=${acceptanceThreshold}%, all org members are collaborators`);
 
         // Mark proposal as applied
         db.run('UPDATE document_proposals SET applied = 1, updated_at = ? WHERE id = ?',

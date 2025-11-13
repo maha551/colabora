@@ -11,6 +11,7 @@ import { StructureProposalMode } from "./components/StructureProposalMode";
 import { StructureProposalCard } from "./components/StructureProposalCard";
 import { StructureHistory } from "./components/StructureHistory";
 import { OrganizationDashboard } from "./components/OrganizationDashboard";
+import { OrganizationManagement } from "./components/OrganizationManagement/OrganizationManagement";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { Avatar, AvatarFallback } from "./components/ui/avatar";
 import { CollaboratorManagement } from "./components/CollaboratorManagement";

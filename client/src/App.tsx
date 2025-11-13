@@ -164,9 +164,15 @@ export default function App() {
       const response = await authApi.getCurrentUser();
       setCurrentUser(response.user);
       loadDocuments(response.user);
-    } catch (error) {
-      // Not authenticated, show login
-      setCurrentUser(null);
+    } catch (error: any) {
+      // Check if it's a rate limit error
+      if (error.name === 'RateLimitError') {
+        console.warn('Rate limited during auth check, showing login')
+        setError('Too many requests. Please wait a moment before trying again.');
+      } else {
+        // Not authenticated, show login
+        setCurrentUser(null);
+      }
     } finally {
       setAuthLoading(false);
     }

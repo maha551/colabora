@@ -10,6 +10,17 @@ function getAuthToken(): string | null {
   return localStorage.getItem('authToken')
 }
 
+// Rate limiting state to prevent excessive retries
+let rateLimitedUntil: number = 0
+
+function isRateLimited(): boolean {
+  return Date.now() < rateLimitedUntil
+}
+
+function setRateLimited(durationMs: number = 30000) { // Default 30 seconds
+  rateLimitedUntil = Date.now() + durationMs
+}
+
 
 
 const CAMEL_CACHE = new Map<string, string>()
@@ -67,12 +78,25 @@ export class AuthError extends ApiError {
   }
 }
 
+export class RateLimitError extends ApiError {
+  constructor(message: string, endpoint: string, retryAfter?: number) {
+    super(message, 429, endpoint, { retryAfter })
+    this.name = 'RateLimitError'
+  }
+}
+
 // Helper function to make authenticated requests with enhanced error handling
 async function apiRequest(
   endpoint: string,
   options: RequestInit = {},
   retries: number = 2
 ): Promise<any> {
+  // Check if we're currently rate limited
+  if (isRateLimited()) {
+    const waitTime = Math.ceil((rateLimitedUntil - Date.now()) / 1000)
+    throw new RateLimitError(`Rate limited. Please wait ${waitTime} seconds before retrying.`, endpoint, waitTime)
+  }
+
   const headersFromOptions = (options.headers ?? {}) as Record<string, string>
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -120,6 +144,10 @@ async function apiRequest(
         // Create specific error types based on status
         if (response.status === 401) {
           throw new AuthError(errorMessage, endpoint)
+        } else if (response.status === 429) {
+          // Rate limit - set rate limited state
+          setRateLimited(30000) // 30 seconds
+          throw new RateLimitError(errorMessage, endpoint, 30)
         } else if (response.status === 409) {
           // Conflict - special case for structure proposals
           throw new ApiError(errorMessage, response.status, endpoint, rawData)
@@ -145,6 +173,11 @@ async function apiRequest(
         ));
 
       if (shouldNotRetry) {
+        // For rate limiting (429), set rate limited state
+        if (error instanceof ApiError && error.status === 429) {
+          setRateLimited(30000) // 30 seconds
+          console.warn(`Rate limited on ${endpoint}. Blocking requests for 30 seconds.`)
+        }
         throw error;
       }
 

@@ -734,8 +734,14 @@ router.get('/:organizationId/document-proposals', requireAuth, async (req, res) 
   const userId = req.user.id;
 
   try {
-    const hasAccess = await isRepresentative(db, userId, organizationId) ||
-                     await isActiveMember(db, userId, organizationId);
+    const isRep = await isRepresentative(db, userId, organizationId);
+    const isMember = await isActiveMember(db, userId, organizationId);
+    const hasAccess = isRep || isMember;
+
+    console.log(`Document proposals access check for user ${userId} in org ${organizationId}:`);
+    console.log(`- Is representative: ${isRep}`);
+    console.log(`- Is active member: ${isMember}`);
+    console.log(`- Has access: ${hasAccess}`);
 
     if (!hasAccess) {
       return res.status(403).json({ error: 'Access denied' });

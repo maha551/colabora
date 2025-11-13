@@ -799,9 +799,20 @@ function ensureDocumentTitleParagraph(db, documentId, documentTitle) {
   });
 }
 
+// Global migration lock to prevent multiple instances from running migrations simultaneously
+let migrationRunning = false;
+
 // Run organization migrations on deployed databases
 function runOrganizationMigrations(db) {
   return new Promise((resolve, reject) => {
+    // Prevent multiple instances from running migrations
+    if (migrationRunning) {
+      console.log('🔄 Migrations already running in another instance, skipping...');
+      resolve();
+      return;
+    }
+
+    migrationRunning = true;
     console.log('🔄 Running organization migrations...');
 
     const migrations = [
@@ -868,6 +879,7 @@ function runOrganizationMigrations(db) {
     function runNext() {
       if (completed >= total) {
         console.log('✅ All organization migrations completed');
+        migrationRunning = false; // Release lock
         resolve();
         return;
       }
@@ -878,6 +890,7 @@ function runOrganizationMigrations(db) {
       db.run(migration, (err) => {
         if (err) {
           console.error(`❌ Migration ${completed + 1} failed:`, err);
+          migrationRunning = false; // Release lock on error
           reject(err);
           return;
         }

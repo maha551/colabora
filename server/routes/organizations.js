@@ -914,7 +914,7 @@ router.post('/:organizationId/document-proposals/:proposalId/vote', requireAuth,
     }
 
     // Check if proposal exists and is not approved yet
-    db.get('SELECT id, approved FROM document_proposals WHERE id = ? AND organization_id = ?',
+    db.get('SELECT id, approved, applied FROM document_proposals WHERE id = ? AND organization_id = ?',
       [proposalId, organizationId], (err, proposal) => {
       if (err) {
         console.error('Error fetching proposal:', err);
@@ -925,12 +925,12 @@ router.post('/:organizationId/document-proposals/:proposalId/vote', requireAuth,
         return res.status(404).json({ error: 'Document proposal not found' });
       }
 
-      if (proposal.approved) {
-        return res.status(400).json({ error: 'Cannot vote on approved proposal' });
+      if (proposal.approved && proposal.applied) {
+        return res.status(400).json({ error: 'Cannot vote on proposal that has already been converted to a document' });
       }
 
       // Check if user already voted
-      db.get('SELECT id FROM document_proposal_votes WHERE document_proposal_id = ? AND user_id = ?',
+      db.get('SELECT id, vote FROM document_proposal_votes WHERE document_proposal_id = ? AND user_id = ?',
         [proposalId, userId], (err, existingVote) => {
         if (err) {
           console.error('Error checking existing vote:', err);
@@ -938,27 +938,49 @@ router.post('/:organizationId/document-proposals/:proposalId/vote', requireAuth,
         }
 
         if (existingVote) {
-          return res.status(400).json({ error: 'Already voted on this proposal' });
+          return res.status(400).json({
+            error: 'Already voted on this proposal',
+            currentVote: existingVote.vote
+          });
         }
 
-        // Cast vote
-        const voteId = uuidv4();
-        db.run(`INSERT INTO document_proposal_votes (
-          id, document_proposal_id, user_id, vote
-        ) VALUES (?, ?, ?, ?)`, [
-          voteId, proposalId, userId, vote
-        ], function(err) {
+        // Cast vote using a transaction to ensure atomicity
+        db.run('BEGIN TRANSACTION', (err) => {
           if (err) {
-            console.error('Error casting vote:', err);
-            return res.status(500).json({ error: 'Failed to cast vote' });
+            console.error('Error starting vote transaction:', err);
+            return res.status(500).json({ error: 'Failed to start voting transaction' });
           }
 
-          // Log the vote
-          logAudit(db, organizationId, 'document_proposal_voted', userId, null, { proposalId, vote, voteId }, req);
+          const voteId = uuidv4();
+          db.run(`INSERT INTO document_proposal_votes (
+            id, document_proposal_id, user_id, vote
+          ) VALUES (?, ?, ?, ?)`, [
+            voteId, proposalId, userId, vote
+          ], function(err) {
+            if (err) {
+              console.error('Error casting vote:', err);
+              db.run('ROLLBACK');
+              return res.status(500).json({ error: 'Failed to cast vote' });
+            }
 
-          // Check if proposal should be approved based on votes
-          checkProposalApproval(db, proposalId, organizationId, () => {
-            res.json({ success: true, voteId });
+            // Log the vote
+            logAudit(db, organizationId, 'document_proposal_voted', userId, null,
+              { proposalId, vote, voteId }, null);
+
+            // Check if proposal should be approved based on votes
+            checkProposalApproval(db, proposalId, organizationId, (approvalResult) => {
+              db.run('COMMIT', (err) => {
+                if (err) {
+                  console.error('Error committing vote transaction:', err);
+                  return res.status(500).json({ error: 'Failed to commit vote' });
+                }
+                res.json({
+                  success: true,
+                  voteId,
+                  message: 'Vote recorded successfully'
+                });
+              });
+            });
           });
         });
       });
@@ -971,7 +993,7 @@ router.post('/:organizationId/document-proposals/:proposalId/vote', requireAuth,
 
 // Helper function to check if proposal should be approved
 function checkProposalApproval(db, proposalId, organizationId, callback) {
-  // Get proposal and voting threshold
+  // Get proposal and voting threshold first (without transaction for read)
   const query = `
     SELECT dp.*,
            COUNT(dpv.id) as total_votes,
@@ -997,7 +1019,6 @@ function checkProposalApproval(db, proposalId, organizationId, callback) {
 
     const totalVotes = row.total_votes || 0;
     const proVotes = row.pro_votes || 0;
-    const contraVotes = row.contra_votes || 0;
     const threshold = row.voting_threshold || 0.5;
 
     // Need at least some votes to consider approval
@@ -1005,32 +1026,55 @@ function checkProposalApproval(db, proposalId, organizationId, callback) {
       return callback();
     }
 
-    // Calculate approval percentage (pro votes vs total votes, but contra votes count against)
+    // Calculate approval percentage
     const approvalRate = proVotes / totalVotes;
 
     if (approvalRate >= threshold) {
-      // Approve the proposal
-      db.run('UPDATE document_proposals SET approved = 1, updated_at = ? WHERE id = ?',
-        [new Date().toISOString(), proposalId], (err) => {
+      // Use a transaction for the approval process
+      db.run('BEGIN TRANSACTION', (err) => {
         if (err) {
-          console.error('Error approving proposal:', err);
-        } else {
+          console.error('Error starting transaction:', err);
+          return callback();
+        }
+
+        // Approve the proposal atomically
+        db.run('UPDATE document_proposals SET approved = 1, updated_at = ? WHERE id = ? AND approved = 0',
+          [new Date().toISOString(), proposalId], function(err) {
+          if (err) {
+            console.error('Error approving proposal:', err);
+            db.run('ROLLBACK');
+            return callback();
+          }
+
+          if (this.changes === 0) {
+            // Proposal was already approved by another process
+            db.run('COMMIT');
+            return callback();
+          }
+
           // Log approval
-          db.get('SELECT proposed_by_user_id FROM document_proposals WHERE id = ?', [proposalId], (err, row) => {
-            if (!err && row) {
-              logAudit(db, organizationId, 'document_proposal_approved', row.proposed_by_user_id, null,
-                { proposalId, approvalRate, threshold, totalVotes, proVotes }, null);
-            }
-          });
+          logAudit(db, organizationId, 'document_proposal_approved', row.proposed_by_user_id, null,
+            { proposalId, approvalRate, threshold, totalVotes, proVotes }, null);
 
           // Convert proposal to actual document
           convertProposalToDocument(db, proposalId, (success) => {
             if (success) {
               console.log(`Document proposal ${proposalId} approved and converted to document`);
+              db.run('COMMIT', (err) => {
+                if (err) console.error('Error committing transaction:', err);
+                callback();
+              });
+            } else {
+              console.error('Failed to convert proposal to document, rolling back approval');
+              db.run('UPDATE document_proposals SET approved = 0 WHERE id = ?', [proposalId], () => {
+                db.run('ROLLBACK', (err) => {
+                  if (err) console.error('Error rolling back transaction:', err);
+                  callback();
+                });
+              });
             }
           });
-        }
-        callback();
+        });
       });
     } else {
       callback();
@@ -1042,48 +1086,81 @@ function checkProposalApproval(db, proposalId, organizationId, callback) {
 function convertProposalToDocument(db, proposalId, callback) {
   // Get proposal details
   db.get('SELECT * FROM document_proposals WHERE id = ? AND approved = 1', [proposalId], (err, proposal) => {
-    if (err || !proposal) {
+    if (err) {
       console.error('Error fetching approved proposal:', err);
       return callback(false);
     }
 
-    // Create document from proposal
-    const documentId = uuidv4();
-    const options = proposal.document_options ? JSON.parse(proposal.document_options) : {};
-    const contributors = proposal.contributors ? JSON.parse(proposal.contributors) : [];
+    if (!proposal) {
+      console.error('Approved proposal not found:', proposalId);
+      return callback(false);
+    }
 
-    // Create document
-    db.run(`INSERT INTO documents (
-      id, title, description, owner_id, collaborators, organization_id,
-      acceptance_threshold, voting_anonymous, voting_anonymity_locked,
-      vote_change_allowed, structure_proposals_enabled, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-      documentId,
-      proposal.title,
-      proposal.description || '',
-      proposal.proposed_by_user_id,
-      JSON.stringify(contributors),
-      proposal.organization_id,
-      options.acceptanceThreshold || 75,
-      options.votingAnonymous || false,
-      options.votingAnonymityLocked || false,
-      options.voteChangeAllowed || true,
-      options.structureProposalsEnabled || false,
-      new Date().toISOString()
-    ], function(err) {
-      if (err) {
-        console.error('Error creating document from proposal:', err);
-        return callback(false);
+    if (proposal.applied) {
+      console.log('Proposal already applied:', proposalId);
+      return callback(true); // Already applied, consider success
+    }
+
+    try {
+      // Parse options and contributors safely
+      let options = {};
+      let contributors = [];
+
+      try {
+        options = proposal.document_options ? JSON.parse(proposal.document_options) : {};
+        contributors = proposal.contributors ? JSON.parse(proposal.contributors) : [];
+      } catch (parseErr) {
+        console.error('Error parsing proposal options/contributors:', parseErr);
+        // Continue with defaults
       }
 
-      // Mark proposal as applied
-      db.run('UPDATE document_proposals SET applied = 1 WHERE id = ?', [proposalId], (err) => {
+      // Create document from proposal
+      const documentId = uuidv4();
+
+      db.run(`INSERT INTO documents (
+        id, title, description, owner_id, collaborators, organization_id,
+        acceptance_threshold, voting_anonymous, voting_anonymity_locked,
+        vote_change_allowed, structure_proposals_enabled, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+        documentId,
+        proposal.title,
+        proposal.description || '',
+        proposal.proposed_by_user_id,
+        JSON.stringify(contributors),
+        proposal.organization_id,
+        options.acceptanceThreshold || 75,
+        options.votingAnonymous || false,
+        options.votingAnonymityLocked || false,
+        options.voteChangeAllowed || true,
+        options.structureProposalsEnabled || false,
+        new Date().toISOString()
+      ], function(err) {
         if (err) {
-          console.error('Error marking proposal as applied:', err);
+          console.error('Error creating document from proposal:', err);
+          return callback(false);
         }
-        callback(true);
+
+        console.log(`Created document ${documentId} from proposal ${proposalId}`);
+
+        // Mark proposal as applied
+        db.run('UPDATE document_proposals SET applied = 1, updated_at = ? WHERE id = ?',
+          [new Date().toISOString(), proposalId], (err) => {
+          if (err) {
+            console.error('Error marking proposal as applied:', err);
+            // Document was created but proposal marking failed
+            // This is a serious inconsistency - log it
+            console.error(`CRITICAL: Document ${documentId} created but proposal ${proposalId} not marked as applied`);
+            return callback(false);
+          }
+
+          console.log(`Proposal ${proposalId} marked as applied`);
+          callback(true);
+        });
       });
-    });
+    } catch (error) {
+      console.error('Unexpected error converting proposal to document:', error);
+      callback(false);
+    }
   });
 }
 

@@ -727,4 +727,339 @@ router.post('/:organizationId/votes/:voteId/vote', requireAuth, async (req, res)
   }
 });
 
+// Get organization document proposals
+router.get('/:organizationId/document-proposals', requireAuth, async (req, res) => {
+  const db = req.app.locals.db;
+  const { organizationId } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const hasAccess = await isRepresentative(db, userId, organizationId) ||
+                     await isActiveMember(db, userId, organizationId);
+
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Get document proposals with votes and user info
+    const query = `
+      SELECT dp.*,
+             u.name as user_name, u.email as user_email,
+             COUNT(dpv.id) as total_votes,
+             COUNT(CASE WHEN dpv.vote = 'PRO' THEN 1 END) as pro_votes,
+             COUNT(CASE WHEN dpv.vote = 'CONTRA' THEN 1 END) as contra_votes,
+             COUNT(CASE WHEN dpv.vote = 'NEUTRAL' THEN 1 END) as neutral_votes,
+             json_group_array(
+               CASE WHEN dpv.id IS NOT NULL THEN
+                 json_object('id', dpv.id, 'userId', dpv.user_id, 'vote', dpv.vote, 'createdAt', dpv.created_at)
+               ELSE NULL END
+             ) FILTER (WHERE dpv.id IS NOT NULL) as votes_json
+      FROM document_proposals dp
+      JOIN users u ON dp.proposed_by_user_id = u.id
+      LEFT JOIN document_proposal_votes dpv ON dp.id = dpv.document_proposal_id
+      WHERE dp.organization_id = ?
+      GROUP BY dp.id
+      ORDER BY dp.created_at DESC
+    `;
+
+    db.all(query, [organizationId], (err, rows) => {
+      if (err) {
+        console.error('Error fetching document proposals:', err);
+        return res.status(500).json({ error: 'Failed to fetch document proposals' });
+      }
+
+      const documentProposals = rows.map(row => ({
+        id: row.id,
+        organizationId: row.organization_id,
+        title: row.title,
+        description: row.description,
+        proposedByUserId: row.proposed_by_user_id,
+        approved: row.approved === 1,
+        applied: row.applied === 1,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        user: {
+          id: row.proposed_by_user_id,
+          name: row.user_name,
+          email: row.user_email
+        },
+        votes: JSON.parse(row.votes_json || '[]').filter(v => v.id),
+        documentOptions: row.document_options ? JSON.parse(row.document_options) : null,
+        contributors: row.contributors ? JSON.parse(row.contributors) : []
+      }));
+
+      res.json({ documentProposals });
+    });
+  } catch (error) {
+    console.error('Error fetching document proposals:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Create document proposal
+router.post('/:organizationId/document-proposals', requireAuth, async (req, res) => {
+  const db = req.app.locals.db;
+  const { organizationId } = req.params;
+  const userId = req.user.id;
+  const { title, description, contributors, documentOptions } = req.body;
+
+  try {
+    const isActive = await isActiveMember(db, userId, organizationId);
+    if (!isActive) {
+      return res.status(403).json({ error: 'Only active members can create document proposals' });
+    }
+
+    if (!title || title.trim().length === 0) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+
+    const proposalId = uuidv4();
+    const contributorsJson = contributors && contributors.length > 0 ? JSON.stringify(contributors) : null;
+    const optionsJson = documentOptions ? JSON.stringify(documentOptions) : null;
+
+    db.run(`INSERT INTO document_proposals (
+      id, organization_id, title, description, proposed_by_user_id,
+      contributors, document_options
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)`, [
+      proposalId, organizationId, title.trim(), description?.trim() || null,
+      userId, contributorsJson, optionsJson
+    ], function(err) {
+      if (err) {
+        console.error('Error creating document proposal:', err);
+        return res.status(500).json({ error: 'Failed to create document proposal' });
+      }
+
+      // Get the created proposal with user info
+      db.get(`
+        SELECT dp.*, u.name as user_name, u.email as user_email
+        FROM document_proposals dp
+        JOIN users u ON dp.proposed_by_user_id = u.id
+        WHERE dp.id = ?
+      `, [proposalId], (err, row) => {
+        if (err) {
+          console.error('Error fetching created proposal:', err);
+          return res.status(500).json({ error: 'Proposal created but failed to retrieve' });
+        }
+
+        const proposal = {
+          id: row.id,
+          organizationId: row.organization_id,
+          title: row.title,
+          description: row.description,
+          proposedByUserId: row.proposed_by_user_id,
+          approved: false,
+          applied: false,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          user: {
+            id: row.proposed_by_user_id,
+            name: row.user_name,
+            email: row.user_email
+          },
+          votes: [],
+          documentOptions: row.document_options ? JSON.parse(row.document_options) : null,
+          contributors: row.contributors ? JSON.parse(row.contributors) : []
+        };
+
+        logAudit(db, organizationId, 'document_proposal_created', userId, null, { proposalId, title, description }, req);
+        res.status(201).json({ documentProposal: proposal });
+      });
+    });
+  } catch (error) {
+    console.error('Error creating document proposal:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Vote on document proposal
+router.post('/:organizationId/document-proposals/:proposalId/vote', requireAuth, async (req, res) => {
+  const db = req.app.locals.db;
+  const { organizationId, proposalId } = req.params;
+  const userId = req.user.id;
+  const { vote } = req.body; // 'PRO', 'NEUTRAL', 'CONTRA'
+
+  try {
+    const isActive = await isActiveMember(db, userId, organizationId);
+    if (!isActive) {
+      return res.status(403).json({ error: 'Only active members can vote on document proposals' });
+    }
+
+    if (!['PRO', 'NEUTRAL', 'CONTRA'].includes(vote)) {
+      return res.status(400).json({ error: 'Invalid vote choice' });
+    }
+
+    // Check if proposal exists and is not approved yet
+    db.get('SELECT id, approved FROM document_proposals WHERE id = ? AND organization_id = ?',
+      [proposalId, organizationId], (err, proposal) => {
+      if (err) {
+        console.error('Error fetching proposal:', err);
+        return res.status(500).json({ error: 'Failed to fetch proposal' });
+      }
+
+      if (!proposal) {
+        return res.status(404).json({ error: 'Document proposal not found' });
+      }
+
+      if (proposal.approved) {
+        return res.status(400).json({ error: 'Cannot vote on approved proposal' });
+      }
+
+      // Check if user already voted
+      db.get('SELECT id FROM document_proposal_votes WHERE document_proposal_id = ? AND user_id = ?',
+        [proposalId, userId], (err, existingVote) => {
+        if (err) {
+          console.error('Error checking existing vote:', err);
+          return res.status(500).json({ error: 'Failed to check existing vote' });
+        }
+
+        if (existingVote) {
+          return res.status(400).json({ error: 'Already voted on this proposal' });
+        }
+
+        // Cast vote
+        const voteId = uuidv4();
+        db.run(`INSERT INTO document_proposal_votes (
+          id, document_proposal_id, user_id, vote
+        ) VALUES (?, ?, ?, ?)`, [
+          voteId, proposalId, userId, vote
+        ], function(err) {
+          if (err) {
+            console.error('Error casting vote:', err);
+            return res.status(500).json({ error: 'Failed to cast vote' });
+          }
+
+          // Log the vote
+          logAudit(db, organizationId, 'document_proposal_voted', userId, null, { proposalId, vote, voteId }, req);
+
+          // Check if proposal should be approved based on votes
+          checkProposalApproval(db, proposalId, organizationId, () => {
+            res.json({ success: true, voteId });
+          });
+        });
+      });
+    });
+  } catch (error) {
+    console.error('Error voting on proposal:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Helper function to check if proposal should be approved
+function checkProposalApproval(db, proposalId, organizationId, callback) {
+  // Get proposal and voting threshold
+  const query = `
+    SELECT dp.*,
+           COUNT(dpv.id) as total_votes,
+           COUNT(CASE WHEN dpv.vote = 'PRO' THEN 1 END) as pro_votes,
+           COUNT(CASE WHEN dpv.vote = 'CONTRA' THEN 1 END) as contra_votes,
+           o.voting_threshold
+    FROM document_proposals dp
+    JOIN organizations o ON dp.organization_id = o.id
+    LEFT JOIN document_proposal_votes dpv ON dp.id = dpv.document_proposal_id
+    WHERE dp.id = ? AND dp.organization_id = ?
+    GROUP BY dp.id
+  `;
+
+  db.get(query, [proposalId, organizationId], (err, row) => {
+    if (err) {
+      console.error('Error checking proposal approval:', err);
+      return callback();
+    }
+
+    if (!row || row.approved) {
+      return callback();
+    }
+
+    const totalVotes = row.total_votes || 0;
+    const proVotes = row.pro_votes || 0;
+    const contraVotes = row.contra_votes || 0;
+    const threshold = row.voting_threshold || 0.5;
+
+    // Need at least some votes to consider approval
+    if (totalVotes === 0) {
+      return callback();
+    }
+
+    // Calculate approval percentage (pro votes vs total votes, but contra votes count against)
+    const approvalRate = proVotes / totalVotes;
+
+    if (approvalRate >= threshold) {
+      // Approve the proposal
+      db.run('UPDATE document_proposals SET approved = 1, updated_at = ? WHERE id = ?',
+        [new Date().toISOString(), proposalId], (err) => {
+        if (err) {
+          console.error('Error approving proposal:', err);
+        } else {
+          // Log approval
+          db.get('SELECT proposed_by_user_id FROM document_proposals WHERE id = ?', [proposalId], (err, row) => {
+            if (!err && row) {
+              logAudit(db, organizationId, 'document_proposal_approved', row.proposed_by_user_id, null,
+                { proposalId, approvalRate, threshold, totalVotes, proVotes }, null);
+            }
+          });
+
+          // Convert proposal to actual document
+          convertProposalToDocument(db, proposalId, (success) => {
+            if (success) {
+              console.log(`Document proposal ${proposalId} approved and converted to document`);
+            }
+          });
+        }
+        callback();
+      });
+    } else {
+      callback();
+    }
+  });
+}
+
+// Helper function to convert approved proposal to actual document
+function convertProposalToDocument(db, proposalId, callback) {
+  // Get proposal details
+  db.get('SELECT * FROM document_proposals WHERE id = ? AND approved = 1', [proposalId], (err, proposal) => {
+    if (err || !proposal) {
+      console.error('Error fetching approved proposal:', err);
+      return callback(false);
+    }
+
+    // Create document from proposal
+    const documentId = uuidv4();
+    const options = proposal.document_options ? JSON.parse(proposal.document_options) : {};
+    const contributors = proposal.contributors ? JSON.parse(proposal.contributors) : [];
+
+    // Create document
+    db.run(`INSERT INTO documents (
+      id, title, description, owner_id, collaborators, organization_id,
+      acceptance_threshold, voting_anonymous, voting_anonymity_locked,
+      vote_change_allowed, structure_proposals_enabled, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+      documentId,
+      proposal.title,
+      proposal.description || '',
+      proposal.proposed_by_user_id,
+      JSON.stringify(contributors),
+      proposal.organization_id,
+      options.acceptanceThreshold || 75,
+      options.votingAnonymous || false,
+      options.votingAnonymityLocked || false,
+      options.voteChangeAllowed || true,
+      options.structureProposalsEnabled || false,
+      new Date().toISOString()
+    ], function(err) {
+      if (err) {
+        console.error('Error creating document from proposal:', err);
+        return callback(false);
+      }
+
+      // Mark proposal as applied
+      db.run('UPDATE document_proposals SET applied = 1 WHERE id = ?', [proposalId], (err) => {
+        if (err) {
+          console.error('Error marking proposal as applied:', err);
+        }
+        callback(true);
+      });
+    });
+  });
+}
+
 module.exports = router;

@@ -73,7 +73,8 @@ CREATE TABLE IF NOT EXISTS organization_audit (
     'org_created', 'rep_added', 'rep_removed', 'rep_removal_failed',
     'member_invited', 'member_joined', 'member_left', 'member_bulk_added',
     'vote_proposed', 'vote_approved', 'vote_started', 'vote_completed',
-    'doc_created', 'dissolution_proposed', 'org_dissolved'
+    'doc_created', 'document_proposal_created', 'document_proposal_voted', 'document_proposal_approved',
+    'dissolution_proposed', 'org_dissolved'
   )),
   performed_by_user_id TEXT NOT NULL,
   affected_user_id TEXT,
@@ -86,11 +87,54 @@ CREATE TABLE IF NOT EXISTS organization_audit (
   FOREIGN KEY (affected_user_id) REFERENCES users(id)
 );
 
--- Add ownership_type column to existing documents table if it doesn't exist
--- SQLite workaround for adding columns
-ALTER TABLE documents ADD COLUMN ownership_type TEXT DEFAULT 'personal';
-ALTER TABLE documents ADD COLUMN creator_ids TEXT;
-ALTER TABLE documents ADD COLUMN organization_id TEXT;
+-- Create documents table if it doesn't exist (for organization support)
+CREATE TABLE IF NOT EXISTS documents (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  owner_id TEXT NOT NULL,
+  collaborators TEXT, -- JSON array of user IDs
+  organization_id TEXT,
+  ownership_type TEXT CHECK(ownership_type IN ('personal', 'shared', 'organizational')) DEFAULT 'personal',
+  acceptance_threshold REAL DEFAULT 75.0,
+  voting_anonymous BOOLEAN DEFAULT false,
+  voting_anonymity_locked BOOLEAN DEFAULT false,
+  vote_change_allowed BOOLEAN DEFAULT true,
+  structure_proposals_enabled BOOLEAN DEFAULT false,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (owner_id) REFERENCES users(id),
+  FOREIGN KEY (organization_id) REFERENCES organizations(id)
+);
+
+-- Document proposals for organization governance
+CREATE TABLE IF NOT EXISTS document_proposals (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  proposed_by_user_id TEXT NOT NULL,
+  contributors TEXT, -- JSON array of user IDs
+  document_options TEXT, -- JSON object with document settings
+  approved BOOLEAN DEFAULT false,
+  applied BOOLEAN DEFAULT false,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (organization_id) REFERENCES organizations(id),
+  FOREIGN KEY (proposed_by_user_id) REFERENCES users(id)
+);
+
+-- Votes on document proposals
+CREATE TABLE IF NOT EXISTS document_proposal_votes (
+  id TEXT PRIMARY KEY,
+  document_proposal_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  vote TEXT CHECK(vote IN ('PRO', 'NEUTRAL', 'CONTRA')) NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (document_proposal_id) REFERENCES document_proposals(id),
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  UNIQUE(document_proposal_id, user_id)
+);
 
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_organization_members_org_user
@@ -107,6 +151,12 @@ ON vote_ballots(vote_id, user_id);
 
 CREATE INDEX IF NOT EXISTS idx_organization_audit_org_action
 ON organization_audit(organization_id, action_type, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_document_proposals_org_status
+ON document_proposals(organization_id, approved, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_document_proposal_votes_proposal_vote
+ON document_proposal_votes(document_proposal_id, vote);
 
 -- Enable foreign key constraints
 PRAGMA foreign_keys = ON;

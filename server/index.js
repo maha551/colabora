@@ -1035,6 +1035,7 @@ function initializeDatabase(db) {
       title TEXT NOT NULL,
       description TEXT,
       owner_id TEXT NOT NULL,
+      collaborators TEXT, -- JSON array of collaborator objects (for legacy/personal docs)
       ownership_type TEXT CHECK(ownership_type IN ('personal', 'shared', 'organizational')) DEFAULT 'personal',
       creator_ids TEXT, -- JSON array for shared docs
       organization_id TEXT, -- For organizational docs

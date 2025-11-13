@@ -680,6 +680,7 @@ export default function App() {
             setCurrentView('organizations');
           }}
           onCreateOrganizationalDocument={handleCreateOrganizationalDocument}
+          onSelectDocument={handleDocumentSelect}
         />
       )}
 

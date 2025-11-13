@@ -517,6 +517,36 @@ export const organizationsApi = {
     return apiRequest(`/api/documents/organization/${organizationId}`)
   },
 
+  // Document proposals
+  async getDocumentProposals(organizationId: string) {
+    return apiRequest(`/api/organizations/${organizationId}/document-proposals`)
+  },
+
+  async createDocumentProposal(organizationId: string, proposal: {
+    title: string;
+    description?: string;
+    contributors?: string[];
+    documentOptions?: {
+      acceptanceThreshold: number;
+      votingAnonymous: boolean;
+      votingAnonymityLocked: boolean;
+      voteChangeAllowed: boolean;
+      structureProposalsEnabled: boolean;
+    };
+  }) {
+    return apiRequest(`/api/organizations/${organizationId}/document-proposals`, {
+      method: 'POST',
+      body: JSON.stringify(proposal),
+    })
+  },
+
+  async voteOnDocumentProposal(organizationId: string, proposalId: string, vote: 'PRO' | 'NEUTRAL' | 'CONTRA') {
+    return apiRequest(`/api/organizations/${organizationId}/document-proposals/${proposalId}/vote`, {
+      method: 'POST',
+      body: JSON.stringify({ vote }),
+    })
+  },
+
   // Create organization (admin only)
   async createOrganization(name: string, description?: string, representatives: string[], membershipPolicy?: 'open' | 'invitation', votingEnabled?: boolean, votingThreshold?: number) {
     return apiRequest('/api/organizations', {

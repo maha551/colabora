@@ -158,12 +158,15 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
     setErrorState('documentProposals', null);
 
     try {
-      // TODO: Implement document proposals API call
-      // const response = await organizationsApi.getDocumentProposals(organizationId);
-      // setDocumentProposals(response.documentProposals || []);
-      setDocumentProposals([]); // Placeholder
-    } catch (error) {
+      const response = await organizationsApi.getDocumentProposals(organizationId);
+      setDocumentProposals(response.documentProposals || []);
+    } catch (error: any) {
       console.error('Failed to load document proposals:', error);
+      // Handle rate limiting specifically
+      if (error.name === 'RateLimitError') {
+        setErrorState('documentProposals', error.message);
+        return;
+      }
       setErrorState('documentProposals', 'Failed to load document proposals');
     } finally {
       setLoadingState('documentProposals', false);
@@ -299,13 +302,30 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
   const actions: OrganizationActions = {
     refreshDocuments: loadDocuments,
     createDocumentProposal: async (title: string, description?: string, contributors?: string[], options?: any) => {
-      // TODO: Implement document proposal creation
-      console.log('Creating document proposal:', title, description, contributors, options);
+      try {
+        await organizationsApi.createDocumentProposal(organizationId, {
+          title,
+          description,
+          contributors,
+          documentOptions: options
+        });
+        // Refresh document proposals after creation
+        await loadDocumentProposals();
+      } catch (error) {
+        console.error('Failed to create document proposal:', error);
+        throw error;
+      }
     },
     refreshDocumentProposals: loadDocumentProposals,
     voteOnDocumentProposal: async (proposalId: string, vote: 'PRO' | 'NEUTRAL' | 'CONTRA') => {
-      // TODO: Implement document proposal voting
-      console.log('Voting on document proposal:', proposalId, vote);
+      try {
+        await organizationsApi.voteOnDocumentProposal(organizationId, proposalId, vote);
+        // Refresh document proposals after voting
+        await loadDocumentProposals();
+      } catch (error) {
+        console.error('Failed to vote on document proposal:', error);
+        throw error;
+      }
     },
     createDocument: async (title: string, description?: string) => {
       // TODO: Implement document creation

@@ -16,13 +16,15 @@ interface OrganizationManagementProps {
   currentUser: User;
   onBack: () => void;
   onCreateOrganizationalDocument?: (organizationId: string) => void;
+  onSelectDocument?: (document: Document) => void;
 }
 
 export function OrganizationManagement({
   organization,
   currentUser,
   onBack,
-  onCreateOrganizationalDocument
+  onCreateOrganizationalDocument,
+  onSelectDocument
 }: OrganizationManagementProps) {
   const [activeTab, setActiveTab] = useState('documents');
 
@@ -88,6 +90,7 @@ export function OrganizationManagement({
             onCreateDocument={onCreateOrganizationalDocument}
             onCreateDocumentProposal={actions.createDocumentProposal}
             onVoteOnDocumentProposal={actions.voteOnDocumentProposal}
+            onSelectDocument={onSelectDocument}
             onRefreshDocuments={actions.refreshDocuments}
             onRefreshDocumentProposals={actions.refreshDocumentProposals}
             onRefreshPolicyVotes={actions.refreshPolicyVotes}

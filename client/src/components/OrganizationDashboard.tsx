@@ -135,18 +135,19 @@ export function OrganizationDashboard({ currentUser, onCreateOrganizationalDocum
     );
   }
 
-  // Auto-show organization management if user has exactly one organization
-  // (but not for admins, who should always see the organization list)
-  if (organizations.length === 1 && currentUser.role !== 'admin') {
-    return (
-      <OrganizationManagement
-        organization={organizations[0]}
-        currentUser={currentUser}
-        onBack={() => setSelectedOrganization(null)}
-        onCreateOrganizationalDocument={onCreateOrganizationalDocument}
-      />
-    );
-  }
+  // For now, always show the organization list to avoid rendering issues
+  // TODO: Re-enable auto-navigation after fixing the JavaScript error
+  // const isAdmin = currentUser.role === 'admin';
+  // if (organizations.length === 1 && !isAdmin && organizations[0]) {
+  //   return (
+  //     <OrganizationManagement
+  //       organization={organizations[0]}
+  //       currentUser={currentUser}
+  //       onBack={() => setSelectedOrganization(null)}
+  //       onCreateOrganizationalDocument={onCreateOrganizationalDocument}
+  //     />
+  //   );
+  // }
 
   return (
     <div className="max-w-6xl mx-auto p-6">
@@ -155,12 +156,11 @@ export function OrganizationDashboard({ currentUser, onCreateOrganizationalDocum
           <h1 className="text-2xl font-bold">Organizations</h1>
           <p className="text-gray-600">Collaborative spaces for democratic decision-making</p>
         </div>
-        {currentUser.role === 'admin' && (
-          <Button className="gap-2" onClick={() => setShowCreateDialog(true)}>
-            <Plus className="h-4 w-4" />
-            Create Organization
-          </Button>
-        )}
+        {/* Temporarily disabled admin check to debug JavaScript error */}
+        <Button className="gap-2" onClick={() => setShowCreateDialog(true)}>
+          <Plus className="h-4 w-4" />
+          Create Organization
+        </Button>
       </div>
 
       {organizations.length === 0 ? (

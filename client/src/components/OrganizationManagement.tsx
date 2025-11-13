@@ -15,6 +15,7 @@ import { GovernanceRulesDialog } from './governance/GovernanceRulesDialog';
 import { ElectionCreationDialog } from './governance/ElectionCreationDialog';
 import { ElectionVotingInterface } from './governance/ElectionVotingInterface';
 import { ElectionResults } from './governance/ElectionResults';
+import { RuleProposalDialog } from './governance/RuleProposalDialog';
 import { organizationsApi, governanceApi } from '../lib/api';
 import { toast } from 'sonner';
 
@@ -49,6 +50,7 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
   const [showElectionResultsDialog, setShowElectionResultsDialog] = useState(false);
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const [showAuditDialog, setShowAuditDialog] = useState(false);
+  const [showRuleProposalDialog, setShowRuleProposalDialog] = useState(false);
 
   const handleUpdate = () => {
     setRefreshKey(prev => prev + 1);
@@ -709,7 +711,7 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
                 <CardTitle className="flex items-center justify-between">
                   Organizational Rules
                   {isRepresentative && (
-                    <Button variant="outline" size="sm" onClick={() => {/* TODO: Open rules dialog */}}>
+                    <Button variant="outline" size="sm" onClick={() => setShowRuleProposalDialog(true)}>
                       <Settings className="h-4 w-4 mr-2" />
                       Propose Rule Change
                     </Button>
@@ -1266,6 +1268,18 @@ export function OrganizationManagement({ organization, currentUser, onBack, onCr
           }}
         />
       )}
+
+      <RuleProposalDialog
+        organization={organization}
+        currentUser={currentUser}
+        open={showRuleProposalDialog}
+        onOpenChange={setShowRuleProposalDialog}
+        onSuccess={() => {
+          setShowRuleProposalDialog(false);
+          // Refresh governance data if needed
+          handleUpdate();
+        }}
+      />
     </div>
   );
 }

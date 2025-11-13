@@ -1653,7 +1653,7 @@ router.get('/:organizationId/public-audit-logs', requireAuth, async (req, res) =
         u1.name as performed_by_name,
         u2.name as affected_user_name,
         CASE
-          WHEN oal.action_type IN ('rep_added', 'rep_removed', 'member_invited', 'member_added', 'member_left') THEN
+          WHEN oal.action_type IN ('org_created', 'rep_added', 'rep_removed', 'member_invited', 'member_added', 'member_left') THEN
             oal.details
           ELSE
             NULL

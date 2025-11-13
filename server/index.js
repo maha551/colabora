@@ -870,7 +870,31 @@ function runOrganizationMigrations(db) {
        ON document_proposals(organization_id, approved, created_at DESC)`,
 
       `CREATE INDEX IF NOT EXISTS idx_document_proposal_votes_proposal_vote
-       ON document_proposal_votes(document_proposal_id, vote)`
+       ON document_proposal_votes(document_proposal_id, vote)`,
+
+      // Insert demo organization if it doesn't exist
+      `INSERT OR IGNORE INTO organizations (
+        id, name, description, representatives, membership_policy,
+        voting_threshold, is_active, created_by_admin_id
+      ) VALUES (
+        'org-demo-1',
+        'Justice League',
+        'A team of superheroes dedicated to protecting Earth from threats too great for any one hero to handle.',
+        '["cmgxlfj9z0000orjgnfy3revt","cmgxlfj9z0000orjgnfy3revw"]',
+        'invitation',
+        0.5,
+        1,
+        'cmgxlfj9z0000orjgnfy3revw'
+      )`,
+
+      // Insert demo organization members
+      `INSERT OR IGNORE INTO organization_members (
+        id, organization_id, user_id, status
+      ) VALUES
+        ('org-member-1', 'org-demo-1', 'cmgxlfj9z0000orjgnfy3revt', 'active'),
+        ('org-member-2', 'org-demo-1', 'cmgxlfj9z0000orjgnfy3revu', 'active'),
+        ('org-member-3', 'org-demo-1', 'cmgxlfj9z0000orjgnfy3revv', 'active'),
+        ('org-member-4', 'org-demo-1', 'cmgxlfj9z0000orjgnfy3revw', 'active')`
     ];
 
     let completed = 0;

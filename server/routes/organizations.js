@@ -741,54 +741,79 @@ router.get('/:organizationId/document-proposals', requireAuth, async (req, res) 
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    // Get document proposals with votes and user info
-    const query = `
-      SELECT dp.*,
-             u.name as user_name, u.email as user_email,
-             COUNT(dpv.id) as total_votes,
-             COUNT(CASE WHEN dpv.vote = 'PRO' THEN 1 END) as pro_votes,
-             COUNT(CASE WHEN dpv.vote = 'CONTRA' THEN 1 END) as contra_votes,
-             COUNT(CASE WHEN dpv.vote = 'NEUTRAL' THEN 1 END) as neutral_votes,
-             json_group_array(
-               CASE WHEN dpv.id IS NOT NULL THEN
-                 json_object('id', dpv.id, 'userId', dpv.user_id, 'vote', dpv.vote, 'createdAt', dpv.created_at)
-               ELSE NULL END
-             ) FILTER (WHERE dpv.id IS NOT NULL) as votes_json
+    // First get the document proposals
+    db.all(`
+      SELECT dp.*, u.name as user_name, u.email as user_email
       FROM document_proposals dp
       JOIN users u ON dp.proposed_by_user_id = u.id
-      LEFT JOIN document_proposal_votes dpv ON dp.id = dpv.document_proposal_id
       WHERE dp.organization_id = ?
-      GROUP BY dp.id
       ORDER BY dp.created_at DESC
-    `;
-
-    db.all(query, [organizationId], (err, rows) => {
+    `, [organizationId], (err, proposalRows) => {
       if (err) {
         console.error('Error fetching document proposals:', err);
         return res.status(500).json({ error: 'Failed to fetch document proposals' });
       }
 
-      const documentProposals = rows.map(row => ({
-        id: row.id,
-        organizationId: row.organization_id,
-        title: row.title,
-        description: row.description,
-        proposedByUserId: row.proposed_by_user_id,
-        approved: row.approved === 1,
-        applied: row.applied === 1,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-        user: {
-          id: row.proposed_by_user_id,
-          name: row.user_name,
-          email: row.user_email
-        },
-        votes: JSON.parse(row.votes_json || '[]').filter(v => v.id),
-        documentOptions: row.document_options ? JSON.parse(row.document_options) : null,
-        contributors: row.contributors ? JSON.parse(row.contributors) : []
-      }));
+      if (proposalRows.length === 0) {
+        return res.json({ documentProposals: [] });
+      }
 
-      res.json({ documentProposals });
+      // Get votes for all proposals
+      const proposalIds = proposalRows.map(row => row.id);
+      const placeholders = proposalIds.map(() => '?').join(',');
+      db.all(`
+        SELECT dpv.*, u.name as voter_name, u.email as voter_email
+        FROM document_proposal_votes dpv
+        JOIN users u ON dpv.user_id = u.id
+        WHERE dpv.document_proposal_id IN (${placeholders})
+        ORDER BY dpv.created_at ASC
+      `, proposalIds, (err, voteRows) => {
+        if (err) {
+          console.error('Error fetching proposal votes:', err);
+          return res.status(500).json({ error: 'Failed to fetch proposal votes' });
+        }
+
+        // Group votes by proposal
+        const votesByProposal = {};
+        voteRows.forEach(vote => {
+          if (!votesByProposal[vote.document_proposal_id]) {
+            votesByProposal[vote.document_proposal_id] = [];
+          }
+          votesByProposal[vote.document_proposal_id].push({
+            id: vote.id,
+            userId: vote.user_id,
+            vote: vote.vote,
+            createdAt: vote.created_at,
+            user: {
+              id: vote.user_id,
+              name: vote.voter_name,
+              email: vote.voter_email
+            }
+          });
+        });
+
+        const documentProposals = proposalRows.map(row => ({
+          id: row.id,
+          organizationId: row.organization_id,
+          title: row.title,
+          description: row.description,
+          proposedByUserId: row.proposed_by_user_id,
+          approved: row.approved === 1,
+          applied: row.applied === 1,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          user: {
+            id: row.proposed_by_user_id,
+            name: row.user_name,
+            email: row.user_email
+          },
+          votes: votesByProposal[row.id] || [],
+          documentOptions: row.document_options ? JSON.parse(row.document_options) : null,
+          contributors: row.contributors ? JSON.parse(row.contributors) : []
+        }));
+
+        res.json({ documentProposals });
+      });
     });
   } catch (error) {
     console.error('Error fetching document proposals:', error);

@@ -8,7 +8,7 @@ import { Label } from '../../ui/label';
 import { RadioGroup, RadioGroupItem } from '../../ui/radio-group';
 import { Checkbox } from '../../ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
-import { FileText, Plus, X } from 'lucide-react';
+import { FileText, Plus, X, Settings } from 'lucide-react';
 import { Organization, User, Document, DocumentProposal } from '../../../types';
 import { OrganizationPermissions } from '../../../hooks/useOrganizationPermissions';
 import { RuleProposalDialog } from '../../governance/RuleProposalDialog';

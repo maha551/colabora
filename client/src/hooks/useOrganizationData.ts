@@ -71,10 +71,14 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
 
   // Refs to track loading state to prevent infinite loops
   const electionsLoadedRef = useRef(false);
+  const documentsLoadedRef = useRef(false);
+  const documentsRateLimitedRef = useRef(false);
 
   // Reset refs when organization changes
   useEffect(() => {
     electionsLoadedRef.current = false;
+    documentsLoadedRef.current = false;
+    documentsRateLimitedRef.current = false;
   }, [organizationId]);
 
   // Loading states
@@ -107,7 +111,7 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
 
   // Document actions
   const loadDocuments = useCallback(async () => {
-    if (loading.documents) return; // Prevent duplicate calls
+    if (loading.documents || documentsLoadedRef.current || documentsRateLimitedRef.current) return; // Prevent duplicate calls
 
     setLoadingState('documents', true);
     setErrorState('documents', null);
@@ -115,8 +119,22 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
     try {
       const response = await organizationsApi.getOrganizationDocuments(organizationId);
       setDocuments(response.documents || []);
-    } catch (error) {
+      documentsLoadedRef.current = true; // Mark as loaded
+    } catch (error: any) {
       console.error('Failed to load organization documents:', error);
+
+      // Handle rate limiting specifically
+      if (error.name === 'RateLimitError') {
+        documentsRateLimitedRef.current = true;
+        setErrorState('documents', error.message);
+        // Reset rate limited state after 30 seconds so user can try again
+        setTimeout(() => {
+          documentsRateLimitedRef.current = false;
+        }, 30000);
+        // Don't show toast for rate limiting - the API client handles retries
+        return;
+      }
+
       setErrorState('documents', 'Failed to load documents');
       toast.error('Failed to load organization documents');
     } finally {
@@ -208,7 +226,7 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
   useEffect(() => {
     switch (activeTab) {
       case 'documents':
-        if (documents.length === 0 && !loading.documents) {
+        if (documents.length === 0 && !loading.documents && !documentsLoadedRef.current && !documentsRateLimitedRef.current) {
           loadDocuments();
           loadPolicyVotes();
         }

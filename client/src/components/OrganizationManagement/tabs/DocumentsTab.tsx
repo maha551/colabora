@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Button } from '../../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 import { Badge } from '../../ui/badge';
-import { FileText, Plus, Settings, CheckSquare } from 'lucide-react';
+import { FileText, Plus } from 'lucide-react';
 import { Organization, User, Document } from '../../../types';
 import { OrganizationPermissions } from '../../../hooks/useOrganizationPermissions';
 import { RuleProposalDialog } from '../../governance/RuleProposalDialog';
@@ -133,65 +133,6 @@ export function DocumentsTab({
         </CardContent>
       </Card>
 
-      {/* Member Initiatives Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span className="flex items-center gap-2">
-              <Settings className="h-5 w-5" />
-              Member Initiatives
-            </span>
-            {permissions.canProposeRules && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowRuleProposalDialog(true)}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Propose Rule Change
-              </Button>
-            )}
-          </CardTitle>
-          <CardDescription>
-            Propose changes to governance rules. {permissions.isRepresentative ? 'Your proposals go directly to voting.' : 'Your proposals need representative approval first.'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-8 text-gray-500">
-            <Settings className="h-12 w-12 mx-auto mb-3 opacity-50" />
-            <p>Member-driven governance proposals</p>
-            <p className="text-sm">Click "Propose Rule Change" to suggest improvements to organization rules</p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Document Policy Votes Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span className="flex items-center gap-2">
-              <CheckSquare className="h-5 w-5" />
-              Document Policy Votes
-            </span>
-            {permissions.canCreateDocuments && (
-              <Button variant="outline" size="sm">
-                <Plus className="h-4 w-4 mr-2" />
-                Create Policy Vote
-              </Button>
-            )}
-          </CardTitle>
-          <CardDescription>
-            Active votes on implementing policies from organization documents
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-8 text-gray-500">
-            <CheckSquare className="h-12 w-12 mx-auto mb-3 opacity-50" />
-            <p>Policy voting system</p>
-            <p className="text-sm">Vote on implementing organizational policies and decisions</p>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Rule Proposal Dialog */}
       {showRuleProposalDialog && (

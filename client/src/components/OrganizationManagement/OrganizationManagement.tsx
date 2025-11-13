@@ -15,7 +15,6 @@ interface OrganizationManagementProps {
   organization: Organization;
   currentUser: User;
   onBack: () => void;
-  onCreateOrganizationalDocument?: (organizationId: string) => void;
   onSelectDocument?: (document: Document) => void;
 }
 
@@ -23,7 +22,6 @@ export function OrganizationManagement({
   organization,
   currentUser,
   onBack,
-  onCreateOrganizationalDocument,
   onSelectDocument
 }: OrganizationManagementProps) {
   const [activeTab, setActiveTab] = useState('documents');

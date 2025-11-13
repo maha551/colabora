@@ -31,7 +31,6 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [currentView, setCurrentView] = useState<'documents' | 'activity' | 'document' | 'profile' | 'organizations' | 'organization'>('documents');
   const [selectedOrganization, setSelectedOrganization] = useState<Organization | null>(null);
-  const [pendingOrganizationalDocument, setPendingOrganizationalDocument] = useState<string | null>(null);
   const [documentLoadKey, setDocumentLoadKey] = useState<number>(Date.now());
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [structureProposals, setStructureProposals] = useState<StructureProposal[]>([]);
@@ -312,18 +311,7 @@ export default function App() {
     }
   };
 
-  const handleCreateOrganizationalDocument = (organizationId: string) => {
-    setPendingOrganizationalDocument(organizationId);
-    setCurrentView('documents');
-    setIsCreateDialogOpen(true);
-  };
 
-  // Reset pending organizational document when dialog closes
-  useEffect(() => {
-    if (!isCreateDialogOpen) {
-      setPendingOrganizationalDocument(null);
-    }
-  }, [isCreateDialogOpen]);
 
   const handleCreateDocument = async (
     title: string,
@@ -613,7 +601,6 @@ export default function App() {
           loading={loading}
           isCreateDialogOpen={isCreateDialogOpen}
           onSetCreateDialogOpen={setIsCreateDialogOpen}
-          currentOrganizationId={pendingOrganizationalDocument}
         />
       )}
 
@@ -679,7 +666,6 @@ export default function App() {
             setSelectedOrganization(null);
             setCurrentView('organizations');
           }}
-          onCreateOrganizationalDocument={handleCreateOrganizationalDocument}
           onSelectDocument={handleDocumentSelect}
         />
       )}

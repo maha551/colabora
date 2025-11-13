@@ -101,8 +101,7 @@ export function DocumentDashboard({
   const [selectedContributors, setSelectedContributors] = useState<string[]>([]);
 
   // New state for ownership type
-  const [ownershipType, setOwnershipType] = useState<'personal' | 'shared' | 'organizational'>('personal');
-  const [selectedOrganizationId, setSelectedOrganizationId] = useState<string>(currentOrganizationId || '');
+  const [ownershipType, setOwnershipType] = useState<'personal' | 'shared'>('personal');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("modified");
@@ -171,12 +170,6 @@ export function DocumentDashboard({
       return;
     }
 
-    // Validate organizational ownership
-    if (ownershipType === 'organizational' && !selectedOrganizationId) {
-      toast.error("Please select an organization for organizational documents");
-      return;
-    }
-
     setIsSubmitting(true);
     try {
       await onCreateDocument(
@@ -190,8 +183,7 @@ export function DocumentDashboard({
           voteChangeAllowed,
           structureProposalsEnabled
         },
-        ownershipType,
-        ownershipType === 'organizational' ? selectedOrganizationId : undefined
+        ownershipType
       );
       setNewDocumentTitle("");
       setNewDocumentDescription("");
@@ -359,7 +351,7 @@ export function DocumentDashboard({
 
                   <div className="space-y-2">
                     <Label>Document Ownership</Label>
-                    <RadioGroup value={ownershipType} onValueChange={(value) => setOwnershipType(value as 'personal' | 'shared' | 'organizational')}>
+                    <RadioGroup value={ownershipType} onValueChange={(value) => setOwnershipType(value as 'personal' | 'shared')}>
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="personal" id="personal" />
                         <Label htmlFor="personal" className="font-normal cursor-pointer">
@@ -372,43 +364,9 @@ export function DocumentDashboard({
                           Shared - Owned by multiple creators
                         </Label>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="organizational" id="organizational" />
-                        <Label htmlFor="organizational" className="font-normal cursor-pointer">
-                          Organizational - Owned by an organization
-                        </Label>
-                      </div>
                     </RadioGroup>
                   </div>
 
-                  {/* Organization Selection (only show for organizational ownership) */}
-                  {ownershipType === 'organizational' && (
-                    <div className="space-y-2">
-                      <Label>Select Organization</Label>
-                      <Select value={selectedOrganizationId} onValueChange={setSelectedOrganizationId}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Choose an organization..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {organizations
-                            .filter(org => org.representatives?.includes(currentUser.id))
-                            .map((org) => (
-                              <SelectItem key={org.id} value={org.id}>
-                                <div className="flex items-center gap-2">
-                                  <span>🏢</span>
-                                  <span>{org.name}</span>
-                                </div>
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                      {organizations.filter(org => org.representatives?.includes(currentUser.id)).length === 0 && (
-                        <p className="text-sm text-gray-500">
-                          You are not a representative of any organizations. Only representatives can create organizational documents.
-                        </p>
-                      )}
-                    </div>
-                  )}
                 </div>
 
                 {/* Document Options */}

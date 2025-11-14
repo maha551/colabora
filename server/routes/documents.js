@@ -566,31 +566,27 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
   createDocument();
 
   function createDocument() {
-    // For personal documents, ignore organization-specific options and use defaults
+    // Parse and validate options for all document types (personal, shared, organizational)
     let acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled;
 
-    if (ownershipType === 'personal') {
-      // Personal documents use default settings
-      acceptanceThreshold = 75.0;
-      votingAnonymous = 0;
-      votingAnonymityLocked = 0;
-      voteChangeAllowed = 1;
-      structureProposalsEnabled = 0;
-    } else {
-      // Parse and validate options for shared/organizational documents
-      const validThresholds = [50, 75, 90, 100];
-      const requestedThreshold = options?.acceptanceThreshold !== undefined
-        ? parseFloat(options.acceptanceThreshold)
-        : 75.0;
-      acceptanceThreshold = validThresholds.includes(requestedThreshold)
-        ? requestedThreshold
-        : 75.0;
+    // Parse and validate options for all document types
+    const validThresholds = [50, 75, 90, 100];
+    const requestedThreshold = options?.acceptanceThreshold !== undefined
+      ? parseFloat(options.acceptanceThreshold)
+      : 75.0;
+    acceptanceThreshold = validThresholds.includes(requestedThreshold)
+      ? requestedThreshold
+      : 75.0;
 
-      // Extract document options with defaults
-      votingAnonymous = options?.votingAnonymous === true ? 1 : 0;
-      votingAnonymityLocked = options?.votingAnonymityLocked === true ? 1 : 0;
-      voteChangeAllowed = options?.voteChangeAllowed !== false ? 1 : 0; // Default to true
-      structureProposalsEnabled = options?.structureProposalsEnabled === true ? 1 : 0;
+    // Extract document options with defaults
+    votingAnonymous = options?.votingAnonymous === true ? 1 : 0;
+    votingAnonymityLocked = options?.votingAnonymityLocked === true ? 1 : 0;
+    voteChangeAllowed = options?.voteChangeAllowed !== false ? 1 : 0; // Default to true
+    structureProposalsEnabled = options?.structureProposalsEnabled === true ? 1 : 0;
+
+    if (ownershipType === 'personal') {
+      // Personal documents can use custom options
+      // Options are already parsed and validated above
     }
 
     const documentId = uuidv4();

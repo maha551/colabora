@@ -688,31 +688,129 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
     }
 
     // Use transaction for atomic document creation
-    db.run('BEGIN TRANSACTION', (beginErr) => {
-      if (beginErr) {
-        console.error('Error beginning transaction:', beginErr);
-        return res.status(500).json({
-          error: 'Failed to create document',
-          details: beginErr.message
-        });
-      }
-
-      db.run(sql, params, function(err) {
-        if (err) {
-          console.error('Error creating document:', err);
-          console.error('SQL Error details:', err.message);
-          console.error('SQL Error code:', err.code);
-          db.run('ROLLBACK', () => {
-            return res.status(500).json({
-              error: 'Failed to create document',
-              details: err.message,
-              code: err.code
-            });
+    try {
+      db.run('BEGIN TRANSACTION', (beginErr) => {
+        if (beginErr) {
+          console.error('Error beginning transaction:', beginErr);
+          console.error('Transaction begin error details:', beginErr.message);
+          console.error('Transaction begin error code:', beginErr.code);
+          return res.status(500).json({
+            error: 'Failed to create document',
+            details: beginErr.message,
+            code: beginErr.code
           });
-          return;
         }
 
+        db.run(sql, params, function(err) {
+          if (err) {
+            console.error('Error creating document:', err);
+            console.error('SQL Error details:', err.message);
+            console.error('SQL Error code:', err.code);
+            console.error('SQL:', sql);
+            console.error('Params:', params);
+            db.run('ROLLBACK', (rollbackErr) => {
+              if (rollbackErr) {
+                console.error('Error during rollback after document creation failure:', rollbackErr);
+              }
+              // Send error response
+              if (!res.headersSent) {
+                return res.status(500).json({
+                  error: 'Failed to create document',
+                  details: err.message,
+                  code: err.code
+                });
+              } else {
+                console.error('Response already sent, cannot send error response');
+              }
+            });
+            return;
+          }
+
         console.log('Document created in database, now creating initial paragraph...');
+
+        // Declare responseSent and sendResponse BEFORE they're used
+        let responseSent = false; // Prevent multiple responses
+        
+        function sendResponse() {
+          // Prevent multiple responses
+          if (responseSent) {
+            console.warn('Attempted to send response multiple times for document creation');
+            return;
+          }
+          
+          // Get user details for owner information
+          db.get('SELECT name, email FROM users WHERE id = ?', [userId], (err, user) => {
+            if (err) {
+              console.error('Error fetching user details:', err);
+              console.error('User ID:', userId);
+              if (!responseSent) {
+                responseSent = true;
+                return res.status(500).json({ 
+                  error: 'Failed to create document',
+                  details: 'Error fetching user details: ' + err.message
+                });
+              }
+              return;
+            }
+
+            if (!user) {
+              console.error('User not found:', userId);
+              if (!responseSent) {
+                responseSent = true;
+                return res.status(500).json({ 
+                  error: 'Failed to create document',
+                  details: 'User not found'
+                });
+              }
+              return;
+            }
+
+            const result = {
+              id: documentId,
+              title: trimmedTitle,
+              description: trimmedDescription,
+              ownerId: userId,
+              parentId: parentId || undefined,
+              status: 'draft', // New documents start as draft
+              owner: {
+                id: userId,
+                name: user.name,
+                email: user.email
+              },
+              ownershipType,
+              organizationId: ownershipType === 'organizational' ? organizationId : null,
+              options: {
+                acceptanceThreshold,
+                votingAnonymous: votingAnonymous === 1,
+                votingAnonymityLocked: votingAnonymityLocked === 1,
+                voteChangeAllowed: voteChangeAllowed === 1,
+                structureProposalsEnabled: structureProposalsEnabled === 1
+              },
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            };
+
+            console.log('Document created successfully:', { id: documentId, title: trimmedTitle });
+
+            // Record business metrics
+            try {
+              metricsCollector.recordBusinessEvent('document_created', {
+                documentId,
+                ownerId: userId,
+                ownershipType,
+                organizationId: ownershipType === 'organizational' ? organizationId : null
+              });
+            } catch (metricsErr) {
+              console.error('Error recording metrics:', metricsErr);
+              // Don't fail the request if metrics fail
+            }
+
+            if (!responseSent) {
+              responseSent = true;
+              res.status(201).json({ document: result });
+            }
+          });
+        }
 
         // Create initial title paragraph - CRITICAL: must succeed
         const paragraphId = uuidv4();
@@ -725,12 +823,20 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
             console.error('Error creating title paragraph:', err);
             console.error('Paragraph creation error details:', err.message);
             console.error('Paragraph creation SQL error code:', err.code);
-            db.run('ROLLBACK', () => {
-              return res.status(500).json({
-                error: 'Failed to create document: title paragraph creation failed',
-                details: err.message,
-                code: err.code
-              });
+            console.error('Document ID:', documentId);
+            console.error('Paragraph ID:', paragraphId);
+            db.run('ROLLBACK', (rollbackErr) => {
+              if (rollbackErr) {
+                console.error('Error during rollback:', rollbackErr);
+              }
+              if (!responseSent) {
+                responseSent = true;
+                return res.status(500).json({
+                  error: 'Failed to create document: title paragraph creation failed',
+                  details: err.message,
+                  code: err.code
+                });
+              }
             });
             return;
           }
@@ -745,8 +851,17 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
               db.run('COMMIT', (commitErr) => {
                 if (commitErr) {
                   console.error('Error committing transaction:', commitErr);
-                  db.run('ROLLBACK', () => {
-                    return res.status(500).json({ error: 'Failed to create document: commit failed' });
+                  console.error('Commit error details:', commitErr.message);
+                  db.run('ROLLBACK', (rollbackErr) => {
+                    if (rollbackErr) {
+                      console.error('Error during rollback after commit failure:', rollbackErr);
+                    }
+                    if (!res.headersSent) {
+                      return res.status(500).json({ 
+                        error: 'Failed to create document: commit failed',
+                        details: commitErr.message
+                      });
+                    }
                   });
                   return;
                 }
@@ -762,8 +877,17 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
                   db.run('COMMIT', (commitErr) => {
                     if (commitErr) {
                       console.error('Error committing transaction:', commitErr);
-                      db.run('ROLLBACK', () => {
-                        return res.status(500).json({ error: 'Failed to create document: commit failed' });
+                      console.error('Commit error details:', commitErr.message);
+                      db.run('ROLLBACK', (rollbackErr) => {
+                        if (rollbackErr) {
+                          console.error('Error during rollback after commit failure:', rollbackErr);
+                        }
+                        if (!res.headersSent) {
+                          return res.status(500).json({ 
+                            error: 'Failed to create document: commit failed',
+                            details: commitErr.message
+                          });
+                        }
                       });
                       return;
                     }
@@ -780,11 +904,17 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
                 `, [collabId, documentId, creatorId], function(err) {
                   if (err) {
                     console.error('Error adding collaborator:', creatorId, err);
-                    db.run('ROLLBACK', () => {
-                      return res.status(500).json({
-                        error: 'Failed to create document: collaborator addition failed',
-                        details: err.message
-                      });
+                    console.error('Collaborator addition error details:', err.message);
+                    db.run('ROLLBACK', (rollbackErr) => {
+                      if (rollbackErr) {
+                        console.error('Error during rollback after collaborator addition failure:', rollbackErr);
+                      }
+                      if (!res.headersSent) {
+                        return res.status(500).json({
+                          error: 'Failed to create document: collaborator addition failed',
+                          details: err.message
+                        });
+                      }
                     });
                     return;
                   }
@@ -800,84 +930,41 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
             db.run('COMMIT', (commitErr) => {
               if (commitErr) {
                 console.error('Error committing transaction:', commitErr);
-                db.run('ROLLBACK', () => {
-                  return res.status(500).json({ error: 'Failed to create document: commit failed' });
+                console.error('Commit error details:', commitErr.message);
+                db.run('ROLLBACK', (rollbackErr) => {
+                  if (rollbackErr) {
+                    console.error('Error during rollback after commit failure:', rollbackErr);
+                  }
+                  if (!res.headersSent) {
+                    return res.status(500).json({ 
+                      error: 'Failed to create document: commit failed',
+                      details: commitErr.message
+                    });
+                  }
                 });
                 return;
               }
               sendResponse();
             });
           }
-
-          let responseSent = false; // Prevent multiple responses
-          
-          function sendResponse() {
-            // Prevent multiple responses
-            if (responseSent) {
-              console.warn('Attempted to send response multiple times for document creation');
-              return;
-            }
-            
-            // Get user details for owner information
-            db.get('SELECT name, email FROM users WHERE id = ?', [userId], (err, user) => {
-              if (err) {
-                console.error('Error fetching user details:', err);
-                if (!responseSent) {
-                  responseSent = true;
-                  return res.status(500).json({ error: 'Failed to create document' });
-                }
-                return;
-              }
-
-              const result = {
-                id: documentId,
-                title: trimmedTitle,
-                description: trimmedDescription,
-                ownerId: userId,
-                parentId: parentId || undefined,
-                status: 'draft', // New documents start as draft
-                owner: {
-                  id: userId,
-                  name: user.name,
-                  email: user.email
-                },
-                ownershipType,
-                organizationId: ownershipType === 'organizational' ? organizationId : null,
-                options: {
-                  acceptanceThreshold,
-                  votingAnonymous: votingAnonymous === 1,
-                  votingAnonymityLocked: votingAnonymityLocked === 1,
-                  voteChangeAllowed: voteChangeAllowed === 1,
-                  structureProposalsEnabled: structureProposalsEnabled === 1
-                },
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-              };
-
-              console.log('Document created successfully:', { id: documentId, title: trimmedTitle });
-
-              // Record business metrics
-              try {
-                metricsCollector.recordBusinessEvent('document_created', {
-                  documentId,
-                  ownerId: userId,
-                  ownershipType,
-                  organizationId: ownershipType === 'organizational' ? organizationId : null
-                });
-              } catch (metricsErr) {
-                console.error('Error recording metrics:', metricsErr);
-                // Don't fail the request if metrics fail
-              }
-
-              if (!responseSent) {
-                responseSent = true;
-                res.status(201).json({ document: result });
-              }
-            });
-          }
         });
       });
     });
+    } catch (unexpectedErr) {
+      console.error('Unexpected error in document creation:', unexpectedErr);
+      console.error('Error stack:', unexpectedErr.stack);
+      // Try to rollback if transaction was started
+      try {
+        db.run('ROLLBACK', () => {});
+      } catch (rollbackErr) {
+        console.error('Error during emergency rollback:', rollbackErr);
+      }
+      return res.status(500).json({
+        error: 'Failed to create document',
+        details: unexpectedErr.message || 'Unexpected error occurred',
+        type: 'unexpected_error'
+      });
+    }
   }
 });
 

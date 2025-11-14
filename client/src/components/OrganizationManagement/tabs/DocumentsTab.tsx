@@ -406,14 +406,20 @@ export function DocumentsTab({
 
               {/* Organization Info */}
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h4 className="font-medium text-blue-900 mb-2">Organizational Document</h4>
+                <h4 className="font-medium text-blue-900 mb-2">
+                  {creationMode === 'proposal' ? 'Document Proposal' : 'Organizational Document'}
+                </h4>
                 <p className="text-sm text-blue-700 mb-2">
-                  This document will be owned by the entire organization and follow the governance rules established in the Governance tab.
+                  {creationMode === 'proposal' 
+                    ? 'This proposal will be voted on by all organization members. If approved, it will become an organizational document.'
+                    : 'This document will be owned by the entire organization and follow the governance rules established in the Governance tab.'}
                 </p>
                 <div className="text-xs text-blue-600 space-y-1">
                   <p>• All active organization members will be included as collaborators</p>
                   <p>• Voting settings will use the organization's governance configuration</p>
-                  <p>• Document requires approval through the proposal voting process</p>
+                  {creationMode === 'proposal' 
+                    ? <p>• Proposal requires approval through member voting before document is created</p>
+                    : <p>• Document will be created immediately and enter proposal period</p>}
                 </div>
               </div>
             </div>
@@ -435,12 +441,12 @@ export function DocumentsTab({
                 {isSubmitting ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Creating...
+                    {creationMode === 'proposal' ? 'Creating Proposal...' : 'Creating...'}
                   </>
                 ) : (
                   <>
                     <Plus className="h-4 w-4" />
-                    Create Proposal
+                    {creationMode === 'proposal' ? 'Create Proposal' : 'Create Document'}
                   </>
                 )}
               </Button>

@@ -66,6 +66,8 @@ router.post('/organizations', requireAdmin, [
 ], (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    console.log('Organization creation validation errors:', errors.array());
+    console.log('Request body:', req.body);
     return res.status(400).json({ error: 'Invalid input', details: errors.array() });
   }
 

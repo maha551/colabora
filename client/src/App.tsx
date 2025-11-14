@@ -180,6 +180,13 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, [currentUser]);
 
+  // Ensure activeTab is valid based on current document capabilities
+  useEffect(() => {
+    if (currentDocument && activeTab === 'history' && !currentDocument.structureProposalsEnabled) {
+      setActiveTab('discussion');
+    }
+  }, [currentDocument, activeTab]);
+
   const checkAuth = async () => {
     try {
       const response = await authApi.getCurrentUser();
@@ -856,28 +863,31 @@ export default function App() {
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "discussion" | "agreed" | "history")}>
           <div className="flex justify-center mb-6 px-4">
             <TabsList className="w-full sm:w-auto">
-              <TabsTrigger value="discussion" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm">
-                <Edit3 className="h-3 w-3 sm:h-4 sm:w-4" />
-                <span className="hidden xs:inline">Discussion</span>
+              <TabsTrigger value="discussion" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm" aria-label={`Discussion tab with ${totalSuggestions} suggestions`}>
+                <Edit3 className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
+                <span className="sm:hidden" aria-hidden="true">Disc</span>
+                <span className="hidden sm:inline" aria-hidden="true">Discussion</span>
                 {totalSuggestions > 0 && (
-                  <Badge variant="secondary" className="ml-1 text-xs">
+                  <Badge variant="secondary" className="ml-1 text-xs" aria-label={`${totalSuggestions} suggestions`}>
                     {totalSuggestions}
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="agreed" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm">
-                <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
-                <span className="hidden xs:inline">Agreed</span>
+              <TabsTrigger value="agreed" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm" aria-label={`Agreed tab with ${acceptedSuggestions} accepted suggestions`}>
+                <FileText className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
+                <span className="sm:hidden" aria-hidden="true">Done</span>
+                <span className="hidden sm:inline" aria-hidden="true">Agreed</span>
                 {acceptedSuggestions > 0 && (
-                  <Badge variant="default" className="ml-1 bg-green-600 text-xs">
+                  <Badge variant="default" className="ml-1 bg-green-600 text-xs" aria-label={`${acceptedSuggestions} accepted suggestions`}>
                     {acceptedSuggestions}
                   </Badge>
                 )}
               </TabsTrigger>
               {currentDocument?.structureProposalsEnabled && (
-              <TabsTrigger value="history" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm">
-                <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
-                <span className="hidden xs:inline">History</span>
+              <TabsTrigger value="history" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm" aria-label="Document structure history">
+                <Clock className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
+                <span className="sm:hidden" aria-hidden="true">Hist</span>
+                <span className="hidden sm:inline" aria-hidden="true">History</span>
               </TabsTrigger>
               )}
             </TabsList>

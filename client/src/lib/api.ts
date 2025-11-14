@@ -909,62 +909,7 @@ export const governanceApi = {
           return apiRequest(`/api/governance/${organizationId}/public-audit-logs${query ? `?${query}` : ''}`)
         },
       }
-    },
-
-  // Admin API functions
-  async getAdminDashboard() {
-    return apiRequest('/api/admin/dashboard')
-  },
-
-  async createOrganizationAdmin(
-    name: string,
-    representatives: string[],
-    options?: {
-      description?: string;
-      membershipPolicy?: 'open' | 'invitation';
-      votingThreshold?: number;
-      governanceRules?: {
-        representativeTermMonths?: number;
-        electionVotingMethod?: 'simple_majority' | 'ranked_choice' | 'approval';
-        electionQuorumPercentage?: number;
-        defaultVotingDeadlineHours?: number;
-        documentProposalPeriodDays?: number;
-      };
     }
-  ) {
-    return apiRequest('/api/admin/organizations', {
-      method: 'POST',
-      body: JSON.stringify({
-        name,
-        representatives,
-        description: options?.description,
-        membershipPolicy: options?.membershipPolicy || 'invitation',
-        votingThreshold: options?.votingThreshold || 0.75,
-        governanceRules: options?.governanceRules
-      }),
-    })
-  },
-
-  async getAllOrganizationsAdmin() {
-    return apiRequest('/api/admin/organizations')
-  },
-
-  async updateOrganizationStatus(id: string, isActive: boolean) {
-    return apiRequest(`/api/admin/organizations/${id}/status`, {
-      method: 'PATCH',
-      body: JSON.stringify({ isActive }),
-    })
-  },
-
-  async getAllUsersAdmin() {
-    return apiRequest('/api/admin/users')
-  },
-
-  async promoteUserToAdmin(userId: string) {
-    return apiRequest(`/api/admin/promote-admin/${userId}`, {
-      method: 'POST',
-    })
-  }
 
 }
 

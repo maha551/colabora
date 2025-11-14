@@ -597,38 +597,44 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
         }}>
           <div className="flex justify-center mb-4 px-4">
             <TabsList className="w-full sm:w-auto">
-              <TabsTrigger 
-                value="agreed" 
+              <TabsTrigger
+                value="agreed"
                 className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm"
+                aria-label={`Accepted versions tab with ${agreedVersions.length} accepted versions`}
               >
-                <CheckCircle2 className="h-3 w-3 sm:h-4 sm:w-4" />
-                <span className="hidden xs:inline">Accepted</span>
+                <CheckCircle2 className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
+                <span className="sm:hidden" aria-hidden="true">Done</span>
+                <span className="hidden sm:inline" aria-hidden="true">Accepted</span>
                 {agreedVersions.length > 0 && (
-                  <Badge variant="default" className="ml-1 bg-green-600 text-xs">
+                  <Badge variant="default" className="ml-1 bg-green-600 text-xs" aria-label={`${agreedVersions.length} accepted versions`}>
                     {agreedVersions.length}
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger 
-                value="debated" 
+              <TabsTrigger
+                value="debated"
                 className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm"
+                aria-label={`Discussed proposals tab with ${debatedProposals.length} discussed proposals`}
               >
-                <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4" />
-                <span className="hidden xs:inline">Discussed</span>
+                <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
+                <span className="sm:hidden" aria-hidden="true">Disc</span>
+                <span className="hidden sm:inline" aria-hidden="true">Discussed</span>
                 {debatedProposals.length > 0 && (
-                  <Badge variant="secondary" className="ml-1 text-xs">
+                  <Badge variant="secondary" className="ml-1 text-xs" aria-label={`${debatedProposals.length} discussed proposals`}>
                     {debatedProposals.length}
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger 
-                value="pending" 
+              <TabsTrigger
+                value="pending"
                 className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm"
+                aria-label={`Pending proposals tab with ${pendingProposals.length} pending proposals`}
               >
-                <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
-                <span className="hidden xs:inline">Pending</span>
+                <Clock className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
+                <span className="sm:hidden" aria-hidden="true">Wait</span>
+                <span className="hidden sm:inline" aria-hidden="true">Pending</span>
                 {pendingProposals.length > 0 && (
-                  <Badge variant="secondary" className="ml-1 text-xs">
+                  <Badge variant="secondary" className="ml-1 text-xs" aria-label={`${pendingProposals.length} pending proposals`}>
                     {pendingProposals.length}
                   </Badge>
                 )}

@@ -167,9 +167,9 @@ export function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
     setLoading(true);
     try {
       const [statsResponse, orgsResponse, usersResponse] = await Promise.all([
-        documentsApi.getAdminDashboard(),
-        documentsApi.getAllOrganizationsAdmin(),
-        documentsApi.getAllUsersAdmin()
+        apiRequest('/api/admin/dashboard'),
+        apiRequest('/api/admin/organizations'),
+        apiRequest('/api/admin/users')
       ]);
 
       setStats(statsResponse.stats);
@@ -184,9 +184,6 @@ export function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
   };
 
   const handleCreateOrganization = async () => {
-    console.log('Create organization called');
-    console.log('Form data:', orgForm);
-
     if (!orgForm.name.trim() || orgForm.representatives.length === 0) {
       toast.error('Please fill in all required fields and select at least one representative');
       return;
@@ -194,22 +191,25 @@ export function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
 
     setCreatingOrg(true);
     try {
-      await documentsApi.createOrganizationAdmin(
-        orgForm.name,
-        orgForm.representatives,
-        {
-          description: orgForm.description,
-          membershipPolicy: orgForm.membershipPolicy,
-          votingThreshold: orgForm.votingThreshold / 100, // Convert percentage to decimal
-          governanceRules: {
-            representativeTermMonths: orgForm.governanceRules.representativeTermMonths,
-            electionVotingMethod: orgForm.governanceRules.electionVotingMethod,
-            electionQuorumPercentage: orgForm.governanceRules.electionQuorumPercentage / 100,
-            defaultVotingDeadlineHours: orgForm.governanceRules.defaultVotingDeadlineHours,
-            documentProposalPeriodDays: orgForm.governanceRules.documentProposalPeriodDays
-          }
+      const requestBody = {
+        name: orgForm.name,
+        representatives: orgForm.representatives,
+        description: orgForm.description,
+        membershipPolicy: orgForm.membershipPolicy,
+        votingThreshold: orgForm.votingThreshold / 100, // Convert percentage to decimal
+        governanceRules: {
+          representativeTermMonths: orgForm.governanceRules.representativeTermMonths,
+          electionVotingMethod: orgForm.governanceRules.electionVotingMethod,
+          electionQuorumPercentage: orgForm.governanceRules.electionQuorumPercentage / 100,
+          defaultVotingDeadlineHours: orgForm.governanceRules.defaultVotingDeadlineHours,
+          documentProposalPeriodDays: orgForm.governanceRules.documentProposalPeriodDays
         }
-      );
+      };
+
+      await apiRequest('/api/admin/organizations', {
+        method: 'POST',
+        body: JSON.stringify(requestBody)
+      });
 
       toast.success('Organization created successfully');
       setCreateOrgDialogOpen(false);
@@ -238,7 +238,10 @@ export function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
 
   const handleToggleOrganizationStatus = async (orgId: string, isActive: boolean) => {
     try {
-      await documentsApi.updateOrganizationStatus(orgId, !isActive);
+      await apiRequest(`/api/admin/organizations/${orgId}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ isActive: !isActive }),
+      });
       toast.success(`Organization ${!isActive ? 'activated' : 'deactivated'} successfully`);
       loadDashboardData(); // Refresh data
     } catch (error) {
@@ -249,7 +252,9 @@ export function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
 
   const handlePromoteUser = async (userId: string) => {
     try {
-      await documentsApi.promoteUserToAdmin(userId);
+      await apiRequest(`/api/admin/promote-admin/${userId}`, {
+        method: 'POST',
+      });
       toast.success('User promoted to admin successfully');
       loadDashboardData(); // Refresh data
     } catch (error) {

@@ -4,13 +4,67 @@ const { hashPassword } = require('../server/middleware/auth');
 
 console.log('🔧 Setting up admin user for Colabora...');
 
-// Database path
-const dbPath = path.join(__dirname, '../colabora.db');
+// Database path - use same path as production
+const dbPath = process.env.DATABASE_URL ?
+  (process.env.DATABASE_URL.startsWith('sqlite:///') ?
+    process.env.DATABASE_URL.replace('sqlite:///', '') :
+    process.env.DATABASE_URL) :
+  path.join(__dirname, '../colabora.db');
+
 const db = new sqlite3.Database(dbPath);
+
+// Database initialization function
+async function initializeDatabase(db) {
+  console.log('📊 Initializing database schema for admin setup...');
+
+  // Enable foreign keys
+  db.run('PRAGMA foreign_keys = ON');
+
+  // Create users table first (needed for admin user)
+  const tables = [
+    `CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT,
+      avatar TEXT,
+      bio TEXT,
+      role TEXT DEFAULT 'user',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`
+  ];
+
+  // Execute table creation sequentially
+  for (const sql of tables) {
+    await new Promise((resolve, reject) => {
+      db.run(sql, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+  }
+
+  // Ensure role column exists (migration)
+  await new Promise((resolve) => {
+    db.run('ALTER TABLE users ADD COLUMN role TEXT DEFAULT \'user\'', (err) => {
+      // Ignore error if column already exists
+      if (err && !err.message.includes('duplicate column name')) {
+        console.error('Error adding role column:', err);
+      }
+      resolve();
+    });
+  });
+
+  console.log('✅ Database schema initialized for admin setup');
+}
 
 async function setupAdmin() {
   try {
-    // Check if admin user already exists
+    // Initialize database schema first
+    await initializeDatabase(db);
+
+    // Now check if admin user already exists
     const existingAdmin = await new Promise((resolve, reject) => {
       db.get('SELECT id, name, email FROM users WHERE role = ?', ['admin'], (err, row) => {
         if (err) reject(err);

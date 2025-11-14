@@ -538,11 +538,7 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
   }
 
   // Validate ownership type and permissions
-  if (ownershipType === 'organizational') {
-    if (!organizationId) {
-      return res.status(400).json({ error: 'Organization ID required for organizational documents' });
-    }
-  } else if (ownershipType === 'shared') {
+  if (ownershipType === 'shared') {
     if (!creatorIds || !Array.isArray(creatorIds) || creatorIds.length < 1) {
       return res.status(400).json({ error: 'Shared documents require at least 1 creator' });
     }
@@ -567,21 +563,38 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
       if (err || !org) {
         return res.status(403).json({ error: 'Only organization representatives can create organizational documents' });
       }
-      createDocument();
+      
+      // If parentId is provided, validate it before creating document
+      if (parentId) {
+        db.get('SELECT id, organization_id, ownership_type FROM documents WHERE id = ?', [parentId], (parentErr, parentDoc) => {
+          if (parentErr || !parentDoc) {
+            return res.status(400).json({ error: 'Parent document not found' });
+          }
+          
+          // Validate parent belongs to same organization
+          if (parentDoc.organization_id !== organizationId) {
+            return res.status(400).json({ error: 'Parent document must belong to the same organization' });
+          }
+          
+          // Validate parent ownership type matches
+          if (parentDoc.ownership_type !== ownershipType) {
+            return res.status(400).json({ error: 'Parent document must have the same ownership type' });
+          }
+          
+          createDocument();
+        });
+      } else {
+        createDocument();
+      }
     });
     return; // Don't continue execution, wait for async callback
   }
 
-  // Validate parent document if provided
+  // Validate parent document if provided (for non-organizational documents)
   if (parentId) {
     db.get('SELECT id, organization_id, ownership_type FROM documents WHERE id = ?', [parentId], (err, parentDoc) => {
       if (err || !parentDoc) {
         return res.status(400).json({ error: 'Parent document not found' });
-      }
-      
-      // Validate parent belongs to same organization for organizational documents
-      if (ownershipType === 'organizational' && parentDoc.organization_id !== organizationId) {
-        return res.status(400).json({ error: 'Parent document must belong to the same organization' });
       }
       
       // Validate parent ownership type matches
@@ -594,7 +607,7 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
     return; // Don't continue execution, wait for async callback
   }
 
-  // For non-organizational documents, create immediately
+  // For non-organizational documents without parent, create immediately
   createDocument();
 
   function createDocument() {

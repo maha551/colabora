@@ -30,64 +30,114 @@ router.get('/', requireAuth, (req, res) => {
   console.log('Executing documents query for user:', userId);
   console.log('Query:', query);
 
-  // Optimize query to fetch all data in single queries
-  const documentIds = documents.map(doc => doc.id);
-  const orgIds = [...new Set(documents.filter(doc => doc.organization_id).map(doc => doc.organization_id))];
+  // Execute main documents query first
+  db.all(query, [userId, userId, userId], (err, documents) => {
+    if (err) {
+      console.error('Error fetching documents:', err);
+      return res.status(500).json({ error: 'Failed to fetch documents' });
+    }
 
-  // Fetch all collaborators in batch
-        let collabQuery, collabParams;
-  if (documentIds.length > 0) {
-          collabQuery = `
-            SELECT
-              dc.document_id,
-        dc.id as collaborator_id,
-              dc.user_id,
-              dc.created_at,
-              u.name as user_name,
-              u.email as user_email
-            FROM document_collaborators dc
-            JOIN users u ON dc.user_id = u.id
-      WHERE dc.document_id IN (${documentIds.map(() => '?').join(',')})
-          `;
-    collabParams = documentIds;
-        }
+    console.log('Found', documents.length, 'documents for user');
 
-  // Fetch organizational collaborators in batch
-  let orgCollabQuery, orgCollabParams;
-  if (orgIds.length > 0) {
-    orgCollabQuery = `
-      SELECT
-        om.organization_id,
-        u.id as user_id,
-        u.name as user_name,
-        u.email as user_email,
-        'auto' as collaborator_type
-      FROM organization_members om
-      JOIN users u ON om.user_id = u.id
-      WHERE om.organization_id IN (${orgIds.map(() => '?').join(',')}) AND om.status = 'active'
-      ORDER BY u.name
-    `;
-    orgCollabParams = orgIds;
-  }
+    // Now we can use the documents to build other queries
+    const documentIds = documents.map(doc => doc.id);
+    const orgIds = [...new Set(documents.filter(doc => doc.organization_id).map(doc => doc.organization_id))];
 
-  // Fetch stats for all documents in batch
-        const statsQuery = `
-          SELECT
-      p.document_id,
-            COUNT(DISTINCT p.id) as paragraph_count,
-            COUNT(DISTINCT pr.id) as proposal_count
-          FROM paragraphs p
-          LEFT JOIN proposals pr ON p.id = pr.paragraph_id
-    WHERE p.document_id IN (${documentIds.map(() => '?').join(',')})
-    GROUP BY p.document_id
-  `;
+    // Fetch all collaborators in batch
+    let collabQuery, collabParams;
+    if (documentIds.length > 0) {
+      collabQuery = `
+        SELECT
+          dc.document_id,
+          dc.id as collaborator_id,
+          dc.user_id,
+          dc.created_at,
+          u.name as user_name,
+          u.email as user_email
+        FROM document_collaborators dc
+        JOIN users u ON dc.user_id = u.id
+        WHERE dc.document_id IN (${documentIds.map(() => '?').join(',')})
+      `;
+      collabParams = documentIds;
+    }
 
-  function processCollaborators(documents, collaborators, orgCollaborators, stats) {
-    const collabMap = new Map();
-    const orgCollabMap = new Map();
-    const statsMap = new Map();
+    // Fetch organizational collaborators in batch
+    let orgCollabQuery, orgCollabParams;
+    if (orgIds.length > 0) {
+      orgCollabQuery = `
+        SELECT
+          om.organization_id,
+          u.id as user_id,
+          u.name as user_name,
+          u.email as user_email,
+          'auto' as collaborator_type
+        FROM organization_members om
+        JOIN users u ON om.user_id = u.id
+        WHERE om.organization_id IN (${orgIds.map(() => '?').join(',')}) AND om.status = 'active'
+        ORDER BY u.name
+      `;
+      orgCollabParams = orgIds;
+    }
 
-    // Build collaborator maps
+    // Fetch stats for all documents in batch (only if we have documents)
+    let statsQuery, statsParams = [];
+    if (documentIds.length > 0) {
+      statsQuery = `
+        SELECT
+          p.document_id,
+          COUNT(DISTINCT p.id) as paragraph_count,
+          COUNT(DISTINCT pr.id) as proposal_count
+        FROM paragraphs p
+        LEFT JOIN proposals pr ON p.id = pr.paragraph_id
+        WHERE p.document_id IN (${documentIds.map(() => '?').join(',')})
+        GROUP BY p.document_id
+      `;
+      statsParams = documentIds;
+    }
+
+    // Execute all queries in parallel
+    const queryPromises = [];
+
+    if (collabQuery) {
+      queryPromises.push(new Promise((resolve, reject) => {
+        db.all(collabQuery, collabParams, (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        });
+      }));
+    } else {
+      queryPromises.push(Promise.resolve([]));
+    }
+
+    if (orgCollabQuery) {
+      queryPromises.push(new Promise((resolve, reject) => {
+        db.all(orgCollabQuery, orgCollabParams, (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        });
+      }));
+    } else {
+      queryPromises.push(Promise.resolve([]));
+    }
+
+    if (statsQuery) {
+      queryPromises.push(new Promise((resolve, reject) => {
+        db.all(statsQuery, statsParams, (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        });
+      }));
+    } else {
+      queryPromises.push(Promise.resolve([]));
+    }
+
+    Promise.all(queryPromises).then(([collaborators, orgCollaborators, stats]) => {
+      // Process collaborators and build response
+      const collabMap = new Map();
+      const orgCollabMap = new Map();
+      const statsMap = new Map();
+
+      // Build collaborator maps
     collaborators.forEach(collab => {
       if (!collabMap.has(collab.document_id)) {
         collabMap.set(collab.document_id, []);
@@ -172,46 +222,11 @@ router.get('/', requireAuth, (req, res) => {
       };
             });
 
-    res.json({ documents: processedDocuments });
-  }
-
-  // Execute all queries in parallel
-  const queryPromises = [];
-
-  if (collabQuery) {
-    queryPromises.push(new Promise((resolve, reject) => {
-      db.all(collabQuery, collabParams, (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows || []);
-      });
-    }));
-  } else {
-    queryPromises.push(Promise.resolve([]));
-  }
-
-  if (orgCollabQuery) {
-    queryPromises.push(new Promise((resolve, reject) => {
-      db.all(orgCollabQuery, orgCollabParams, (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows || []);
-      });
-    }));
-  } else {
-    queryPromises.push(Promise.resolve([]));
-  }
-
-  queryPromises.push(new Promise((resolve, reject) => {
-    db.all(statsQuery, documentIds, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows || []);
+      res.json({ documents: processedDocuments });
+    }).catch(err => {
+      console.error('Error fetching document data:', err);
+      return res.status(500).json({ error: 'Failed to fetch documents' });
     });
-  }));
-
-  Promise.all(queryPromises).then(([collaborators, orgCollaborators, stats]) => {
-    processCollaborators(documents, collaborators, orgCollaborators, stats);
-  }).catch(err => {
-    console.error('Error fetching document data:', err);
-    return res.status(500).json({ error: 'Failed to fetch documents' });
   });
 });
 

@@ -2,6 +2,8 @@
 const config = require('./config');
 const DatabaseManager = require('./modules/database');
 const ServerManager = require('./modules/server');
+const { hashPassword } = require('./middleware/auth');
+const demoUsers = require('./demoUsers');
 
 // Import route handlers
 const authRoutes = require('./routes/auth');
@@ -65,6 +67,70 @@ async function startApplication() {
     console.error('❌ Failed to start application:', error);
     process.exit(1);
   }
+}
+
+// Demo users creation function
+async function createDemoUsers(db, callback) {
+  const demoUsersData = [
+    { ...demoUsers[0], password: 'SecurePass123!' },
+    { ...demoUsers[1], password: 'SecurePass123!' },
+    { ...demoUsers[2], password: 'SecurePass123!' },
+    { ...demoUsers[3], password: 'SecurePass123!' }
+  ];
+
+  let usersCreated = 0;
+  const totalUsers = demoUsersData.length;
+
+  function createNextUser() {
+    if (usersCreated >= totalUsers) {
+      console.log('✅ Demo users created');
+      callback();
+      return;
+    }
+
+    const userData = demoUsersData[usersCreated];
+
+    // Check if user already exists
+    db.get('SELECT id FROM users WHERE email = ?', [userData.email], async (err, existingUser) => {
+      if (err) {
+        console.error('Error checking existing user:', err);
+        usersCreated++;
+        createNextUser();
+        return;
+      }
+
+      if (existingUser) {
+        console.log(`⚠️  Demo user ${userData.name} already exists`);
+        usersCreated++;
+        createNextUser();
+        return;
+      }
+
+      try {
+        // Hash password and create user
+        const hashedPassword = await hashPassword(userData.password);
+        db.run(
+          'INSERT INTO users (id, name, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
+          [userData.id, userData.name, userData.email, hashedPassword, 'user'],
+          (err) => {
+            if (err) {
+              console.error(`❌ Error creating demo user ${userData.name}:`, err);
+            } else {
+              console.log(`✅ Created demo user: ${userData.name}`);
+            }
+            usersCreated++;
+            createNextUser();
+          }
+        );
+      } catch (error) {
+        console.error(`❌ Error hashing password for ${userData.name}:`, error);
+        usersCreated++;
+        createNextUser();
+      }
+    });
+  }
+
+  createNextUser();
 }
 
 // Start the application
@@ -250,7 +316,7 @@ async function initializeDatabase(db) {
 
   function createNextTable() {
     if (tablesCreated >= totalTables) {
-      // After creating all tables, ensure role column exists
+      // After creating all tables, ensure role column exists and create demo users
       console.log('Ensuring role column exists...');
       db.run('ALTER TABLE users ADD COLUMN role TEXT DEFAULT \'user\'', (err) => {
         // Ignore error if column already exists
@@ -259,7 +325,12 @@ async function initializeDatabase(db) {
         } else {
           console.log('✅ Role column ensured');
         }
-        console.log('✅ Database schema initialized');
+
+        // Create demo users if they don't exist
+        console.log('Creating demo users...');
+        createDemoUsers(db, () => {
+          console.log('✅ Database schema initialized with demo users');
+        });
       });
       return;
     }

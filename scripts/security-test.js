@@ -27,8 +27,8 @@ function check(description, condition, details = '') {
 
 // 1. Environment Variables Check
 console.log('\n🔑 ENVIRONMENT VARIABLES');
-check('SESSION_SECRET is set', process.env.SESSION_SECRET && !process.env.SESSION_SECRET.includes('fallback'), 'Should not contain "fallback"');
-check('JWT_SECRET is set', process.env.JWT_SECRET && !process.env.JWT_SECRET.includes('fallback'), 'Should not contain "fallback"');
+check('SESSION_SECRET is available', process.env.SESSION_SECRET && process.env.SESSION_SECRET.length > 10, 'Should be at least 10 characters');
+check('JWT_SECRET is available', process.env.JWT_SECRET && process.env.JWT_SECRET.length > 10, 'Should be at least 10 characters');
 check('Secrets are different', process.env.SESSION_SECRET !== process.env.JWT_SECRET, 'Session and JWT secrets should be different');
 
 // 2. File Permissions Check

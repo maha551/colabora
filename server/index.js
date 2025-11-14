@@ -724,6 +724,12 @@ function ensureColumn(db, tableName, columnName, columnDefinition) {
     console.error(`Invalid column name: ${columnName}`);
     return;
   }
+  
+  // Validate columnDefinition is provided and is a string
+  if (!columnDefinition || typeof columnDefinition !== 'string') {
+    console.error(`Invalid column definition for ${tableName}.${columnName}:`, columnDefinition);
+    return;
+  }
 
   db.all(`PRAGMA table_info(${tableName})`, (err, columns) => {
     if (err) {

@@ -543,11 +543,15 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
       return res.status(400).json({ error: 'Organization ID required for organizational documents' });
     }
   } else if (ownershipType === 'shared') {
-    if (!creatorIds || !Array.isArray(creatorIds) || creatorIds.length < 2) {
-      return res.status(400).json({ error: 'Shared documents require at least 2 creators' });
+    if (!creatorIds || !Array.isArray(creatorIds) || creatorIds.length < 1) {
+      return res.status(400).json({ error: 'Shared documents require at least 1 creator' });
     }
+    // Automatically add current user to creatorIds if not already included
     if (!creatorIds.includes(userId)) {
-      return res.status(400).json({ error: 'Current user must be included in shared document creators' });
+      creatorIds.push(userId);
+    }
+    if (creatorIds.length < 2) {
+      return res.status(400).json({ error: 'Shared documents require at least 2 creators' });
     }
   }
 
@@ -720,49 +724,64 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
 
           // Add creators as collaborators if it's a shared document
           if (ownershipType === 'shared' && creatorIds) {
-            // Use Promise.all to handle all collaborator additions atomically
-            const collaboratorPromises = creatorIds
-              .filter(creatorId => creatorId !== userId) // Don't add owner as collaborator
-              .map(creatorId => {
-                return new Promise((resolve, reject) => {
-                  const collabId = uuidv4();
-                  db.run(`
-                    INSERT INTO document_collaborators (id, document_id, user_id)
-                    VALUES (?, ?, ?)
-                  `, [collabId, documentId, creatorId], function(err) {
-                    if (err) {
-                      console.error('Error adding collaborator:', creatorId, err);
-                      reject(err);
-                    } else {
-                      resolve();
-                    }
+            // Serialize collaborator additions (SQLite doesn't handle concurrent writes well in transactions)
+            const collaboratorsToAdd = creatorIds.filter(creatorId => creatorId !== userId); // Don't add owner as collaborator
+            
+            if (collaboratorsToAdd.length === 0) {
+              // No collaborators to add, commit transaction
+              db.run('COMMIT', (commitErr) => {
+                if (commitErr) {
+                  console.error('Error committing transaction:', commitErr);
+                  db.run('ROLLBACK', () => {
+                    return res.status(500).json({ error: 'Failed to create document: commit failed' });
                   });
-                });
+                  return;
+                }
+                sendResponse();
               });
-
-            Promise.all(collaboratorPromises)
-              .then(() => {
-                // All collaborators added successfully, commit transaction
-                db.run('COMMIT', (commitErr) => {
-                  if (commitErr) {
-                    console.error('Error committing transaction:', commitErr);
+            } else {
+              // Add collaborators sequentially
+              let collaboratorIndex = 0;
+              
+              const addNextCollaborator = () => {
+                if (collaboratorIndex >= collaboratorsToAdd.length) {
+                  // All collaborators added successfully, commit transaction
+                  db.run('COMMIT', (commitErr) => {
+                    if (commitErr) {
+                      console.error('Error committing transaction:', commitErr);
+                      db.run('ROLLBACK', () => {
+                        return res.status(500).json({ error: 'Failed to create document: commit failed' });
+                      });
+                      return;
+                    }
+                    sendResponse();
+                  });
+                  return;
+                }
+                
+                const creatorId = collaboratorsToAdd[collaboratorIndex];
+                const collabId = uuidv4();
+                db.run(`
+                  INSERT INTO document_collaborators (id, document_id, user_id)
+                  VALUES (?, ?, ?)
+                `, [collabId, documentId, creatorId], function(err) {
+                  if (err) {
+                    console.error('Error adding collaborator:', creatorId, err);
                     db.run('ROLLBACK', () => {
-                      return res.status(500).json({ error: 'Failed to create document: commit failed' });
+                      return res.status(500).json({
+                        error: 'Failed to create document: collaborator addition failed',
+                        details: err.message
+                      });
                     });
                     return;
                   }
-                  sendResponse();
+                  collaboratorIndex++;
+                  addNextCollaborator();
                 });
-              })
-              .catch((collabErr) => {
-                console.error('Error adding collaborators:', collabErr);
-                db.run('ROLLBACK', () => {
-                  return res.status(500).json({
-                    error: 'Failed to create document: collaborator addition failed',
-                    details: collabErr.message
-                  });
-                });
-              });
+              };
+              
+              addNextCollaborator();
+            }
           } else {
             // No collaborators to add, commit transaction
             db.run('COMMIT', (commitErr) => {
@@ -777,12 +796,24 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
             });
           }
 
+          let responseSent = false; // Prevent multiple responses
+          
           function sendResponse() {
+            // Prevent multiple responses
+            if (responseSent) {
+              console.warn('Attempted to send response multiple times for document creation');
+              return;
+            }
+            
             // Get user details for owner information
             db.get('SELECT name, email FROM users WHERE id = ?', [userId], (err, user) => {
               if (err) {
                 console.error('Error fetching user details:', err);
-                return res.status(500).json({ error: 'Failed to create document' });
+                if (!responseSent) {
+                  responseSent = true;
+                  return res.status(500).json({ error: 'Failed to create document' });
+                }
+                return;
               }
 
               const result = {
@@ -813,14 +844,22 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
               console.log('Document created successfully:', { id: documentId, title: trimmedTitle });
 
               // Record business metrics
-              metricsCollector.recordBusinessEvent('document_created', {
-                documentId,
-                ownerId: userId,
-                ownershipType,
-                organizationId: ownershipType === 'organizational' ? organizationId : null
-              });
+              try {
+                metricsCollector.recordBusinessEvent('document_created', {
+                  documentId,
+                  ownerId: userId,
+                  ownershipType,
+                  organizationId: ownershipType === 'organizational' ? organizationId : null
+                });
+              } catch (metricsErr) {
+                console.error('Error recording metrics:', metricsErr);
+                // Don't fail the request if metrics fail
+              }
 
-              res.status(201).json({ document: result });
+              if (!responseSent) {
+                responseSent = true;
+                res.status(201).json({ document: result });
+              }
             });
           }
         });

@@ -235,7 +235,9 @@ export const documentsApi = {
         options,
         ownershipType: ownershipType || 'personal',
         organizationId,
-        parentId: options?.parentId || undefined
+        parentId: options?.parentId || undefined,
+        // For shared documents, send contributors as creatorIds (backend will add current user)
+        creatorIds: ownershipType === 'shared' && contributors ? contributors : undefined
       }),
     })
   },

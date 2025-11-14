@@ -49,9 +49,6 @@ function RepresentativeSelector({ users, selectedRepresentatives, onSelectionCha
   const [open, setOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
 
-  console.log('RepresentativeSelector received users:', users);
-  console.log('Selected representatives:', selectedRepresentatives);
-
   const filteredUsers = users.filter(user =>
     user.name.toLowerCase().includes(searchValue.toLowerCase()) ||
     user.email.toLowerCase().includes(searchValue.toLowerCase())
@@ -169,19 +166,11 @@ export function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
   const loadDashboardData = async () => {
     setLoading(true);
     try {
-      // Debug: Check what's available on documentsApi
-      console.log('documentsApi object:', documentsApi);
-
-      // Temporary inline API calls to test backend
       const [statsResponse, orgsResponse, usersResponse] = await Promise.all([
-        apiRequest('/api/admin/dashboard'),
-        apiRequest('/api/admin/organizations'),
-        apiRequest('/api/admin/users')
+        documentsApi.getAdminDashboard(),
+        documentsApi.getAllOrganizationsAdmin(),
+        documentsApi.getAllUsersAdmin()
       ]);
-
-      console.log('Stats response:', statsResponse);
-      console.log('Organizations response:', orgsResponse);
-      console.log('Users response:', usersResponse);
 
       setStats(statsResponse.stats);
       setOrganizations(orgsResponse.organizations || []);
@@ -205,31 +194,23 @@ export function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
 
     setCreatingOrg(true);
     try {
-      console.log('Calling createOrganizationAdmin API...');
-
-      const requestBody = {
-        name: orgForm.name,
-        representatives: orgForm.representatives,
-        description: orgForm.description,
-        membershipPolicy: orgForm.membershipPolicy,
-        votingThreshold: orgForm.votingThreshold / 100, // Convert percentage to decimal
-        governanceRules: {
-          representativeTermMonths: orgForm.governanceRules.representativeTermMonths,
-          electionVotingMethod: orgForm.governanceRules.electionVotingMethod,
-          electionQuorumPercentage: orgForm.governanceRules.electionQuorumPercentage / 100,
-          defaultVotingDeadlineHours: orgForm.governanceRules.defaultVotingDeadlineHours,
-          documentProposalPeriodDays: orgForm.governanceRules.documentProposalPeriodDays
+      await documentsApi.createOrganizationAdmin(
+        orgForm.name,
+        orgForm.representatives,
+        {
+          description: orgForm.description,
+          membershipPolicy: orgForm.membershipPolicy,
+          votingThreshold: orgForm.votingThreshold / 100, // Convert percentage to decimal
+          governanceRules: {
+            representativeTermMonths: orgForm.governanceRules.representativeTermMonths,
+            electionVotingMethod: orgForm.governanceRules.electionVotingMethod,
+            electionQuorumPercentage: orgForm.governanceRules.electionQuorumPercentage / 100,
+            defaultVotingDeadlineHours: orgForm.governanceRules.defaultVotingDeadlineHours,
+            documentProposalPeriodDays: orgForm.governanceRules.documentProposalPeriodDays
+          }
         }
-      };
+      );
 
-      console.log('Request body:', requestBody);
-
-      await apiRequest('/api/admin/organizations', {
-        method: 'POST',
-        body: JSON.stringify(requestBody)
-      });
-
-      console.log('Organization created successfully');
       toast.success('Organization created successfully');
       setCreateOrgDialogOpen(false);
       setOrgForm({

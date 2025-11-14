@@ -54,7 +54,7 @@ router.post('/organizations', requireAdmin, [
   body('name').isLength({ min: 2, max: 100 }).trim().escape(),
   body('description').optional().isLength({ max: 500 }).trim().escape(),
   body('representatives').isArray({ min: 1 }),
-  body('representatives.*').isUUID(),
+  body('representatives.*').isLength({ min: 1, max: 50 }),
   body('membershipPolicy').isIn(['open', 'invitation']),
   body('votingThreshold').isFloat({ min: 0, max: 1 }),
   body('governanceRules').optional().isObject(),

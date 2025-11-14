@@ -397,10 +397,8 @@ export function ParagraphWithSuggestions({
     <div className="space-y-3">
       <div
         className={cn(
-          "relative transition-all duration-200",
-          suggestions.length > 0
-            ? "bg-blue-50/50 dark:bg-blue-900/10 border-l-4 border-blue-400 cursor-pointer"
-            : "bg-white dark:bg-slate-900/40",
+          "relative transition-all duration-200 bg-white dark:bg-slate-900/40",
+          suggestions.length > 0 && "cursor-pointer",
           showDiscussionArea || showHistory || isHovered
             ? "shadow-lg ring-1 ring-primary/10 p-8"
             : "shadow-sm p-6"
@@ -416,14 +414,6 @@ export function ParagraphWithSuggestions({
                 <p className="text-sm text-muted-foreground italic">Consensus open.</p>
               )}
             </div>
-            {suggestions.length > 0 && (
-              <div className="flex-shrink-0">
-                <div className="flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 rounded-full text-xs font-medium text-blue-700 dark:text-blue-300">
-                  <MessageSquare className="h-3 w-3" />
-                  {suggestions.length}
-                </div>
-              </div>
-            )}
             <div
               className={cn(
                 "flex items-center transition-all duration-150",

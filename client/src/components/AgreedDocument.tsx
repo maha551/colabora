@@ -40,13 +40,8 @@ export function AgreedDocument({ document, totalUsers }: AgreedDocumentProps) {
     // Count paragraphs with accepted changes and non-empty content
     const acceptedParagraphsCount = sortedParagraphs.filter(p => hasAcceptedChanges(p) && (p.title || p.text) && (p.title || p.text).trim() !== '').length;
 
-    // Only show paragraphs that have been approved through voting (have history meeting threshold)
-    // OR paragraphs that are part of the document structure (headings) but have been approved
-    const agreedParagraphs = sortedParagraphs.filter(p => {
-      if (p.isDocumentTitle) return false; // Document title is shown in header
-      if (hasAcceptedChanges(p)) return true; // Has approved changes
-      return false; // Don't show unapproved content
-    });
+    // Count all paragraphs with any content (for agreed view)
+    const paragraphsWithContent = sortedParagraphs.filter(p => !p.isDocumentTitle && (p.title || p.text) && (p.title || p.text).trim() !== '');
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -54,7 +49,7 @@ export function AgreedDocument({ document, totalUsers }: AgreedDocumentProps) {
         <div className="space-y-6">
 
         {/* Empty State - No consensus reached */}
-        {agreedParagraphs.length === 0 && (
+        {paragraphsWithContent.length === 0 && (
           <div className="text-center py-16">
             <div className="max-w-md mx-auto">
               <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
@@ -69,10 +64,17 @@ export function AgreedDocument({ document, totalUsers }: AgreedDocumentProps) {
         )}
 
         {/* Paper-like Document */}
-        {agreedParagraphs.length > 0 && (
+        {paragraphsWithContent.length > 0 && (
           <Card className="p-12 rounded-none shadow-2xl bg-white dark:bg-gray-900 relative overflow-hidden border-2 border-gray-200 dark:border-gray-700">
+          {/* Document Title */}
+          <div className="mb-8 pb-6 border-b-2 border-gray-300 dark:border-gray-600">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 text-center">
+              {document.title}
+            </h1>
+          </div>
+
           {/* Realistic paper texture and effects */}
-          
+
           <div className="absolute inset-0 pointer-events-none">
             {/* Subtle paper texture */}
             <div className="absolute inset-0 opacity-[0.015] bg-[radial-gradient(circle_at_50%_50%,rgba(0,0,0,0.1)_0%,transparent_50%)] bg-[length:20px_20px]" />
@@ -102,8 +104,9 @@ export function AgreedDocument({ document, totalUsers }: AgreedDocumentProps) {
               // Skip document title as it's shown in the main header
               if (paragraph.isDocumentTitle) return null;
 
-              // Skip paragraphs that are empty
+              // Get display text
               const displayText = paragraph.title || paragraph.text;
+              // Skip paragraphs that are truly empty
               if (!displayText || displayText.trim() === '') {
                 return null;
               }
@@ -116,8 +119,8 @@ export function AgreedDocument({ document, totalUsers }: AgreedDocumentProps) {
                     <div className="flex flex-col sm:flex-row sm:items-start sm:gap-3 gap-2">
                       {React.createElement(
                         `h${headingLevel}`,
-                        { className: "text-xl font-bold text-gray-900 dark:text-gray-100 leading-tight" },
-                        displayText
+                        { className: "text-xl font-bold text-gray-900 dark:text-gray-100 leading-tight whitespace-pre-wrap" },
+                        displayText.trim()
                       )}
                       {hasChanges && highestApprovedChange && (
                         <div className="hidden landscape:flex flex-col items-end text-xs text-green-600 gap-1 shrink-0">
@@ -142,8 +145,8 @@ export function AgreedDocument({ document, totalUsers }: AgreedDocumentProps) {
               return (
                 <div key={paragraph.id} className="relative">
                   <div className="flex flex-col sm:flex-row sm:gap-4 gap-2">
-                    <p className="flex-1 leading-relaxed text-gray-800 dark:text-gray-200 text-justify indent-8 first-line:font-medium">
-                      {displayText}
+                    <p className="flex-1 leading-relaxed text-gray-800 dark:text-gray-200 text-justify indent-8 first-line:font-medium whitespace-pre-wrap">
+                      {displayText.trim()}
                     </p>
                     {hasChanges && highestApprovedChange && (
                       <div className="hidden landscape:flex flex-col items-end text-xs text-green-600 gap-1 shrink-0">

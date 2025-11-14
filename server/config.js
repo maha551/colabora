@@ -40,15 +40,52 @@ const config = {
   RATE_LIMIT_WINDOW_MS: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
   RATE_LIMIT_MAX_REQUESTS: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
 
-  // Security Headers - Temporarily relaxed for React app compatibility
-  // TODO: Fine-tune CSP after app is working
+  // Security Headers - Properly configured for React app
   SECURITY_HEADERS: {
-    contentSecurityPolicy: false, // Disable CSP for now to fix blocking issues
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: [
+          "'self'",
+          "'unsafe-inline'", // Required for React development
+          "'unsafe-eval'",   // Required for some React features
+          "https://cdn.jsdelivr.net" // For any external CDNs if needed
+        ],
+        styleSrc: [
+          "'self'",
+          "'unsafe-inline'", // Required for styled-components and CSS-in-JS
+          "https://fonts.googleapis.com"
+        ],
+        fontSrc: [
+          "'self'",
+          "https://fonts.gstatic.com",
+          "data:" // For inline fonts
+        ],
+        imgSrc: [
+          "'self'",
+          "data:",  // For inline images/data URLs
+          "blob:",  // For file uploads
+          "https:" // For external images
+        ],
+        connectSrc: [
+          "'self'",
+          "https://api.github.com" // If using GitHub API
+        ],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+        frameAncestors: ["'none'"],
+        upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null
+      }
+    },
     hsts: process.env.NODE_ENV === 'production' ? {
       maxAge: 31536000,
       includeSubDomains: true,
       preload: true
-    } : false
+    } : false,
+    noSniff: true,
+    xssFilter: true,
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" }
   },
 
   // Database Settings

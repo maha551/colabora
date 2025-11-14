@@ -2,16 +2,9 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { metricsCollector } = require('../middleware/monitoring');
 const { documentValidation } = require('../middleware/validation');
+const { requireAuth, requireDocumentAccess } = require('../middleware/auth');
 
 const router = express.Router();
-
-// Middleware to check authentication
-const requireAuth = (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  next();
-};
 
 // Get all documents for current user (as owner or collaborator)
 router.get('/', requireAuth, (req, res) => {

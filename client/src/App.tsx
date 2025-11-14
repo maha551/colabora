@@ -178,9 +178,19 @@ export default function App() {
     }
   };
 
-  const handleLogin = (user: User) => {
+  const handleLogin = async (user: User) => {
     setCurrentUser(user);
-    loadDocuments(user);
+
+    // After login, fetch complete user info including role
+    try {
+      const response = await authApi.getCurrentUser();
+      setCurrentUser(response.user);
+      loadDocuments(response.user);
+    } catch (error) {
+      console.error('Failed to fetch user info after login:', error);
+      // Fallback to loading documents with the basic user info
+      loadDocuments(user);
+    }
   };
 
   const handleLogout = async () => {

@@ -26,7 +26,7 @@ router.post('/login', [
 
   try {
     // Find user by email
-    db.get('SELECT id, name, email, password_hash, avatar, bio FROM users WHERE email = ?', [email], async (err, user) => {
+    db.get('SELECT id, name, email, password_hash, avatar, bio, role FROM users WHERE email = ?', [email], async (err, user) => {
       if (err) {
         console.error('Database error during login:', err);
         securityLogger.authFailure(email, 'database_error', ip, userAgent);
@@ -76,7 +76,8 @@ router.post('/login', [
           name: user.name,
           email: user.email,
           avatar: user.avatar,
-          bio: user.bio
+          bio: user.bio,
+          role: user.role || 'user'
         },
         token,
         message: 'Login successful'

@@ -50,7 +50,10 @@ COPY --from=builder --chown=nodejs:nodejs /app/server ./server
 
 # Create health check script
 RUN echo '#!/bin/sh' > /healthcheck.sh && \
-    echo 'curl -f http://localhost:3000/api/health || exit 1' >> /healthcheck.sh && \
+    echo '# Wait for app to be ready' >> /healthcheck.sh && \
+    echo 'sleep 3' >> /healthcheck.sh && \
+    echo '# Check if server is responding' >> /healthcheck.sh && \
+    echo 'curl -f --max-time 5 --retry 3 --retry-delay 1 http://localhost:3000/health || exit 1' >> /healthcheck.sh && \
     chmod +x /healthcheck.sh
 
 # Switch to non-root user
@@ -61,6 +64,7 @@ ENV NODE_ENV=production
 
 # Security: Don't expose sensitive defaults
 # SESSION_SECRET and JWT_SECRET must be provided via environment variables
+ENV DATABASE_URL="sqlite:////data/colabora.db"
 
 # Expose port
 EXPOSE 3000

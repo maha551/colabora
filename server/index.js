@@ -33,26 +33,32 @@ console.log(`💾 Database: ${config.DATABASE_URL}`);
 // Initialize database and server
 async function startApplication() {
   try {
-    // Initialize database
+    // Initialize database connection first
     const db = await dbManager.initialize();
-    console.log('✅ Database initialized');
+    console.log('✅ Database connection initialized');
 
     // Initialize server
     const app = serverManager.initialize();
     console.log('✅ Server initialized');
 
-  // Make database available to routes
-  app.locals.db = db;
+    // Make database available to routes
+    app.locals.db = db;
 
     // Register routes
     registerRoutes(app);
 
-    // Initialize database schema
-    await initializeDatabase(db);
+    // Start server immediately (don't wait for schema)
+    serverManager.start(config.PORT, async () => {
+      console.log('🎉 Server started successfully!');
 
-    // Start server
-    serverManager.start(config.PORT, () => {
-      console.log('🎉 Application started successfully!');
+      // Initialize database schema in background
+      try {
+        await initializeDatabase(db);
+        console.log('✅ Database schema initialized');
+      } catch (error) {
+        console.error('❌ Database schema initialization failed:', error);
+        // Don't exit - server is running, just log the error
+      }
     });
 
     } catch (error) {

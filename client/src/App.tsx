@@ -863,22 +863,22 @@ export default function App() {
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "discussion" | "agreed" | "history")}>
           <div className="flex justify-center mb-6 px-4">
             <TabsList className="w-full sm:w-auto">
-              <TabsTrigger value="discussion" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm" aria-label={`Discussion tab with ${totalSuggestions} suggestions`}>
+              <TabsTrigger value="discussion" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm" aria-label={`Draft tab with ${totalSuggestions} proposals`}>
                 <Edit3 className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
-                <span className="sm:hidden" aria-hidden="true">Disc</span>
-                <span className="hidden sm:inline" aria-hidden="true">Discussion</span>
+                <span className="sm:hidden" aria-hidden="true">Draft</span>
+                <span className="hidden sm:inline" aria-hidden="true">Draft</span>
                 {totalSuggestions > 0 && (
-                  <Badge variant="secondary" className="ml-1 text-xs" aria-label={`${totalSuggestions} suggestions`}>
+                  <Badge variant="secondary" className="ml-1 text-xs" aria-label={`${totalSuggestions} proposals`}>
                     {totalSuggestions}
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="agreed" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm" aria-label={`Agreed tab with ${acceptedSuggestions} accepted suggestions`}>
+              <TabsTrigger value="agreed" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm" aria-label={`Final tab with ${acceptedSuggestions} approved paragraphs`}>
                 <FileText className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
-                <span className="sm:hidden" aria-hidden="true">Done</span>
-                <span className="hidden sm:inline" aria-hidden="true">Agreed</span>
+                <span className="sm:hidden" aria-hidden="true">Final</span>
+                <span className="hidden sm:inline" aria-hidden="true">Final</span>
                 {acceptedSuggestions > 0 && (
-                  <Badge variant="default" className="ml-1 bg-green-600 text-xs" aria-label={`${acceptedSuggestions} accepted suggestions`}>
+                  <Badge variant="default" className="ml-1 bg-green-600 text-xs" aria-label={`${acceptedSuggestions} approved paragraphs`}>
                     {acceptedSuggestions}
                   </Badge>
                 )}

@@ -37,19 +37,32 @@ export function AgreedDocument({ document, totalUsers }: AgreedDocumentProps) {
     return getHighestApprovedChangeInfo(paragraph) !== null;
   };
 
-    // Count paragraphs with accepted changes and non-empty content
-    const acceptedParagraphsCount = sortedParagraphs.filter(p => hasAcceptedChanges(p) && (p.title || p.text) && (p.title || p.text).trim() !== '').length;
+  // Get the winning proposal content for display
+  const getWinningProposalContent = (paragraph: any) => {
+    const winningChange = getHighestApprovedChangeInfo(paragraph);
+    if (winningChange) {
+      return {
+        text: winningChange.new_text,
+        title: winningChange.heading_level ? winningChange.new_text : undefined,
+        headingLevel: winningChange.heading_level
+      };
+    }
+    return null;
+  };
 
-    // Count all paragraphs with any content (for agreed view)
-    const paragraphsWithContent = sortedParagraphs.filter(p => !p.isDocumentTitle && (p.title || p.text) && (p.title || p.text).trim() !== '');
+    // Count paragraphs with accepted changes
+    const acceptedParagraphsCount = sortedParagraphs.filter(p => hasAcceptedChanges(p)).length;
+
+    // Only show paragraphs that have been approved through voting
+    const approvedParagraphs = sortedParagraphs.filter(p => !p.isDocumentTitle && hasAcceptedChanges(p));
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="space-y-6">
 
-        {/* Empty State - No consensus reached */}
-        {paragraphsWithContent.length === 0 && (
+        {/* Empty State - No approved content yet */}
+        {approvedParagraphs.length === 0 && (
           <div className="text-center py-16">
             <div className="max-w-md mx-auto">
               <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
@@ -57,14 +70,14 @@ export function AgreedDocument({ document, totalUsers }: AgreedDocumentProps) {
                 No Approved Content Yet
               </h3>
               <p className="text-gray-500 dark:text-gray-400">
-                No content has reached consensus yet. Proposals need to meet the {document.options?.acceptanceThreshold || 75}% approval threshold to appear here.
+                No content has reached consensus yet. Paragraphs will appear here once they receive enough votes to meet the {document.options?.acceptanceThreshold || 75}% approval threshold.
               </p>
             </div>
           </div>
         )}
 
         {/* Paper-like Document */}
-        {paragraphsWithContent.length > 0 && (
+        {approvedParagraphs.length > 0 && (
           <Card className="p-12 rounded-none shadow-2xl bg-white dark:bg-gray-900 relative overflow-hidden border-2 border-gray-200 dark:border-gray-700">
           {/* Document Title */}
           <div className="mb-8 pb-6 border-b-2 border-gray-300 dark:border-gray-600">
@@ -97,23 +110,21 @@ export function AgreedDocument({ document, totalUsers }: AgreedDocumentProps) {
 
           {/* Document Content */}
           <div className="relative space-y-8 text-gray-900 dark:text-gray-100">
-            {agreedParagraphs.map((paragraph, index) => {
+            {approvedParagraphs.map((paragraph, index) => {
               const hasChanges = hasAcceptedChanges(paragraph);
               const highestApprovedChange = getHighestApprovedChangeInfo(paragraph);
+              const winningContent = getWinningProposalContent(paragraph);
 
-              // Skip document title as it's shown in the main header
-              if (paragraph.isDocumentTitle) return null;
+              // Skip if no winning content (shouldn't happen since we filtered for approved paragraphs)
+              if (!winningContent) return null;
 
-              // Get display text
-              const displayText = paragraph.title || paragraph.text;
-              // Skip paragraphs that are truly empty
-              if (!displayText || displayText.trim() === '') {
-                return null;
-              }
+              // Use winning proposal content for display
+              const displayText = winningContent.title || winningContent.text;
+              const isHeading = winningContent.title && winningContent.headingLevel;
 
-              if (paragraph.title) {
-                // Heading
-                const headingLevel = Math.min(6, 2 + (paragraph.order || 0));
+              if (isHeading) {
+                // Heading from winning proposal
+                const headingLevel = winningContent.headingLevel || 2;
                 return (
                   <div key={paragraph.id} className="relative">
                     <div className="flex flex-col sm:flex-row sm:items-start sm:gap-3 gap-2">
@@ -122,46 +133,42 @@ export function AgreedDocument({ document, totalUsers }: AgreedDocumentProps) {
                         { className: "text-xl font-bold text-gray-900 dark:text-gray-100 leading-tight whitespace-pre-wrap" },
                         displayText.trim()
                       )}
-                      {hasChanges && highestApprovedChange && (
-                        <div className="hidden landscape:flex flex-col items-end text-xs text-green-600 gap-1 shrink-0">
-                          <div className="flex items-center gap-1 bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded">
-                            <CheckCircle2 className="h-3 w-3" />
-                            <span className="font-medium">Accepted</span>
-                          </div>
-                          <span className="text-gray-500">
-                            {highestApprovedChange.approvalPercentage.toFixed(0)}% approval
-                          </span>
-                          <span className="text-gray-500">
-                            {new Date(highestApprovedChange.acceptedAt).toLocaleDateString()}
-                          </span>
+                      <div className="hidden landscape:flex flex-col items-end text-xs text-green-600 gap-1 shrink-0">
+                        <div className="flex items-center gap-1 bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded">
+                          <CheckCircle2 className="h-3 w-3" />
+                          <span className="font-medium">Approved</span>
                         </div>
-                      )}
+                        <span className="text-gray-500">
+                          {highestApprovedChange.approvalPercentage.toFixed(0)}% consensus
+                        </span>
+                        <span className="text-gray-500">
+                          {new Date(highestApprovedChange.acceptedAt).toLocaleDateString()}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 );
               }
 
-              // Regular paragraph
+              // Regular paragraph from winning proposal
               return (
                 <div key={paragraph.id} className="relative">
                   <div className="flex flex-col sm:flex-row sm:gap-4 gap-2">
                     <p className="flex-1 leading-relaxed text-gray-800 dark:text-gray-200 text-justify indent-8 first-line:font-medium whitespace-pre-wrap">
                       {displayText.trim()}
                     </p>
-                    {hasChanges && highestApprovedChange && (
-                      <div className="hidden landscape:flex flex-col items-end text-xs text-green-600 gap-1 shrink-0">
-                        <div className="flex items-center gap-1 bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded">
-                          <CheckCircle2 className="h-3 w-3" />
-                          <span className="font-medium">Accepted</span>
-                        </div>
-                        <span className="text-gray-500">
-                          {highestApprovedChange.approvalPercentage.toFixed(0)}% approval
-                        </span>
-                        <span className="text-gray-500">
-                          {new Date(highestApprovedChange.acceptedAt).toLocaleDateString()}
-                        </span>
+                    <div className="hidden landscape:flex flex-col items-end text-xs text-green-600 gap-1 shrink-0">
+                      <div className="flex items-center gap-1 bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded">
+                        <CheckCircle2 className="h-3 w-3" />
+                        <span className="font-medium">Approved</span>
                       </div>
-                    )}
+                      <span className="text-gray-500">
+                        {highestApprovedChange.approvalPercentage.toFixed(0)}% consensus
+                      </span>
+                      <span className="text-gray-500">
+                        {new Date(highestApprovedChange.acceptedAt).toLocaleDateString()}
+                      </span>
+                    </div>
                   </div>
                 </div>
               );
@@ -174,7 +181,7 @@ export function AgreedDocument({ document, totalUsers }: AgreedDocumentProps) {
               <div className="flex items-center gap-4">
                 <span className="flex items-center gap-1">
                   <FileText className="h-4 w-4" />
-                  {agreedParagraphs.length} agreed sections
+                  {approvedParagraphs.length} approved sections
                 </span>
                 <span className="flex items-center gap-1">
                   <CheckCircle2 className="h-4 w-4 text-green-600" />

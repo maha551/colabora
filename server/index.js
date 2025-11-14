@@ -211,6 +211,31 @@ async function initializeDatabase(db) {
       FOREIGN KEY (created_by_admin_id) REFERENCES users(id)
     )`,
 
+    `CREATE TABLE IF NOT EXISTS organization_governance_rules (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      representative_term_months INTEGER DEFAULT 12,
+      representative_term_limits INTEGER,
+      election_voting_method TEXT CHECK(election_voting_method IN ('simple_majority', 'ranked_choice', 'approval')) DEFAULT 'simple_majority',
+      election_quorum_percentage REAL DEFAULT 0.5,
+      election_notice_days INTEGER DEFAULT 14,
+      default_voting_deadline_hours INTEGER DEFAULT 168,
+      default_quorum_percentage REAL DEFAULT 0.5,
+      document_proposal_period_days INTEGER DEFAULT 365,
+      anonymous_voting_enabled BOOLEAN DEFAULT 1,
+      vote_change_allowed BOOLEAN DEFAULT 0,
+      representative_can_create_votes BOOLEAN DEFAULT 1,
+      representative_can_invite_members BOOLEAN DEFAULT 1,
+      representative_can_manage_documents BOOLEAN DEFAULT 1,
+      representative_approval_required BOOLEAN DEFAULT 1,
+      tamper_proof_enabled BOOLEAN DEFAULT 1,
+      audit_trail_enabled BOOLEAN DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+      UNIQUE(organization_id)
+    )`,
+
     `CREATE TABLE IF NOT EXISTS organization_members (
       id TEXT PRIMARY KEY,
       organization_id TEXT NOT NULL,

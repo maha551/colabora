@@ -557,15 +557,31 @@ export const organizationsApi = {
     return apiRequest('/api/admin/dashboard')
   },
 
-  async createOrganizationAdmin(name: string, description?: string, membershipPolicy?: 'open' | 'invitation', votingThreshold?: number, firstRepresentativeId?: string) {
+  async createOrganizationAdmin(
+    name: string,
+    representatives: string[],
+    options?: {
+      description?: string;
+      membershipPolicy?: 'open' | 'invitation';
+      votingThreshold?: number;
+      governanceRules?: {
+        representativeTermMonths?: number;
+        electionVotingMethod?: 'simple_majority' | 'ranked_choice' | 'approval';
+        electionQuorumPercentage?: number;
+        defaultVotingDeadlineHours?: number;
+        documentProposalPeriodDays?: number;
+      };
+    }
+  ) {
     return apiRequest('/api/admin/organizations', {
       method: 'POST',
       body: JSON.stringify({
         name,
-        description,
-        membershipPolicy: membershipPolicy || 'invitation',
-        votingThreshold: votingThreshold || 0.75,
-        firstRepresentativeId
+        representatives,
+        description: options?.description,
+        membershipPolicy: options?.membershipPolicy || 'invitation',
+        votingThreshold: options?.votingThreshold || 0.75,
+        governanceRules: options?.governanceRules
       }),
     })
   },

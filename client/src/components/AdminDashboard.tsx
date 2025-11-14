@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Badge } from './ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Building2, Users, FileText, Shield, Plus, UserCheck, UserX, Eye, EyeOff } from 'lucide-react';
+import { Building2, Users, FileText, Shield, Plus, UserCheck, UserX, Eye, EyeOff, X, Settings } from 'lucide-react';
 import { documentsApi } from '../lib/api';
 import { toast } from 'sonner';
 
@@ -47,9 +47,16 @@ export function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
   const [orgForm, setOrgForm] = useState({
     name: '',
     description: '',
+    representatives: [] as string[],
     membershipPolicy: 'invitation' as 'open' | 'invitation',
     votingThreshold: 75,
-    firstRepresentativeId: ''
+    governanceRules: {
+      representativeTermMonths: 12,
+      electionVotingMethod: 'simple_majority' as 'simple_majority' | 'ranked_choice' | 'approval',
+      electionQuorumPercentage: 50,
+      defaultVotingDeadlineHours: 168,
+      documentProposalPeriodDays: 365
+    }
   });
 
   useEffect(() => {
@@ -77,8 +84,8 @@ export function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
   };
 
   const handleCreateOrganization = async () => {
-    if (!orgForm.name.trim() || !orgForm.firstRepresentativeId) {
-      toast.error('Please fill in all required fields');
+    if (!orgForm.name.trim() || orgForm.representatives.length === 0) {
+      toast.error('Please fill in all required fields and select at least one representative');
       return;
     }
 
@@ -86,10 +93,19 @@ export function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
     try {
       await documentsApi.createOrganizationAdmin(
         orgForm.name,
-        orgForm.description,
-        orgForm.membershipPolicy,
-        orgForm.votingThreshold / 100, // Convert percentage to decimal
-        orgForm.firstRepresentativeId
+        orgForm.representatives,
+        {
+          description: orgForm.description,
+          membershipPolicy: orgForm.membershipPolicy,
+          votingThreshold: orgForm.votingThreshold / 100, // Convert percentage to decimal
+          governanceRules: {
+            representativeTermMonths: orgForm.governanceRules.representativeTermMonths,
+            electionVotingMethod: orgForm.governanceRules.electionVotingMethod,
+            electionQuorumPercentage: orgForm.governanceRules.electionQuorumPercentage / 100,
+            defaultVotingDeadlineHours: orgForm.governanceRules.defaultVotingDeadlineHours,
+            documentProposalPeriodDays: orgForm.governanceRules.documentProposalPeriodDays
+          }
+        }
       );
 
       toast.success('Organization created successfully');
@@ -97,9 +113,16 @@ export function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
       setOrgForm({
         name: '',
         description: '',
+        representatives: [],
         membershipPolicy: 'invitation',
         votingThreshold: 75,
-        firstRepresentativeId: ''
+        governanceRules: {
+          representativeTermMonths: 12,
+          electionVotingMethod: 'simple_majority',
+          electionQuorumPercentage: 50,
+          defaultVotingDeadlineHours: 168,
+          documentProposalPeriodDays: 365
+        }
       });
       loadDashboardData(); // Refresh data
     } catch (error) {
@@ -214,87 +237,239 @@ export function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
               Create New Organization
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Create New Organization</DialogTitle>
               <DialogDescription>
-                Set up a new organization with initial settings and representative.
+                Set up a new organization with representatives and governance rules.
               </DialogDescription>
             </DialogHeader>
 
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="org-name">Organization Name *</Label>
-                <Input
-                  id="org-name"
-                  value={orgForm.name}
-                  onChange={(e) => setOrgForm(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="Enter organization name"
-                />
-              </div>
+            <Tabs defaultValue="basic" className="w-full">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="basic">Basic Info</TabsTrigger>
+                <TabsTrigger value="representatives">Representatives</TabsTrigger>
+                <TabsTrigger value="governance">Governance</TabsTrigger>
+              </TabsList>
 
-              <div className="grid gap-2">
-                <Label htmlFor="org-description">Description</Label>
-                <Input
-                  id="org-description"
-                  value={orgForm.description}
-                  onChange={(e) => setOrgForm(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="Optional description"
-                />
-              </div>
+              <TabsContent value="basic" className="space-y-4">
+                <div className="grid gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="org-name">Organization Name *</Label>
+                    <Input
+                      id="org-name"
+                      value={orgForm.name}
+                      onChange={(e) => setOrgForm(prev => ({ ...prev, name: e.target.value }))}
+                      placeholder="Enter organization name"
+                    />
+                  </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="membership-policy">Membership Policy</Label>
-                <Select
-                  value={orgForm.membershipPolicy}
-                  onValueChange={(value: 'open' | 'invitation') =>
-                    setOrgForm(prev => ({ ...prev, membershipPolicy: value }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="invitation">Invitation Only</SelectItem>
-                    <SelectItem value="open">Open Membership</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="org-description">Description</Label>
+                    <Input
+                      id="org-description"
+                      value={orgForm.description}
+                      onChange={(e) => setOrgForm(prev => ({ ...prev, description: e.target.value }))}
+                      placeholder="Optional description"
+                    />
+                  </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="voting-threshold">Voting Threshold (%)</Label>
-                <Input
-                  id="voting-threshold"
-                  type="number"
-                  min="1"
-                  max="100"
-                  value={orgForm.votingThreshold}
-                  onChange={(e) => setOrgForm(prev => ({
-                    ...prev,
-                    votingThreshold: parseInt(e.target.value) || 75
-                  }))}
-                />
-              </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="membership-policy">Membership Policy</Label>
+                    <Select
+                      value={orgForm.membershipPolicy}
+                      onValueChange={(value: 'open' | 'invitation') =>
+                        setOrgForm(prev => ({ ...prev, membershipPolicy: value }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="invitation">Invitation Only</SelectItem>
+                        <SelectItem value="open">Open Membership</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="first-rep">First Representative *</Label>
-                <Select
-                  value={orgForm.firstRepresentativeId}
-                  onValueChange={(value) => setOrgForm(prev => ({ ...prev, firstRepresentativeId: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a user as representative" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {users.map((user) => (
-                      <SelectItem key={user.id} value={user.id}>
-                        {user.name} ({user.email})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="voting-threshold">Voting Threshold (%)</Label>
+                    <Input
+                      id="voting-threshold"
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={orgForm.votingThreshold}
+                      onChange={(e) => setOrgForm(prev => ({
+                        ...prev,
+                        votingThreshold: parseInt(e.target.value) || 75
+                      }))}
+                    />
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="representatives" className="space-y-4">
+                <div className="space-y-4">
+                  <div className="grid gap-2">
+                    <Label>Select Representatives *</Label>
+                    <p className="text-sm text-gray-600">
+                      Choose one or more users to serve as representatives for this organization.
+                    </p>
+
+                    <div className="border rounded-lg p-4 space-y-2 max-h-40 overflow-y-auto">
+                      {users.map((user) => (
+                        <div key={user.id} className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id={`rep-${user.id}`}
+                            checked={orgForm.representatives.includes(user.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setOrgForm(prev => ({
+                                  ...prev,
+                                  representatives: [...prev.representatives, user.id]
+                                }));
+                              } else {
+                                setOrgForm(prev => ({
+                                  ...prev,
+                                  representatives: prev.representatives.filter(id => id !== user.id)
+                                }));
+                              }
+                            }}
+                            className="rounded"
+                          />
+                          <label htmlFor={`rep-${user.id}`} className="text-sm">
+                            {user.name} ({user.email})
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+
+                    {orgForm.representatives.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {orgForm.representatives.map(repId => {
+                          const user = users.find(u => u.id === repId);
+                          return user ? (
+                            <Badge key={repId} variant="secondary" className="flex items-center gap-1">
+                              {user.name}
+                              <X
+                                className="h-3 w-3 cursor-pointer hover:text-red-500"
+                                onClick={() => setOrgForm(prev => ({
+                                  ...prev,
+                                  representatives: prev.representatives.filter(id => id !== repId)
+                                }))}
+                              />
+                            </Badge>
+                          ) : null;
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="governance" className="space-y-4">
+                <div className="grid gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="rep-term">Representative Term (Months)</Label>
+                    <Input
+                      id="rep-term"
+                      type="number"
+                      min="1"
+                      max="120"
+                      value={orgForm.governanceRules.representativeTermMonths}
+                      onChange={(e) => setOrgForm(prev => ({
+                        ...prev,
+                        governanceRules: {
+                          ...prev.governanceRules,
+                          representativeTermMonths: parseInt(e.target.value) || 12
+                        }
+                      }))}
+                    />
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="election-method">Election Voting Method</Label>
+                    <Select
+                      value={orgForm.governanceRules.electionVotingMethod}
+                      onValueChange={(value: 'simple_majority' | 'ranked_choice' | 'approval') =>
+                        setOrgForm(prev => ({
+                          ...prev,
+                          governanceRules: {
+                            ...prev.governanceRules,
+                            electionVotingMethod: value
+                          }
+                        }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="simple_majority">Simple Majority</SelectItem>
+                        <SelectItem value="ranked_choice">Ranked Choice</SelectItem>
+                        <SelectItem value="approval">Approval Voting</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="election-quorum">Election Quorum (%)</Label>
+                    <Input
+                      id="election-quorum"
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={orgForm.governanceRules.electionQuorumPercentage}
+                      onChange={(e) => setOrgForm(prev => ({
+                        ...prev,
+                        governanceRules: {
+                          ...prev.governanceRules,
+                          electionQuorumPercentage: parseInt(e.target.value) || 50
+                        }
+                      }))}
+                    />
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="voting-deadline">Default Voting Deadline (Hours)</Label>
+                    <Input
+                      id="voting-deadline"
+                      type="number"
+                      min="1"
+                      max="720"
+                      value={orgForm.governanceRules.defaultVotingDeadlineHours}
+                      onChange={(e) => setOrgForm(prev => ({
+                        ...prev,
+                        governanceRules: {
+                          ...prev.governanceRules,
+                          defaultVotingDeadlineHours: parseInt(e.target.value) || 168
+                        }
+                      }))}
+                    />
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="proposal-period">Document Proposal Period (Days)</Label>
+                    <Input
+                      id="proposal-period"
+                      type="number"
+                      min="1"
+                      max="3650"
+                      value={orgForm.governanceRules.documentProposalPeriodDays}
+                      onChange={(e) => setOrgForm(prev => ({
+                        ...prev,
+                        governanceRules: {
+                          ...prev.governanceRules,
+                          documentProposalPeriodDays: parseInt(e.target.value) || 365
+                        }
+                      }))}
+                    />
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
 
             <div className="flex justify-end gap-2">
               <Button

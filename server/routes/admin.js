@@ -53,9 +53,16 @@ router.get('/dashboard', requireAdmin, (req, res) => {
 router.post('/organizations', requireAdmin, [
   body('name').isLength({ min: 2, max: 100 }).trim().escape(),
   body('description').optional().isLength({ max: 500 }).trim().escape(),
+  body('representatives').isArray({ min: 1 }),
+  body('representatives.*').isUUID(),
   body('membershipPolicy').isIn(['open', 'invitation']),
   body('votingThreshold').isFloat({ min: 0, max: 1 }),
-  body('firstRepresentativeId').isUUID()
+  body('governanceRules').optional().isObject(),
+  body('governanceRules.representativeTermMonths').optional().isInt({ min: 1, max: 120 }),
+  body('governanceRules.electionVotingMethod').optional().isIn(['simple_majority', 'ranked_choice', 'approval']),
+  body('governanceRules.electionQuorumPercentage').optional().isFloat({ min: 0, max: 1 }),
+  body('governanceRules.defaultVotingDeadlineHours').optional().isInt({ min: 1, max: 720 }),
+  body('governanceRules.documentProposalPeriodDays').optional().isInt({ min: 1, max: 3650 })
 ], (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -63,66 +70,164 @@ router.post('/organizations', requireAdmin, [
   }
 
   const db = req.app.locals.db;
-  const { name, description, membershipPolicy, votingThreshold, firstRepresentativeId } = req.body;
+  const {
+    name,
+    description,
+    representatives,
+    membershipPolicy,
+    votingThreshold,
+    governanceRules = {}
+  } = req.body;
   const organizationId = uuidv4();
 
-  // Verify the first representative exists
-  db.get('SELECT id, name FROM users WHERE id = ?', [firstRepresentativeId], (err, user) => {
-    if (err) {
-      console.error('Error checking representative:', err);
-      return res.status(500).json({ error: 'Failed to verify representative' });
-    }
+  // Verify all representatives exist
+  const checkPromises = representatives.map(repId =>
+    new Promise((resolve, reject) => {
+      db.get('SELECT id, name FROM users WHERE id = ?', [repId], (err, user) => {
+        if (err) reject(err);
+        else resolve(user);
+      });
+    })
+  );
 
-    if (!user) {
-      return res.status(400).json({ error: 'Representative user not found' });
+  Promise.all(checkPromises).then(verifiedUsers => {
+    const missingUsers = verifiedUsers.filter(user => !user);
+    if (missingUsers.length > 0) {
+      return res.status(400).json({ error: 'One or more representative users not found' });
     }
 
     // Create organization
     db.run(`
       INSERT INTO organizations (id, name, description, representatives, membership_policy, voting_threshold, is_active, created_by_admin_id)
       VALUES (?, ?, ?, ?, ?, ?, 1, ?)
-    `, [organizationId, name, description, JSON.stringify([firstRepresentativeId]), membershipPolicy, votingThreshold, req.user.id], function(err) {
+    `, [organizationId, name, description, JSON.stringify(representatives), membershipPolicy, votingThreshold, req.user.id], function(err) {
       if (err) {
         console.error('Error creating organization:', err);
         return res.status(500).json({ error: 'Failed to create organization' });
       }
 
-      // Add representative as organization member
+      // Create governance rules for the organization
+      const rulesId = uuidv4();
+      const defaultRules = {
+        representativeTermMonths: governanceRules.representativeTermMonths || 12,
+        electionVotingMethod: governanceRules.electionVotingMethod || 'simple_majority',
+        electionQuorumPercentage: governanceRules.electionQuorumPercentage || 0.5,
+        electionNoticeDays: 14,
+        defaultVotingDeadlineHours: governanceRules.defaultVotingDeadlineHours || 168,
+        defaultQuorumPercentage: 0.5,
+        documentProposalPeriodDays: governanceRules.documentProposalPeriodDays || 365,
+        anonymousVotingEnabled: true,
+        voteChangeAllowed: false,
+        representativeCanCreateVotes: true,
+        representativeCanInviteMembers: true,
+        representativeCanManageDocuments: true,
+        representativeApprovalRequired: true,
+        tamperProofEnabled: true,
+        auditTrailEnabled: true
+      };
+
       db.run(`
-        INSERT INTO organization_members (id, organization_id, user_id, status)
-        VALUES (?, ?, ?, 'active')
-      `, [uuidv4(), organizationId, firstRepresentativeId], function(err) {
+        INSERT INTO organization_governance_rules (
+          id, organization_id, representative_term_months, election_voting_method,
+          election_quorum_percentage, election_notice_days, default_voting_deadline_hours,
+          default_quorum_percentage, document_proposal_period_days, anonymous_voting_enabled,
+          vote_change_allowed, representative_can_create_votes, representative_can_invite_members,
+          representative_can_manage_documents, representative_approval_required,
+          tamper_proof_enabled, audit_trail_enabled
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        rulesId, organizationId,
+        defaultRules.representativeTermMonths,
+        defaultRules.electionVotingMethod,
+        defaultRules.electionQuorumPercentage,
+        defaultRules.electionNoticeDays,
+        defaultRules.defaultVotingDeadlineHours,
+        defaultRules.defaultQuorumPercentage,
+        defaultRules.documentProposalPeriodDays,
+        defaultRules.anonymousVotingEnabled ? 1 : 0,
+        defaultRules.voteChangeAllowed ? 1 : 0,
+        defaultRules.representativeCanCreateVotes ? 1 : 0,
+        defaultRules.representativeCanInviteMembers ? 1 : 0,
+        defaultRules.representativeCanManageDocuments ? 1 : 0,
+        defaultRules.representativeApprovalRequired ? 1 : 0,
+        defaultRules.tamperProofEnabled ? 1 : 0,
+        defaultRules.auditTrailEnabled ? 1 : 0
+      ], function(err) {
         if (err) {
-          console.error('Error adding representative to organization:', err);
+          console.error('Error creating governance rules:', err);
           // Don't fail the whole operation, just log the error
-          securityLogger.error('Failed to add representative to new organization', {
+          securityLogger.error('Failed to create governance rules for new organization', {
             organizationId,
-            representativeId: firstRepresentativeId,
             error: err.message
           });
         }
 
-        securityLogger.adminAction(req.user.id, 'organization_created', {
-          organizationId,
-          organizationName: name,
-          representativeId: firstRepresentativeId
-        });
+        // Add all representatives as organization members
+        const memberPromises = representatives.map(repId =>
+          new Promise((resolve, reject) => {
+            db.run(`
+              INSERT INTO organization_members (id, organization_id, user_id, status)
+              VALUES (?, ?, ?, 'active')
+            `, [uuidv4(), organizationId, repId], function(err) {
+              if (err) reject(err);
+              else resolve();
+            });
+          })
+        );
 
-        res.status(201).json({
-          success: true,
-          organization: {
-            id: organizationId,
-            name,
-            description,
-            membershipPolicy,
-            votingThreshold,
-            representatives: [firstRepresentativeId],
-            isActive: true,
-            createdBy: req.user.id
-          }
+        Promise.all(memberPromises).then(() => {
+          securityLogger.adminAction(req.user.id, 'organization_created', {
+            organizationId,
+            organizationName: name,
+            representatives: representatives,
+            governanceRules: defaultRules
+          });
+
+          res.status(201).json({
+            success: true,
+            organization: {
+              id: organizationId,
+              name,
+              description,
+              membershipPolicy,
+              votingThreshold,
+              representatives: representatives,
+              governanceRules: defaultRules,
+              isActive: true,
+              createdBy: req.user.id
+            }
+          });
+        }).catch(err => {
+          console.error('Error adding representatives to organization:', err);
+          // Organization is created, but representatives couldn't be added
+          securityLogger.error('Failed to add representatives to new organization', {
+            organizationId,
+            representatives,
+            error: err.message
+          });
+
+          // Still return success since organization was created
+          res.status(201).json({
+            success: true,
+            organization: {
+              id: organizationId,
+              name,
+              description,
+              membershipPolicy,
+              votingThreshold,
+              representatives: representatives,
+              governanceRules: defaultRules,
+              isActive: true,
+              createdBy: req.user.id
+            },
+            warning: 'Organization created but some representatives could not be added'
+          });
         });
       });
     });
+  }).catch(err => {
+    console.error('Error verifying representatives:', err);
+    res.status(500).json({ error: 'Failed to verify representatives' });
   });
 });
 

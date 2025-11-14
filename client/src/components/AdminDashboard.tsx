@@ -265,16 +265,9 @@ export function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
+      {/* Description */}
       <div className="mb-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-            <p className="text-gray-600 mt-1">Manage organizations, users, and system settings</p>
-          </div>
-          <Button onClick={onBack} variant="outline">
-            Back to Documents
-          </Button>
-        </div>
+        <p className="text-gray-600">Manage organizations, users, and system settings</p>
       </div>
 
       {/* Stats Cards */}

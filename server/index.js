@@ -72,10 +72,11 @@ async function startApplication() {
 // Demo users creation function
 async function createDemoUsers(db, callback) {
   const demoUsersData = [
-    { ...demoUsers[0], password: 'SecurePass123!' },
-    { ...demoUsers[1], password: 'SecurePass123!' },
-    { ...demoUsers[2], password: 'SecurePass123!' },
-    { ...demoUsers[3], password: 'SecurePass123!' }
+    { ...demoUsers[0], password: 'SecurePass123!', role: 'user' },
+    { ...demoUsers[1], password: 'SecurePass123!', role: 'user' },
+    { ...demoUsers[2], password: 'SecurePass123!', role: 'user' },
+    { ...demoUsers[3], password: 'SecurePass123!', role: 'user' },
+    { ...demoUsers[4], password: 'AdminSecurePass123!', role: 'admin' } // Admin user
   ];
 
   let usersCreated = 0;
@@ -111,12 +112,12 @@ async function createDemoUsers(db, callback) {
         const hashedPassword = await hashPassword(userData.password);
         db.run(
           'INSERT INTO users (id, name, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
-          [userData.id, userData.name, userData.email, hashedPassword, 'user'],
+          [userData.id, userData.name, userData.email, hashedPassword, userData.role],
           (err) => {
             if (err) {
               console.error(`❌ Error creating demo user ${userData.name}:`, err);
             } else {
-              console.log(`✅ Created demo user: ${userData.name}`);
+              console.log(`✅ Created demo user: ${userData.name} (${userData.role})`);
             }
             usersCreated++;
             createNextUser();

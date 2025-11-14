@@ -2185,8 +2185,288 @@ function insertDemoOrganizationMembers(db) {
       }
       membersInserted++;
       if (membersInserted === demoOrganizationMembers.length) {
-        console.log('Demo organization members inserted, demo data insertion complete!');
-        console.log('Database initialized with demo data including organizations.');
+        console.log('Demo organization members inserted, inserting organization documents...');
+        insertDemoOrganizationDocuments(db);
+      }
+    });
+  });
+}
+
+function insertDemoOrganizationDocuments(db) {
+  const orgId = 'org-demo-1';
+  const now = new Date();
+  const oneYearFromNow = new Date(now);
+  oneYearFromNow.setFullYear(now.getFullYear() + 1);
+  const oneYearAgo = new Date(now);
+  oneYearAgo.setFullYear(now.getFullYear() - 1);
+  const sixMonthsAgo = new Date(now);
+  sixMonthsAgo.setMonth(now.getMonth() - 6);
+  
+  // Demo documents with hierarchical structure and different statuses
+  const demoDocs = [
+    {
+      id: 'org-doc-1',
+      title: 'Organization Charter',
+      description: 'The foundational document defining our organization',
+      ownerId: 'cmgxlfj9z0000orjgnfy3revt', // Alice
+      organizationId: orgId,
+      parentId: null,
+      status: 'agreed', // Already agreed
+      proposalDeadline: oneYearAgo.toISOString(), // Deadline passed
+      acceptanceThreshold: 75.0,
+      votingAnonymous: 0,
+      votingAnonymityLocked: 0,
+      voteChangeAllowed: 1,
+      structureProposalsEnabled: 1,
+      createdAt: oneYearAgo.toISOString(),
+      updatedAt: oneYearAgo.toISOString()
+    },
+    {
+      id: 'org-doc-1-1',
+      title: 'Mission Statement',
+      description: 'Our core mission and values',
+      ownerId: 'cmgxlfj9z0000orjgnfy3revt', // Alice
+      organizationId: orgId,
+      parentId: 'org-doc-1',
+      status: 'agreed',
+      proposalDeadline: oneYearAgo.toISOString(),
+      acceptanceThreshold: 75.0,
+      votingAnonymous: 0,
+      votingAnonymityLocked: 0,
+      voteChangeAllowed: 1,
+      structureProposalsEnabled: 1,
+      createdAt: oneYearAgo.toISOString(),
+      updatedAt: oneYearAgo.toISOString()
+    },
+    {
+      id: 'org-doc-1-2',
+      title: 'Code of Conduct',
+      description: 'Expected behavior and ethical guidelines',
+      ownerId: 'cmgxlfj9z0000orjgnfy3revt', // Alice
+      organizationId: orgId,
+      parentId: 'org-doc-1',
+      status: 'proposal', // Currently in proposal stage
+      proposalDeadline: oneYearFromNow.toISOString(), // Deadline in future
+      acceptanceThreshold: 75.0,
+      votingAnonymous: 0,
+      votingAnonymityLocked: 0,
+      voteChangeAllowed: 1,
+      structureProposalsEnabled: 1,
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString()
+    },
+    {
+      id: 'org-doc-2',
+      title: 'Governance Policies',
+      description: 'Policies governing organizational decision-making',
+      ownerId: 'cmgxlfj9z0000orjgnfy3revw', // Diana
+      organizationId: orgId,
+      parentId: null,
+      status: 'draft', // Draft document
+      proposalDeadline: null,
+      acceptanceThreshold: 75.0,
+      votingAnonymous: 0,
+      votingAnonymityLocked: 0,
+      voteChangeAllowed: 1,
+      structureProposalsEnabled: 1,
+      createdAt: sixMonthsAgo.toISOString(),
+      updatedAt: sixMonthsAgo.toISOString()
+    },
+    {
+      id: 'org-doc-2-1',
+      title: 'Voting Procedures',
+      description: 'How votes are conducted and counted',
+      ownerId: 'cmgxlfj9z0000orjgnfy3revw', // Diana
+      organizationId: orgId,
+      parentId: 'org-doc-2',
+      status: 'agreed',
+      proposalDeadline: sixMonthsAgo.toISOString(), // Deadline passed
+      acceptanceThreshold: 75.0,
+      votingAnonymous: 0,
+      votingAnonymityLocked: 0,
+      voteChangeAllowed: 1,
+      structureProposalsEnabled: 1,
+      createdAt: sixMonthsAgo.toISOString(),
+      updatedAt: sixMonthsAgo.toISOString()
+    },
+    {
+      id: 'org-doc-2-1-1',
+      title: 'Election Rules',
+      description: 'Specific rules for representative elections',
+      ownerId: 'cmgxlfj9z0000orjgnfy3revw', // Diana
+      organizationId: orgId,
+      parentId: 'org-doc-2-1',
+      status: 'proposal',
+      proposalDeadline: oneYearFromNow.toISOString(),
+      acceptanceThreshold: 75.0,
+      votingAnonymous: 0,
+      votingAnonymityLocked: 0,
+      voteChangeAllowed: 1,
+      structureProposalsEnabled: 1,
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString()
+    },
+    {
+      id: 'org-doc-3',
+      title: 'Financial Guidelines',
+      description: 'Budget and financial management policies',
+      ownerId: 'cmgxlfj9z0000orjgnfy3revu', // Bob
+      organizationId: orgId,
+      parentId: null,
+      status: 'proposal',
+      proposalDeadline: oneYearFromNow.toISOString(),
+      acceptanceThreshold: 75.0,
+      votingAnonymous: 0,
+      votingAnonymityLocked: 0,
+      voteChangeAllowed: 1,
+      structureProposalsEnabled: 1,
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString()
+    }
+  ];
+
+  let docsInserted = 0;
+  demoDocs.forEach(doc => {
+    db.run(`
+      INSERT OR IGNORE INTO documents (
+        id, title, description, owner_id, organization_id, parent_id, status, proposal_deadline,
+        ownership_type, acceptance_threshold, voting_anonymous, voting_anonymity_locked,
+        vote_change_allowed, structure_proposals_enabled, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      doc.id,
+      doc.title,
+      doc.description,
+      doc.ownerId,
+      doc.organizationId,
+      doc.parentId,
+      doc.status,
+      doc.proposalDeadline,
+      'organizational', // Set ownership_type to 'organizational'
+      doc.acceptanceThreshold,
+      doc.votingAnonymous,
+      doc.votingAnonymityLocked,
+      doc.voteChangeAllowed,
+      doc.structureProposalsEnabled,
+      doc.createdAt,
+      doc.updatedAt
+    ], (err) => {
+      if (err) {
+        console.error('Error inserting demo organization document:', err);
+      }
+      docsInserted++;
+      if (docsInserted === demoDocs.length) {
+        console.log('Demo organization documents inserted, inserting document votes...');
+        insertDemoDocumentVotes(db);
+      }
+    });
+  });
+}
+
+function insertDemoDocumentVotes(db) {
+  // Add document-level votes for agreed documents (to show they reached quorum)
+  const demoVotes = [
+    // Votes for org-doc-1 (agreed) - all 4 members voted PRO
+    { documentId: 'org-doc-1', userId: 'cmgxlfj9z0000orjgnfy3revt', vote: 'PRO' }, // Alice
+    { documentId: 'org-doc-1', userId: 'cmgxlfj9z0000orjgnfy3revu', vote: 'PRO' }, // Bob
+    { documentId: 'org-doc-1', userId: 'cmgxlfj9z0000orjgnfy3revv', vote: 'PRO' }, // Charlie
+    { documentId: 'org-doc-1', userId: 'cmgxlfj9z0000orjgnfy3revw', vote: 'PRO' }, // Diana
+    
+    // Votes for org-doc-1-1 (agreed) - 3 PRO, 1 NEUTRAL (75% threshold met)
+    { documentId: 'org-doc-1-1', userId: 'cmgxlfj9z0000orjgnfy3revt', vote: 'PRO' }, // Alice
+    { documentId: 'org-doc-1-1', userId: 'cmgxlfj9z0000orjgnfy3revu', vote: 'PRO' }, // Bob
+    { documentId: 'org-doc-1-1', userId: 'cmgxlfj9z0000orjgnfy3revv', vote: 'PRO' }, // Charlie
+    { documentId: 'org-doc-1-1', userId: 'cmgxlfj9z0000orjgnfy3revw', vote: 'NEUTRAL' }, // Diana
+    
+    // Votes for org-doc-2-1 (agreed) - all PRO
+    { documentId: 'org-doc-2-1', userId: 'cmgxlfj9z0000orjgnfy3revt', vote: 'PRO' }, // Alice
+    { documentId: 'org-doc-2-1', userId: 'cmgxlfj9z0000orjgnfy3revu', vote: 'PRO' }, // Bob
+    { documentId: 'org-doc-2-1', userId: 'cmgxlfj9z0000orjgnfy3revv', vote: 'PRO' }, // Charlie
+    { documentId: 'org-doc-2-1', userId: 'cmgxlfj9z0000orjgnfy3revw', vote: 'PRO' }, // Diana
+    
+    // Votes for org-doc-1-2 (proposal) - mixed votes, not yet agreed
+    { documentId: 'org-doc-1-2', userId: 'cmgxlfj9z0000orjgnfy3revt', vote: 'PRO' }, // Alice
+    { documentId: 'org-doc-1-2', userId: 'cmgxlfj9z0000orjgnfy3revu', vote: 'PRO' }, // Bob
+    { documentId: 'org-doc-1-2', userId: 'cmgxlfj9z0000orjgnfy3revv', vote: 'NEUTRAL' }, // Charlie
+    { documentId: 'org-doc-1-2', userId: 'cmgxlfj9z0000orjgnfy3revw', vote: 'CONTRA' }, // Diana
+    
+    // Votes for org-doc-2-1-1 (proposal) - early stage
+    { documentId: 'org-doc-2-1-1', userId: 'cmgxlfj9z0000orjgnfy3revt', vote: 'PRO' }, // Alice
+    { documentId: 'org-doc-2-1-1', userId: 'cmgxlfj9z0000orjgnfy3revu', vote: 'PRO' }, // Bob
+    
+    // Votes for org-doc-3 (proposal) - early stage
+    { documentId: 'org-doc-3', userId: 'cmgxlfj9z0000orjgnfy3revt', vote: 'PRO' }, // Alice
+  ];
+
+  let votesInserted = 0;
+  demoVotes.forEach(vote => {
+    db.run(`
+      INSERT OR IGNORE INTO document_votes (
+        id, document_id, user_id, vote, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `, [
+      uuidv4(),
+      vote.documentId,
+      vote.userId,
+      vote.vote
+    ], (err) => {
+      if (err) {
+        console.error('Error inserting demo document vote:', err);
+      }
+      votesInserted++;
+      if (votesInserted === demoVotes.length) {
+        console.log('Demo document votes inserted, inserting document paragraphs...');
+        insertDemoDocumentParagraphs(db);
+      }
+    });
+  });
+}
+
+function insertDemoDocumentParagraphs(db) {
+  // Add some paragraphs to the documents to make them more realistic
+  const demoParagraphs = [
+    // Paragraphs for org-doc-1 (Organization Charter)
+    { id: 'org-para-1-1', documentId: 'org-doc-1', title: 'Organization Charter', text: 'This document establishes the Justice League as a collaborative organization dedicated to protecting Earth.', orderIndex: 0, headingLevel: 'h1' },
+    { id: 'org-para-1-2', documentId: 'org-doc-1', title: null, text: 'The Justice League operates under democratic principles, with all members having equal voice in decision-making processes.', orderIndex: 1, headingLevel: null },
+    
+    // Paragraphs for org-doc-1-1 (Mission Statement)
+    { id: 'org-para-1-1-1', documentId: 'org-doc-1-1', title: 'Our Mission', text: 'To protect Earth and its inhabitants from threats too great for any single individual to handle.', orderIndex: 0, headingLevel: 'h1' },
+    { id: 'org-para-1-1-2', documentId: 'org-doc-1-1', title: null, text: 'We believe in collaboration, transparency, and democratic decision-making.', orderIndex: 1, headingLevel: null },
+    
+    // Paragraphs for org-doc-1-2 (Code of Conduct) - proposal
+    { id: 'org-para-1-2-1', documentId: 'org-doc-1-2', title: 'Code of Conduct', text: 'All members of the Justice League are expected to adhere to the highest standards of ethical behavior.', orderIndex: 0, headingLevel: 'h1' },
+    { id: 'org-para-1-2-2', documentId: 'org-doc-1-2', title: null, text: 'This code is currently under review and discussion by all members.', orderIndex: 1, headingLevel: null },
+    
+    // Paragraphs for org-doc-2-1 (Voting Procedures)
+    { id: 'org-para-2-1-1', documentId: 'org-doc-2-1', title: 'Voting Procedures', text: 'All votes require a quorum of at least 50% of active members.', orderIndex: 0, headingLevel: 'h1' },
+    { id: 'org-para-2-1-2', documentId: 'org-doc-2-1', title: null, text: 'Proposals are accepted when they receive 75% or more PRO votes from all members.', orderIndex: 1, headingLevel: null },
+    
+    // Paragraphs for org-doc-3 (Financial Guidelines) - proposal
+    { id: 'org-para-3-1', documentId: 'org-doc-3', title: 'Financial Guidelines', text: 'The Justice League maintains a transparent financial system with regular audits.', orderIndex: 0, headingLevel: 'h1' },
+    { id: 'org-para-3-2', documentId: 'org-doc-3', title: null, text: 'All financial decisions require approval through our democratic voting process.', orderIndex: 1, headingLevel: null },
+  ];
+
+  let paragraphsInserted = 0;
+  demoParagraphs.forEach(para => {
+    db.run(`
+      INSERT OR IGNORE INTO paragraphs (
+        id, document_id, title, text, order_index, heading_level, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `, [
+      para.id,
+      para.documentId,
+      para.title,
+      para.text,
+      para.orderIndex,
+      para.headingLevel
+    ], (err) => {
+      if (err) {
+        console.error('Error inserting demo document paragraph:', err);
+      }
+      paragraphsInserted++;
+      if (paragraphsInserted === demoParagraphs.length) {
+        console.log('Demo document paragraphs inserted, demo data insertion complete!');
+        console.log('Database initialized with demo data including organizations and documents.');
       }
     });
   });

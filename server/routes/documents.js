@@ -1080,6 +1080,9 @@ router.get('/organization/:organizationId', requireAuth, (req, res) => {
                 console.error('Error fetching organization members for document:', doc.id, err);
                 return resolve({
                   ...doc,
+                  parentId: doc.parent_id || undefined,
+                  status: doc.status || 'draft',
+                  proposalDeadline: doc.proposal_deadline || undefined,
                   owner: {
                     id: doc.owner_id,
                     name: doc.owner_name,
@@ -1103,6 +1106,8 @@ router.get('/organization/:organizationId', requireAuth, (req, res) => {
               resolve({
                 ...doc,
                 parentId: doc.parent_id || undefined,
+                status: doc.status || 'draft',
+                proposalDeadline: doc.proposal_deadline || undefined,
                 owner: {
                   id: doc.owner_id,
                   name: doc.owner_name,
@@ -1171,6 +1176,8 @@ router.get('/organization/:organizationId', requireAuth, (req, res) => {
               resolve({
                 ...doc,
                 parentId: doc.parent_id || undefined,
+                status: doc.status || 'draft',
+                proposalDeadline: doc.proposal_deadline || undefined,
                 owner: {
                   id: doc.owner_id,
                   name: doc.owner_name,

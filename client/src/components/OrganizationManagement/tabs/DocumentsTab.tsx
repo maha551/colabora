@@ -72,39 +72,6 @@ export function DocumentsTab({
   const availableContributors = demoUsers.filter(user => user.id !== currentUser.id);
 
   // Build document items with parentId
-  const documentItems: DocumentItem[] = documents.map(doc => ({
-    type: 'document' as const,
-    id: doc.id,
-    title: doc.title,
-    description: doc.description,
-    createdAt: doc.createdAt,
-    updatedAt: doc.updatedAt,
-    owner: doc.owner,
-    collaborators: doc.collaborators,
-    openProposals: (doc.proposals || []).filter(p => !p.approved).length,
-    level: 1, // Will be recalculated
-    parentId: doc.parentId,
-  }));
-
-  // Add proposals
-  const proposalItems: DocumentItem[] = documentProposals.map(proposal => ({
-    type: 'proposal' as const,
-    id: proposal.id,
-    title: proposal.title,
-    description: proposal.description,
-    createdAt: proposal.createdAt,
-    updatedAt: proposal.updatedAt,
-    owner: proposal.user,
-    collaborators: proposal.contributors?.map(id => ({ id, name: 'Unknown' })) || [],
-    openProposals: 0,
-    level: 1,
-    approved: proposal.approved,
-    votes: proposal.votes,
-  }));
-
-  // Combine and build tree
-  const allItems = buildTree([...documentItems, ...proposalItems]);
-
   const handleCreateDocumentProposal = async () => {
     if (!proposalTitle.trim()) {
       toast.error('Please enter a document title');

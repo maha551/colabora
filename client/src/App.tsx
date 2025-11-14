@@ -29,7 +29,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<"discussion" | "agreed" | "history">("discussion");
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [currentView, setCurrentView] = useState<'documents' | 'activity' | 'document' | 'profile' | 'organizations' | 'organization'>('documents');
+  const [currentView, setCurrentView] = useState<'documents' | 'activity' | 'document' | 'profile' | 'organizations' | 'organization'>('activity');
   const [selectedOrganization, setSelectedOrganization] = useState<Organization | null>(null);
   const [documentLoadKey, setDocumentLoadKey] = useState<number>(Date.now());
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -247,7 +247,7 @@ export default function App() {
 
   const handleBackToDocuments = () => {
     setCurrentDocument(null);
-    setCurrentView('documents');
+    setCurrentView('activity');
   };
 
   // Handle document selection
@@ -639,7 +639,7 @@ export default function App() {
         onShowProfile={handleShowProfile}
         onShowDocuments={handleShowDocuments}
         onShowOrganizations={handleShowOrganizations}
-        showBackButton={currentView === 'activity' || currentView === 'document' || currentView === 'profile' || currentView === 'organizations' || currentView === 'organization'}
+        showBackButton={currentView === 'document' || currentView === 'profile' || currentView === 'organizations' || currentView === 'organization' || currentView === 'documents'}
         onBack={handleBackToDocuments}
         title={
           currentView === 'document' && currentDocument ? currentDocument.title :

@@ -1,10 +1,13 @@
+# DISABLED - This workflow has been disabled due to missing Fly.io secrets
+# To re-enable, uncomment the 'on:' section and ensure FLY_API_TOKEN secret is configured
 # See https://fly.io/docs/app-guides/continuous-deployment-with-github-actions/
 
-name: Fly Deploy
+name: Fly Deploy (DISABLED)
 on:
-  push:
-    branches:
-      - main
+  # Disabled - uncomment to re-enable
+  # push:
+  #   branches:
+  #     - main
 jobs:
   deploy:
     name: Deploy app

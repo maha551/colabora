@@ -335,23 +335,26 @@ export function DocumentsTab({
             Table of contents for {organization.name} documents
             </p>
           </div>
-        {permissions.canCreateDocuments && (
+        {(permissions.canCreateDocuments || permissions.canCreateDocumentProposals) && (
           <div className="relative">
             <Button
               variant="outline"
               size="sm"
               className="gap-2 hover:bg-gray-50"
-              onClick={handleSuggestDocumentClick}
+              onClick={() => {
+                setCreationMode(permissions.canCreateDocuments ? 'document' : 'proposal');
+                handleSuggestDocumentClick();
+              }}
             >
             <Plus className="h-4 w-4" />
-            Create Document
+            {permissions.canCreateDocuments ? 'Create Document' : 'Propose Document'}
           </Button>
         </div>
         )}
       </div>
 
       {/* Inline Document Creation Form */}
-      {showInlineCreation && permissions.canCreateDocuments && (
+      {showInlineCreation && (permissions.canCreateDocuments || permissions.canCreateDocumentProposals) && (
         <Card className="border-2 border-blue-200 bg-blue-50 animate-in slide-in-from-top-2 duration-300">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
@@ -369,7 +372,9 @@ export function DocumentsTab({
               </Button>
             </div>
             <CardDescription>
-              Propose a new organizational document. All organization members will be included and governance rules will be applied automatically.
+              {creationMode === 'proposal' 
+                ? 'Propose a new organizational document. The proposal will be voted on by all members before being created.'
+                : 'Create a new organizational document. All organization members will be included and governance rules will be applied automatically.'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

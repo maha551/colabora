@@ -774,7 +774,6 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
         }
       });
     });
-    }
   }
 });
 

@@ -30,173 +30,188 @@ router.get('/', requireAuth, (req, res) => {
   console.log('Executing documents query for user:', userId);
   console.log('Query:', query);
 
-  db.all(query, [userId, userId, userId], (err, documents) => {
-    if (err) {
-      console.error('Error fetching documents:', err);
-      console.error('SQL Error details:', err.message);
-      console.error('SQL Error code:', err.code);
-      return res.status(500).json({
-        error: 'Failed to fetch documents',
-        details: err.message,
-        code: err.code
-      });
-    }
+  // Optimize query to fetch all data in single queries
+  const documentIds = documents.map(doc => doc.id);
+  const orgIds = [...new Set(documents.filter(doc => doc.organization_id).map(doc => doc.organization_id))];
 
-    console.log('Found', documents ? documents.length : 0, 'documents');
+  // Fetch all collaborators in batch
+  let collabQuery, collabParams;
+  if (documentIds.length > 0) {
+    collabQuery = `
+      SELECT
+        dc.document_id,
+        dc.id as collaborator_id,
+        dc.user_id,
+        dc.created_at,
+        u.name as user_name,
+        u.email as user_email
+      FROM document_collaborators dc
+      JOIN users u ON dc.user_id = u.id
+      WHERE dc.document_id IN (${documentIds.map(() => '?').join(',')})
+    `;
+    collabParams = documentIds;
+  }
 
-    const documentsWithCollaborators = documents.map(doc => {
-      return new Promise((resolve) => {
-        let collabQuery, collabParams;
+  // Fetch organizational collaborators in batch
+  let orgCollabQuery, orgCollabParams;
+  if (orgIds.length > 0) {
+    orgCollabQuery = `
+      SELECT
+        om.organization_id,
+        u.id as user_id,
+        u.name as user_name,
+        u.email as user_email,
+        'auto' as collaborator_type
+      FROM organization_members om
+      JOIN users u ON om.user_id = u.id
+      WHERE om.organization_id IN (${orgIds.map(() => '?').join(',')}) AND om.status = 'active'
+      ORDER BY u.name
+    `;
+    orgCollabParams = orgIds;
+  }
 
-        if (doc.ownership_type === 'organizational') {
-          // For organizational documents, all active organization members are automatically collaborators
-          collabQuery = `
-            SELECT
-              u.id as user_id,
-              u.name as user_name,
-              u.email as user_email,
-              'auto' as collaborator_type
-            FROM organization_members om
-            JOIN users u ON om.user_id = u.id
-            WHERE om.organization_id = ? AND om.status = 'active'
-            ORDER BY u.name
-          `;
-          collabParams = [doc.organization_id];
-        } else {
-          // For personal/shared documents, fetch stored collaborators
-          collabQuery = `
-            SELECT
-              dc.id as collaborator_id,
-              dc.document_id,
-              dc.user_id,
-              dc.created_at,
-              u.name as user_name,
-              u.email as user_email
-            FROM document_collaborators dc
-            JOIN users u ON dc.user_id = u.id
-            WHERE dc.document_id = ?
-          `;
-          collabParams = [doc.id];
+  // Fetch stats for all documents in batch
+  const statsQuery = `
+    SELECT
+      p.document_id,
+      COUNT(DISTINCT p.id) as paragraph_count,
+      COUNT(DISTINCT pr.id) as proposal_count
+    FROM paragraphs p
+    LEFT JOIN proposals pr ON p.id = pr.paragraph_id
+    WHERE p.document_id IN (${documentIds.map(() => '?').join(',')})
+    GROUP BY p.document_id
+  `;
+
+  function processCollaborators(documents, collaborators, orgCollaborators, stats) {
+    const collabMap = new Map();
+    const orgCollabMap = new Map();
+    const statsMap = new Map();
+
+    // Build collaborator maps
+    collaborators.forEach(collab => {
+      if (!collabMap.has(collab.document_id)) {
+        collabMap.set(collab.document_id, []);
+      }
+      collabMap.get(collab.document_id).push({
+        id: collab.collaborator_id,
+        document_id: collab.document_id,
+        user_id: collab.user_id,
+        created_at: collab.created_at,
+        user: {
+          id: collab.user_id,
+          name: collab.user_name,
+          email: collab.user_email
         }
-
-        // Also fetch paragraph and proposal counts
-        const statsQuery = `
-          SELECT
-            COUNT(DISTINCT p.id) as paragraph_count,
-            COUNT(DISTINCT pr.id) as proposal_count
-          FROM paragraphs p
-          LEFT JOIN proposals pr ON p.id = pr.paragraph_id
-          WHERE p.document_id = ?
-        `;
-
-        // Fetch collaborators
-        db.all(collabQuery, collabParams, (err, collaborators) => {
-          if (err) {
-            console.error('Error fetching collaborators:', err);
-            return resolve({
-              ...doc,
-              parentId: doc.parent_id || undefined,
-              status: doc.status || 'draft',
-              proposalDeadline: doc.proposal_deadline || undefined,
-              owner: {
-                id: doc.owner_id,
-                name: doc.owner_name,
-                email: doc.owner_email
-              },
-              collaborators: [],
-              paragraphs: [],
-              organization: doc.organization_id ? {
-                id: doc.organization_id,
-                name: doc.organization_name
-              } : undefined,
-              options: {
-                acceptanceThreshold: doc.acceptance_threshold || 75.0,
-                votingAnonymous: doc.voting_anonymous === 1,
-                structureProposalsEnabled: doc.structure_proposals_enabled === 1,
-                votingAnonymityLocked: doc.voting_anonymity_locked === 1,
-                voteChangeAllowed: doc.vote_change_allowed === 1
-              }
-            });
-          }
-
-          // Fetch stats
-          db.get(statsQuery, [doc.id], (statsErr, stats) => {
-            if (statsErr) {
-              console.error('Error fetching document stats:', statsErr);
-            }
-
-            // Normalize collaborators based on document type
-            const normalizedCollaborators = (collaborators || []).map(collab => {
-              if (doc.ownership_type === 'organizational') {
-                // For organizational docs, collaborators come from org members query
-                return {
-                  id: collab.user_id, // Use user_id as id for auto-collaborators
-                  user_id: collab.user_id,
-                  user: {
-                    id: collab.user_id,
-                    name: collab.user_name,
-                    email: collab.user_email
-                  },
-                  collaborator_type: 'auto'
-                };
-              } else {
-                // For personal/shared docs, collaborators come from document_collaborators table
-                return {
-                  id: collab.collaborator_id,
-                  document_id: collab.document_id,
-                  user_id: collab.user_id,
-                  created_at: collab.created_at,
-                  user: {
-                    id: collab.user_id,
-                    name: collab.user_name,
-                    email: collab.user_email
-                  }
-                };
-              }
-            });
-
-            // Add paragraph and proposal counts to the document
-            const paragraphCount = stats ? stats.paragraph_count : 0;
-            const proposalCount = stats ? stats.proposal_count : 0;
-
-            // Create minimal paragraph objects for counting (client expects paragraphs array)
-            const paragraphs = Array.from({ length: paragraphCount }, (_, index) => ({
-              id: `para-${doc.id}-${index}`,
-              proposals: index === 0 ? Array.from({ length: proposalCount }, () => ({})) : []
-            }));
-
-            resolve({
-              ...doc,
-              parentId: doc.parent_id || undefined,
-              status: doc.status || 'draft',
-              proposalDeadline: doc.proposal_deadline || undefined,
-              owner: {
-                id: doc.owner_id,
-                name: doc.owner_name,
-                email: doc.owner_email
-              },
-              collaborators: normalizedCollaborators,
-              paragraphs: paragraphs,
-              organization: doc.organization_id ? {
-                id: doc.organization_id,
-                name: doc.organization_name
-              } : undefined,
-              options: {
-                acceptanceThreshold: doc.acceptance_threshold || 75.0,
-                votingAnonymous: doc.voting_anonymous === 1,
-                structureProposalsEnabled: doc.structure_proposals_enabled === 1,
-                votingAnonymityLocked: doc.voting_anonymity_locked === 1,
-                voteChangeAllowed: doc.vote_change_allowed === 1
-              }
-            });
-          });
-        });
       });
     });
 
-    Promise.all(documentsWithCollaborators).then(results => {
-      res.json({ documents: results });
+    orgCollaborators.forEach(collab => {
+      if (!orgCollabMap.has(collab.organization_id)) {
+        orgCollabMap.set(collab.organization_id, []);
+      }
+      orgCollabMap.get(collab.organization_id).push({
+        id: collab.user_id,
+        user_id: collab.user_id,
+        user: {
+          id: collab.user_id,
+          name: collab.user_name,
+          email: collab.user_email
+        },
+        collaborator_type: 'auto'
+      });
     });
+
+    // Build stats map
+    stats.forEach(stat => {
+      statsMap.set(stat.document_id, {
+        paragraphCount: stat.paragraph_count || 0,
+        proposalCount: stat.proposal_count || 0
+      });
+    });
+
+    // Process documents
+    const processedDocuments = documents.map(doc => {
+      const docStats = statsMap.get(doc.id) || { paragraphCount: 0, proposalCount: 0 };
+      let docCollaborators = [];
+
+      if (doc.ownership_type === 'organizational' && doc.organization_id) {
+        docCollaborators = orgCollabMap.get(doc.organization_id) || [];
+      } else {
+        docCollaborators = collabMap.get(doc.id) || [];
+      }
+
+      // Create minimal paragraph objects for counting
+      const paragraphs = Array.from({ length: docStats.paragraphCount }, (_, index) => ({
+        id: `para-${doc.id}-${index}`,
+        proposals: index === 0 ? Array.from({ length: docStats.proposalCount }, () => ({})) : []
+      }));
+
+      return {
+        ...doc,
+        parentId: doc.parent_id || undefined,
+        status: doc.status || 'draft',
+        proposalDeadline: doc.proposal_deadline || undefined,
+        owner: {
+          id: doc.owner_id,
+          name: doc.owner_name,
+          email: doc.owner_email
+        },
+        collaborators: docCollaborators,
+        paragraphs: paragraphs,
+        organization: doc.organization_id ? {
+          id: doc.organization_id,
+          name: doc.organization_name
+        } : undefined,
+        options: {
+          acceptanceThreshold: doc.acceptance_threshold || 75.0,
+          votingAnonymous: doc.voting_anonymous === 1,
+          structureProposalsEnabled: doc.structure_proposals_enabled === 1,
+          votingAnonymityLocked: doc.voting_anonymity_locked === 1,
+          voteChangeAllowed: doc.vote_change_allowed === 1
+        }
+      };
+    });
+
+    res.json({ documents: processedDocuments });
+  }
+
+  // Execute all queries in parallel
+  const queryPromises = [];
+
+  if (collabQuery) {
+    queryPromises.push(new Promise((resolve, reject) => {
+      db.all(collabQuery, collabParams, (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    }));
+  } else {
+    queryPromises.push(Promise.resolve([]));
+  }
+
+  if (orgCollabQuery) {
+    queryPromises.push(new Promise((resolve, reject) => {
+      db.all(orgCollabQuery, orgCollabParams, (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    }));
+  } else {
+    queryPromises.push(Promise.resolve([]));
+  }
+
+  queryPromises.push(new Promise((resolve, reject) => {
+    db.all(statsQuery, documentIds, (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows || []);
+    });
+  }));
+
+  Promise.all(queryPromises).then(([collaborators, orgCollaborators, stats]) => {
+    processCollaborators(documents, collaborators, orgCollaborators, stats);
+  }).catch(err => {
+    console.error('Error fetching document data:', err);
+    return res.status(500).json({ error: 'Failed to fetch documents' });
   });
 });
 

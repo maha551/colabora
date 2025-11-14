@@ -21,8 +21,8 @@ const config = {
   PORT: parseInt(process.env.PORT) || 3000,
 
   // Security Secrets
-  SESSION_SECRET: requireEnvVar('SESSION_SECRET', 'fallback-session-secret-change-in-production'),
-  JWT_SECRET: requireEnvVar('JWT_SECRET', 'fallback-jwt-secret-change-in-production'),
+  SESSION_SECRET: requireEnvVar('SESSION_SECRET'),
+  JWT_SECRET: requireEnvVar('JWT_SECRET'),
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '24h',
 
   // Database Configuration

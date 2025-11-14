@@ -73,7 +73,7 @@ if (config.NODE_ENV === 'production') {
 
 // Create the logger
 const logger = winston.createLogger({
-  level: config.LOG_LEVEL,
+  level: config.LOG_LEVEL || 'warn', // Default to warn level to reduce noise
   levels,
   format,
   transports,
@@ -82,15 +82,18 @@ const logger = winston.createLogger({
 
 // Security-focused logging functions
 const securityLogger = {
-  // Log authentication attempts
+  // Log authentication attempts - only failures and admin logins
   authAttempt: (email, success, ip, userAgent) => {
-    logger.info('Authentication attempt', {
-      email,
-      success,
-      ip,
-      userAgent,
-      event: 'auth_attempt'
-    });
+    if (!success || email.includes('admin')) {
+      const level = success ? 'info' : 'warn';
+      logger.log(level, 'Authentication attempt', {
+        email,
+        success,
+        ip,
+        userAgent,
+        event: 'auth_attempt'
+      });
+    }
   },
 
   // Log failed authentication
@@ -133,6 +136,17 @@ const securityLogger = {
       details,
       timestamp: new Date().toISOString()
     });
+  },
+
+  // Log admin actions
+  adminAction: (adminId, action, details) => {
+    logger.info('Admin action', {
+      adminId,
+      action,
+      details,
+      event: 'admin_action',
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
@@ -142,29 +156,23 @@ function requestLogger(req, res, next) {
   const ip = req.ip || req.connection.remoteAddress || req.socket.remoteAddress || 'unknown';
   const userAgent = req.get('User-Agent') || 'unknown';
 
-  // Log request
-  logger.http('Request received', {
-    method: req.method,
-    url: req.url,
-    ip,
-    userAgent,
-    userId: req.user?.id || 'anonymous'
-  });
-
-  // Log response
+  // Log response - only errors and slow requests (>1s)
   res.on('finish', () => {
     const duration = Date.now() - start;
-    const level = res.statusCode >= 400 ? 'warn' : 'http';
+    const shouldLog = res.statusCode >= 400 || duration > 1000;
 
-    logger.log(level, 'Request completed', {
-      method: req.method,
-      url: req.url,
-      status: res.statusCode,
-      duration: `${duration}ms`,
-      ip,
-      userAgent,
-      userId: req.user?.id || 'anonymous'
-    });
+    if (shouldLog) {
+      const level = res.statusCode >= 400 ? 'warn' : 'info';
+      logger.log(level, 'Slow/Error Request', {
+        method: req.method,
+        url: req.url,
+        status: res.statusCode,
+        duration: `${duration}ms`,
+        ip,
+        userAgent,
+        userId: req.user?.id || 'anonymous'
+      });
+    }
   });
 
   next();

@@ -103,11 +103,19 @@ function requireAdmin(req, res, next) {
     return res.status(401).json({ error: 'Authentication required' });
   }
 
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
+  // Check admin role from database (not from JWT token)
+  req.app.locals.db.get('SELECT role FROM users WHERE id = ?', [req.user.id], (err, row) => {
+    if (err) {
+      console.error('Error checking admin role:', err);
+      return res.status(500).json({ error: 'Authorization check failed' });
+    }
 
-  next();
+    if (!row || row.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    next();
+  });
 }
 
 // Middleware to check document access (owner or collaborator)

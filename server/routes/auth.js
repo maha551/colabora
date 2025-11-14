@@ -1,7 +1,7 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { body, validationResult } = require('express-validator');
-const { requireAuth, generateToken, hashPassword, verifyPassword } = require('../middleware/auth');
+const { requireAuth, requireAdmin, generateToken, hashPassword, verifyPassword } = require('../middleware/auth');
 const { securityLogger } = require('../middleware/logger');
 const { metricsCollector } = require('../middleware/monitoring');
 const config = require('../config');
@@ -297,30 +297,42 @@ router.put('/profile', (req, res) => {
   );
 });
 
-// TEMPORARY: Promote user to admin (for development only)
-// In production, this should be secured and restricted
-router.post('/promote-admin/:userId', requireAuth, (req, res) => {
+// Promote user to admin (admin only)
+router.post('/promote-admin/:userId', requireAuth, requireAdmin, (req, res) => {
   const db = req.app.locals.db;
   const { userId } = req.params;
-  const requestingUserId = req.user.id;
 
-  // For now, allow any authenticated user to promote others (development only)
-  // In production, this should check if the requesting user is already an admin
-
-  db.run('UPDATE users SET role = ? WHERE id = ?', ['admin', userId], function(err) {
+  // Verify target user exists
+  db.get('SELECT id, name, email, role FROM users WHERE id = ?', [userId], (err, user) => {
     if (err) {
-      console.error('Error promoting user to admin:', err);
-      return res.status(500).json({ error: 'Failed to promote user' });
+      console.error('Error checking user:', err);
+      return res.status(500).json({ error: 'Failed to verify user' });
     }
 
-    if (this.changes === 0) {
+    if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    console.log(`User ${userId} promoted to admin by ${requestingUserId}`);
-    res.json({
-      message: `User ${userId} has been promoted to admin`,
-      promotedUserId: userId
+    if (user.role === 'admin') {
+      return res.status(400).json({ error: 'User is already an admin' });
+    }
+
+    db.run('UPDATE users SET role = ? WHERE id = ?', ['admin', userId], function(err) {
+      if (err) {
+        console.error('Error promoting user to admin:', err);
+        return res.status(500).json({ error: 'Failed to promote user' });
+      }
+
+      res.json({
+        success: true,
+        message: `User ${user.name} has been promoted to admin`,
+        promotedUser: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: 'admin'
+        }
+      });
     });
   });
 });

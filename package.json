@@ -23,6 +23,7 @@
     "test:all": "npm run test:unit && npm run test:integration && npm run test:security",
     "test:ci": "npm run test:coverage && npm run test:security",
     "test:smoke": "node scripts/smoke-test.js",
+    "setup-admin": "node scripts/setup-admin.js",
     "lint": "eslint server/**/*.js --fix || echo 'ESLint not configured'",
     "format": "prettier --write . || echo 'Prettier not configured'",
     "build:docker": "docker build -t colabora-app .",

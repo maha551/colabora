@@ -47,6 +47,7 @@ RUN npm ci --only=production && npm cache clean --force
 # Copy built application from builder stage
 COPY --from=builder --chown=nodejs:nodejs /app/client/build ./client/build
 COPY --from=builder --chown=nodejs:nodejs /app/server ./server
+COPY --from=builder --chown=nodejs:nodejs /app/scripts ./scripts
 
 # Create health check script
 RUN echo '#!/bin/sh' > /healthcheck.sh && \

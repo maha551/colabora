@@ -9,6 +9,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Badge } from './ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from './ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { Check, ChevronsUpDown } from 'lucide-react';
 import { Building2, Users, FileText, Shield, Plus, UserCheck, UserX, Eye, EyeOff, X, Settings } from 'lucide-react';
 import { documentsApi } from '../lib/api';
 import { toast } from 'sonner';
@@ -33,6 +36,103 @@ interface AdminOrganization extends Organization {
 interface AdminDashboardProps {
   currentUser: User;
   onBack: () => void;
+}
+
+// Searchable Multi-Select Component for Representatives
+interface RepresentativeSelectorProps {
+  users: AdminUser[];
+  selectedRepresentatives: string[];
+  onSelectionChange: (selectedIds: string[]) => void;
+}
+
+function RepresentativeSelector({ users, selectedRepresentatives, onSelectionChange }: RepresentativeSelectorProps) {
+  const [open, setOpen] = useState(false);
+  const [searchValue, setSearchValue] = useState("");
+
+  const filteredUsers = users.filter(user =>
+    user.name.toLowerCase().includes(searchValue.toLowerCase()) ||
+    user.email.toLowerCase().includes(searchValue.toLowerCase())
+  );
+
+  const selectedUsers = users.filter(user => selectedRepresentatives.includes(user.id));
+
+  return (
+    <div className="space-y-2">
+      <Label>Select Representatives *</Label>
+      <p className="text-sm text-gray-600">
+        Choose one or more users to serve as representatives for this organization.
+      </p>
+
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className="w-full justify-between"
+          >
+            {selectedUsers.length > 0
+              ? `${selectedUsers.length} representative${selectedUsers.length > 1 ? 's' : ''} selected`
+              : "Select representatives..."}
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-full p-0" align="start">
+          <Command>
+            <CommandInput
+              placeholder="Search users..."
+              value={searchValue}
+              onValueChange={setSearchValue}
+            />
+            <CommandEmpty>No users found.</CommandEmpty>
+            <CommandGroup className="max-h-64 overflow-auto">
+              {filteredUsers.map((user) => {
+                const isSelected = selectedRepresentatives.includes(user.id);
+                return (
+                  <CommandItem
+                    key={user.id}
+                    onSelect={() => {
+                      const newSelection = isSelected
+                        ? selectedRepresentatives.filter(id => id !== user.id)
+                        : [...selectedRepresentatives, user.id];
+                      onSelectionChange(newSelection);
+                    }}
+                  >
+                    <Check
+                      className={`mr-2 h-4 w-4 ${
+                        isSelected ? "opacity-100" : "opacity-0"
+                      }`}
+                    />
+                    <div className="flex flex-col">
+                      <span>{user.name}</span>
+                      <span className="text-sm text-gray-500">{user.email}</span>
+                    </div>
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+          </Command>
+        </PopoverContent>
+      </Popover>
+
+      {selectedUsers.length > 0 && (
+        <div className="flex flex-wrap gap-2 mt-2">
+          {selectedUsers.map(user => (
+            <Badge key={user.id} variant="secondary" className="flex items-center gap-1">
+              {user.name}
+              <X
+                className="h-3 w-3 cursor-pointer hover:text-red-500"
+                onClick={() => {
+                  const newSelection = selectedRepresentatives.filter(id => id !== user.id);
+                  onSelectionChange(newSelection);
+                }}
+              />
+            </Badge>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
@@ -310,63 +410,13 @@ export function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
               </TabsContent>
 
               <TabsContent value="representatives" className="space-y-4">
-                <div className="space-y-4">
-                  <div className="grid gap-2">
-                    <Label>Select Representatives *</Label>
-                    <p className="text-sm text-gray-600">
-                      Choose one or more users to serve as representatives for this organization.
-                    </p>
-
-                    <div className="border rounded-lg p-4 space-y-2 max-h-40 overflow-y-auto">
-                      {users.map((user) => (
-                        <div key={user.id} className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            id={`rep-${user.id}`}
-                            checked={orgForm.representatives.includes(user.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setOrgForm(prev => ({
-                                  ...prev,
-                                  representatives: [...prev.representatives, user.id]
-                                }));
-                              } else {
-                                setOrgForm(prev => ({
-                                  ...prev,
-                                  representatives: prev.representatives.filter(id => id !== user.id)
-                                }));
-                              }
-                            }}
-                            className="rounded"
-                          />
-                          <label htmlFor={`rep-${user.id}`} className="text-sm">
-                            {user.name} ({user.email})
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-
-                    {orgForm.representatives.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {orgForm.representatives.map(repId => {
-                          const user = users.find(u => u.id === repId);
-                          return user ? (
-                            <Badge key={repId} variant="secondary" className="flex items-center gap-1">
-                              {user.name}
-                              <X
-                                className="h-3 w-3 cursor-pointer hover:text-red-500"
-                                onClick={() => setOrgForm(prev => ({
-                                  ...prev,
-                                  representatives: prev.representatives.filter(id => id !== repId)
-                                }))}
-                              />
-                            </Badge>
-                          ) : null;
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <RepresentativeSelector
+                  users={users}
+                  selectedRepresentatives={orgForm.representatives}
+                  onSelectionChange={(selectedIds) =>
+                    setOrgForm(prev => ({ ...prev, representatives: selectedIds }))
+                  }
+                />
               </TabsContent>
 
               <TabsContent value="governance" className="space-y-4">

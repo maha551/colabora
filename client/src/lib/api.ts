@@ -532,6 +532,7 @@ export const organizationsApi = {
       votingAnonymityLocked: boolean;
       voteChangeAllowed: boolean;
       structureProposalsEnabled: boolean;
+      parentId?: string;
     };
   }) {
     return apiRequest(`/api/organizations/${organizationId}/document-proposals`, {

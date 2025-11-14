@@ -1126,17 +1126,22 @@ function convertProposalToDocument(db, proposalId, callback) {
       // Create organizational document with standard governance settings
       const documentId = uuidv4();
 
+      // Extract parentId from documentOptions if provided
+      const documentOptions = proposal.document_options ? JSON.parse(proposal.document_options) : null;
+      const parentId = documentOptions?.parentId || null;
+
       db.run(`INSERT INTO documents (
-        id, title, description, owner_id, collaborators, organization_id,
+        id, title, description, owner_id, collaborators, organization_id, parent_id,
         acceptance_threshold, voting_anonymous, voting_anonymity_locked,
         vote_change_allowed, structure_proposals_enabled, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
         documentId,
         proposal.title,
         proposal.description || '',
         proposal.proposed_by_user_id, // Original proposer becomes owner
         JSON.stringify([]), // Empty array - org members are auto-collaborators
         proposal.organization_id,
+        parentId, // parent_id from documentOptions
         acceptanceThreshold, // Use organization's voting threshold
         0, // voting_anonymous - organizations typically have transparent voting
         0, // voting_anonymity_locked - allow changes if governance allows

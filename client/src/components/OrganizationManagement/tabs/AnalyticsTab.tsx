@@ -57,7 +57,11 @@ export function AnalyticsTab({
               <div>
                 <p className="text-sm font-medium text-gray-600">Participation Rate</p>
                 <p className="text-2xl font-bold text-green-600">
-                  {analytics ? `${Math.round(analytics.participationRate || 0)}%` : '--'}
+                  {analytics 
+                    ? `${Math.round(analytics.totalMembers > 0 
+                        ? (analytics.activeVoters / analytics.totalMembers) * 100 
+                        : analytics.averageElectionTurnout || 0)}%` 
+                    : '--'}
                 </p>
               </div>
               <TrendingUp className="h-8 w-8 text-green-600" />

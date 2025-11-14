@@ -128,6 +128,7 @@ export interface Document {
   ownerId: string;
   createdAt: string;
   updatedAt: string;
+  parentId?: string; // For hierarchical document structure
   owner: {
     id: string;
     name: string;
@@ -284,6 +285,7 @@ export interface Organization {
   votingThreshold: number;
   isActive: boolean;
   createdAt: string;
+  members?: OrganizationMember[];
 }
 
 export interface OrganizationMember {

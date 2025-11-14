@@ -494,6 +494,7 @@ router.get('/:id', requireAuth, (req, res) => {
 
           const result = {
             ...document,
+            parentId: document.parent_id || undefined,
             owner: {
               id: document.owner_id,
               name: document.owner_name,
@@ -523,7 +524,7 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
   console.log('User:', req.user ? req.user.name : 'No user');
 
   const db = req.app.locals.db;
-  const { title, description, options, ownershipType = 'personal', organizationId, creatorIds } = req.body;
+  const { title, description, options, ownershipType = 'personal', organizationId, creatorIds, parentId } = req.body;
   const userId = req.user.id;
 
   if (!title || title.trim() === '') {
@@ -562,6 +563,28 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
     return; // Don't continue execution, wait for async callback
   }
 
+  // Validate parent document if provided
+  if (parentId) {
+    db.get('SELECT id, organization_id, ownership_type FROM documents WHERE id = ?', [parentId], (err, parentDoc) => {
+      if (err || !parentDoc) {
+        return res.status(400).json({ error: 'Parent document not found' });
+      }
+      
+      // Validate parent belongs to same organization for organizational documents
+      if (ownershipType === 'organizational' && parentDoc.organization_id !== organizationId) {
+        return res.status(400).json({ error: 'Parent document must belong to the same organization' });
+      }
+      
+      // Validate parent ownership type matches
+      if (parentDoc.ownership_type !== ownershipType) {
+        return res.status(400).json({ error: 'Parent document must have the same ownership type' });
+      }
+      
+      createDocument();
+    });
+    return; // Don't continue execution, wait for async callback
+  }
+  
   // For non-organizational documents, create immediately
   createDocument();
 
@@ -596,6 +619,7 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
     console.log('Creating document with ID:', documentId);
     console.log('Title:', trimmedTitle);
     console.log('Ownership type:', ownershipType);
+    console.log('Parent ID:', parentId || 'none');
 
     // Build the SQL query based on ownership type
     let sql, params;
@@ -604,39 +628,39 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
       // For shared documents, store creator IDs as JSON
       sql = `
         INSERT INTO documents (
-          id, title, description, owner_id, ownership_type, creator_ids, organization_id,
+          id, title, description, owner_id, ownership_type, creator_ids, organization_id, parent_id,
           acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed,
           structure_proposals_enabled, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       `;
       params = [
-        documentId, trimmedTitle, trimmedDescription, userId, ownershipType, JSON.stringify(creatorIds), null,
+        documentId, trimmedTitle, trimmedDescription, userId, ownershipType, JSON.stringify(creatorIds), null, parentId || null,
         acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
       ];
     } else if (ownershipType === 'organizational') {
       // For organizational documents, set organization_id
       sql = `
         INSERT INTO documents (
-          id, title, description, owner_id, ownership_type, creator_ids, organization_id,
+          id, title, description, owner_id, ownership_type, creator_ids, organization_id, parent_id,
           acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed,
           structure_proposals_enabled, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       `;
       params = [
-        documentId, trimmedTitle, trimmedDescription, userId, ownershipType, null, organizationId,
+        documentId, trimmedTitle, trimmedDescription, userId, ownershipType, null, organizationId, parentId || null,
         acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
       ];
     } else {
       // For personal documents (default)
       sql = `
         INSERT INTO documents (
-          id, title, description, owner_id, ownership_type, creator_ids, organization_id,
+          id, title, description, owner_id, ownership_type, creator_ids, organization_id, parent_id,
           acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed,
           structure_proposals_enabled, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       `;
       params = [
-        documentId, trimmedTitle, trimmedDescription, userId, ownershipType, null, null,
+        documentId, trimmedTitle, trimmedDescription, userId, ownershipType, null, null, parentId || null,
         acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
       ];
     }
@@ -716,6 +740,7 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
               title: trimmedTitle,
               description: trimmedDescription,
               ownerId: userId,
+              parentId: parentId || undefined,
               owner: {
                 id: userId,
                 name: user.name,
@@ -749,6 +774,7 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
         }
       });
     });
+    }
   }
 });
 
@@ -1025,7 +1051,7 @@ router.get('/organization/:organizationId', requireAuth, (req, res) => {
       WHERE d.ownership_type = 'organizational'
         AND d.organization_id = ?
         AND o.is_active = 1
-      ORDER BY d.updated_at DESC
+      ORDER BY d.parent_id NULLS FIRST, d.created_at ASC
     `;
 
     db.all(documentsQuery, [organizationId], (err, documents) => {
@@ -1081,6 +1107,7 @@ router.get('/organization/:organizationId', requireAuth, (req, res) => {
 
               resolve({
                 ...doc,
+                parentId: doc.parent_id || undefined,
                 owner: {
                   id: doc.owner_id,
                   name: doc.owner_name,
@@ -1118,6 +1145,7 @@ router.get('/organization/:organizationId', requireAuth, (req, res) => {
                 console.error('Error fetching collaborators for document:', doc.id, err);
                 return resolve({
                   ...doc,
+                  parentId: doc.parent_id || undefined,
                   owner: {
                     id: doc.owner_id,
                     name: doc.owner_name,
@@ -1147,6 +1175,7 @@ router.get('/organization/:organizationId', requireAuth, (req, res) => {
 
               resolve({
                 ...doc,
+                parentId: doc.parent_id || undefined,
                 owner: {
                   id: doc.owner_id,
                   name: doc.owner_name,

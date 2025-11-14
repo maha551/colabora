@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Users, Vote, FileText, BarChart3 } from 'lucide-react';
+import { Users, Vote, FileText, BarChart3, Building2 } from 'lucide-react';
 
-import { Organization, User } from '../../types';
+import { Organization, User, Document } from '../../types';
 import { useOrganizationPermissions } from '../../hooks/useOrganizationPermissions';
 import { useOrganizationData } from '../../hooks/useOrganizationData';
 
@@ -38,7 +38,16 @@ export function OrganizationManagement({
 
   return (
     <div className="max-w-6xl mx-auto p-6">
-
+      {/* Page Header */}
+      <div className="mb-6">
+        <div className="flex items-center gap-3 mb-2">
+          <Building2 className="h-6 w-6 text-gray-600" />
+          <h1 className="text-3xl font-bold text-gray-900">{organization.name}</h1>
+        </div>
+        {organization.description && (
+          <p className="text-gray-600 ml-9">{organization.description}</p>
+        )}
+      </div>
 
       {/* Navigation Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -85,6 +94,7 @@ export function OrganizationManagement({
             documentProposals={data.documentProposals}
             policyVotes={data.policyVotes}
             loading={data.loading.documents}
+            error={data.errors.documents}
             onCreateDocumentProposal={actions.createDocumentProposal}
             onVoteOnDocumentProposal={actions.voteOnDocumentProposal}
             onSelectDocument={onSelectDocument}

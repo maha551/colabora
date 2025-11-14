@@ -1039,6 +1039,7 @@ function initializeDatabase(db) {
       ownership_type TEXT CHECK(ownership_type IN ('personal', 'shared', 'organizational')) DEFAULT 'personal',
       creator_ids TEXT, -- JSON array for shared docs
       organization_id TEXT, -- For organizational docs
+      parent_id TEXT, -- For hierarchical document structure
       acceptance_threshold REAL DEFAULT 75.0 NOT NULL,
       voting_anonymous BOOLEAN DEFAULT 0 NOT NULL,
       voting_anonymity_locked BOOLEAN DEFAULT 0 NOT NULL,
@@ -1047,7 +1048,8 @@ function initializeDatabase(db) {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (owner_id) REFERENCES users(id),
-      FOREIGN KEY (organization_id) REFERENCES organizations(id)
+      FOREIGN KEY (organization_id) REFERENCES organizations(id),
+      FOREIGN KEY (parent_id) REFERENCES documents(id)
     )`,
 
     `CREATE TABLE IF NOT EXISTS document_collaborators (
@@ -1633,6 +1635,9 @@ function initializeDatabase(db) {
       ensureColumn(db, 'users', 'avatar', 'TEXT');
       ensureColumn(db, 'users', 'bio', 'TEXT');
                ensureColumn(db, 'users', 'role', 'TEXT CHECK(role IN (\'user\', \'admin\')) DEFAULT \'user\'');
+      
+      // Ensure documents table has new option columns and parent_id
+      ensureColumn(db, 'documents', 'parent_id', 'TEXT');
       
       // Ensure documents table has new option columns
       ensureColumn(db, 'documents', 'acceptance_threshold', 'REAL DEFAULT 75.0 NOT NULL');

@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, Fragment } from 'react';
 import { Button } from '../../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 import { Badge } from '../../ui/badge';
 import { Input } from '../../ui/input';
 import { Textarea } from '../../ui/textarea';
 import { Label } from '../../ui/label';
-import { FileText, Plus, X } from 'lucide-react';
+import { FileText, Plus, X, ThumbsUp, ThumbsDown, Minus, AlertCircle } from 'lucide-react';
 import { Organization, User, Document, DocumentProposal } from '../../../types';
 import { OrganizationPermissions } from '../../../hooks/useOrganizationPermissions';
 import { RuleProposalDialog } from '../../governance/RuleProposalDialog';
+import { toast } from 'sonner';
 
 interface DocumentsTabProps {
   organization: Organization;
@@ -18,6 +19,7 @@ interface DocumentsTabProps {
   documentProposals: DocumentProposal[];
   policyVotes: any[];
   loading: boolean;
+  error?: string | null;
   onCreateDocumentProposal?: (title: string, description?: string, contributors?: string[], options?: any) => Promise<void>;
   onVoteOnDocumentProposal?: (proposalId: string, vote: 'PRO' | 'NEUTRAL' | 'CONTRA') => Promise<void>;
   onSelectDocument?: (document: Document) => void;
@@ -34,6 +36,7 @@ export function DocumentsTab({
   documentProposals,
   policyVotes,
   loading,
+  error,
   onCreateDocumentProposal,
   onVoteOnDocumentProposal,
   onSelectDocument,
@@ -43,6 +46,12 @@ export function DocumentsTab({
 }: DocumentsTabProps) {
   const [showRuleProposalDialog, setShowRuleProposalDialog] = useState(false);
   const [showInlineCreation, setShowInlineCreation] = useState(false);
+  const [inlineCreationPosition, setInlineCreationPosition] = useState<{
+    afterItemId?: string;
+    beforeItemId?: string;
+    parentId?: string;
+    level: number;
+  } | null>(null);
 
   // Form state for inline document creation
   const [proposalTitle, setProposalTitle] = useState('');
@@ -59,15 +68,9 @@ export function DocumentsTab({
   ];
   const availableContributors = demoUsers.filter(user => user.id !== currentUser.id);
 
-  const handleCreateDocument = () => {
-    if (onCreateDocument) {
-      onCreateDocument(organization.id);
-    }
-  };
-
   const handleCreateDocumentProposal = async () => {
     if (!proposalTitle.trim()) {
-      alert('Please enter a document title');
+      toast.error('Please enter a document title');
       return;
     }
 
@@ -88,7 +91,9 @@ export function DocumentsTab({
             votingAnonymous: false,  // Default, will be overridden
             votingAnonymityLocked: false, // Default, will be overridden
             voteChangeAllowed: true, // Default, will be overridden
-            structureProposalsEnabled: true // Default, will be overridden
+            structureProposalsEnabled: true, // Default, will be overridden
+            // Include parentId if creating inline between documents
+            parentId: inlineCreationPosition?.parentId
           }
         );
       }
@@ -103,10 +108,10 @@ export function DocumentsTab({
               setProposalDescription('');
               setShowInlineCreation(false);
 
-      alert('Document proposal created successfully!');
+      toast.success('Document proposal created successfully!');
     } catch (error) {
       console.error('Failed to create document proposal:', error);
-      alert('Failed to create document proposal. Please try again.');
+      toast.error('Failed to create document proposal. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -114,42 +119,164 @@ export function DocumentsTab({
 
   const handleSuggestDocumentClick = () => {
     setShowInlineCreation(!showInlineCreation);
+    setInlineCreationPosition(null);
   };
 
-  // Combine documents and proposals for hierarchical display
-  const allItems = [
-    ...documents.map(doc => ({
-      type: 'document' as const,
-      id: doc.id,
-      title: doc.title,
-      description: doc.description,
-      createdAt: doc.createdAt,
-      updatedAt: doc.updatedAt,
-      owner: doc.owner,
-      collaborators: doc.collaborators,
-      openProposals: (doc.proposals || []).filter(p => !p.approved).length, // Count unapproved proposals
-      level: 1, // Top level documents
-    })),
-    ...documentProposals.map(proposal => ({
-      type: 'proposal' as const,
-      id: proposal.id,
-      title: proposal.title,
-      description: proposal.description,
-      createdAt: proposal.createdAt,
-      updatedAt: proposal.updatedAt,
-      owner: proposal.user,
-      collaborators: proposal.contributors?.map(id => ({ id, name: 'Unknown' })) || [], // TODO: Resolve contributor names
-      openProposals: 0, // Proposals don't have sub-proposals
-      level: 1, // Top level proposals
-      approved: proposal.approved,
-      votes: proposal.votes,
-    }))
-  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const handleInsertAfter = (item: DocumentItem, allItems: DocumentItem[], index: number) => {
+    // Determine parent: if item has a parent, use it; otherwise, item is root level
+    const parentId = item.parentId || undefined;
+    const level = item.level;
+    
+    setInlineCreationPosition({
+      afterItemId: item.id,
+      parentId,
+      level
+    });
+    setProposalTitle('');
+    setProposalDescription('');
+  };
 
+  const handleInsertBefore = (item: DocumentItem, allItems: DocumentItem[], index: number) => {
+    // Determine parent: if item has a parent, use it; otherwise, item is root level
+    const parentId = item.parentId || undefined;
+    const level = item.level;
+    
+    setInlineCreationPosition({
+      beforeItemId: item.id,
+      parentId,
+      level
+    });
+    setProposalTitle('');
+    setProposalDescription('');
+  };
 
-  // Generate hierarchical numbering
-  const generateNumbering = (index: number, level: number): string => {
-    return `${index + 1}${level > 1 ? '.1'.repeat(level - 1) : ''}`;
+  const cancelInlineCreation = () => {
+    setInlineCreationPosition(null);
+    setProposalTitle('');
+    setProposalDescription('');
+  };
+
+  // Build hierarchical document tree
+  interface DocumentItem {
+    type: 'document' | 'proposal';
+    id: string;
+    title: string;
+    description?: string;
+    createdAt: string;
+    updatedAt: string;
+    owner: { id: string; name: string; email?: string };
+    collaborators: any[];
+    openProposals: number;
+    level: number;
+    parentId?: string;
+    children?: DocumentItem[];
+    approved?: boolean;
+    votes?: any[];
+  }
+
+  // Build document items with parentId
+  const documentItems: DocumentItem[] = documents.map(doc => ({
+    type: 'document' as const,
+    id: doc.id,
+    title: doc.title,
+    description: doc.description,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+    owner: doc.owner,
+    collaborators: doc.collaborators,
+    openProposals: (doc.proposals || []).filter(p => !p.approved).length,
+    level: 1, // Will be recalculated
+    parentId: doc.parentId,
+  }));
+
+  // Add proposals
+  const proposalItems: DocumentItem[] = documentProposals.map(proposal => ({
+    type: 'proposal' as const,
+    id: proposal.id,
+    title: proposal.title,
+    description: proposal.description,
+    createdAt: proposal.createdAt,
+    updatedAt: proposal.updatedAt,
+    owner: proposal.user,
+    collaborators: proposal.contributors?.map(id => ({ id, name: 'Unknown' })) || [],
+    openProposals: 0,
+    level: 1,
+    approved: proposal.approved,
+    votes: proposal.votes,
+  }));
+
+  // Build tree structure
+  const buildTree = (items: DocumentItem[]): DocumentItem[] => {
+    const itemMap = new Map<string, DocumentItem>();
+    const rootItems: DocumentItem[] = [];
+
+    // First pass: create map and set initial levels
+    items.forEach(item => {
+      itemMap.set(item.id, { ...item, children: [] });
+    });
+
+    // Second pass: build tree
+    items.forEach(item => {
+      const node = itemMap.get(item.id)!;
+      if (item.parentId && itemMap.has(item.parentId)) {
+        const parent = itemMap.get(item.parentId)!;
+        if (!parent.children) parent.children = [];
+        parent.children.push(node);
+        node.level = parent.level + 1;
+      } else {
+        rootItems.push(node);
+      }
+    });
+
+    // Flatten tree for display (depth-first)
+    const flattenTree = (nodes: DocumentItem[], level = 1): DocumentItem[] => {
+      const result: DocumentItem[] = [];
+      nodes.forEach(node => {
+        node.level = level;
+        result.push(node);
+        if (node.children && node.children.length > 0) {
+          result.push(...flattenTree(node.children, level + 1));
+        }
+      });
+      return result;
+    };
+
+    return flattenTree(rootItems);
+  };
+
+  // Combine and build tree
+  const allItems = buildTree([...documentItems, ...proposalItems]);
+
+  // Generate hierarchical numbering based on position in tree
+  const generateNumbering = (item: DocumentItem, index: number, allItems: DocumentItem[]): string => {
+    if (item.level === 1) {
+      return `${index + 1}.`;
+    }
+    
+    // Find parent and count siblings at same level
+    let parentIndex = -1;
+    for (let i = index - 1; i >= 0; i--) {
+      if (allItems[i].id === item.parentId) {
+        parentIndex = i;
+        break;
+      }
+    }
+    
+    if (parentIndex >= 0) {
+      const parentNumber = generateNumbering(allItems[parentIndex], parentIndex, allItems);
+      // Count siblings with same parent at same level
+      let siblingCount = 1;
+      for (let i = index - 1; i >= 0; i--) {
+        if (allItems[i].parentId === item.parentId && allItems[i].level === item.level) {
+          siblingCount++;
+        } else if (allItems[i].level < item.level) {
+          break;
+        }
+      }
+      return `${parentNumber.replace(/\.$/, '')}.${siblingCount}.`;
+    }
+    
+    return `${index + 1}.`;
   };
 
   const handleItemClick = (item: typeof allItems[0]) => {
@@ -300,7 +427,16 @@ export function DocumentsTab({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {loading ? (
+          {error ? (
+            <div className="text-center py-8">
+              <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+              <p className="text-red-600 font-medium mb-2">Error loading documents</p>
+              <p className="text-sm text-gray-600 mb-4">{error}</p>
+              <Button variant="outline" size="sm" onClick={() => onRefreshDocuments()}>
+                Try Again
+              </Button>
+            </div>
+          ) : loading ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
               <p className="text-gray-600 mt-2">Loading document structure...</p>
@@ -316,7 +452,11 @@ export function DocumentsTab({
                 }
               </p>
               {permissions.canCreateDocuments && (
-                <Button variant="outline" className="gap-2">
+                <Button 
+                  variant="outline" 
+                  className="gap-2"
+                  onClick={handleSuggestDocumentClick}
+                >
                   <Plus className="h-4 w-4" />
                   Suggest First Document
                 </Button>
@@ -324,19 +464,81 @@ export function DocumentsTab({
             </div>
           ) : (
             <div className="space-y-2">
-              {allItems.map((item, index) => (
-                <div
-                  key={item.id}
-                  className={`flex items-start gap-3 p-3 rounded-lg border transition-colors cursor-pointer group ${
-                    item.type === 'proposal' && !item.approved
-                      ? 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                      : 'hover:bg-gray-50'
-                  }`}
-                  onClick={() => handleItemClick(item)}
-                >
+              {allItems.map((item, index) => {
+                const showInsertBefore = inlineCreationPosition?.beforeItemId === item.id;
+                const showInsertAfter = inlineCreationPosition?.afterItemId === item.id;
+                
+                return (
+                  <Fragment key={item.id}>
+                    {/* Insert Before Form */}
+                    {showInsertBefore && (
+                      <div 
+                        className="p-4 border-2 border-blue-200 bg-blue-50 rounded-lg animate-in slide-in-from-top-2 duration-300"
+                        style={{ marginLeft: `${(inlineCreationPosition.level - 1) * 24}px` }}
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="font-semibold text-blue-900">Insert New Document</h4>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={cancelInlineCreation}
+                            className="h-6 w-6 p-0"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="space-y-3">
+                          <div>
+                            <Label htmlFor={`inline-title-${item.id}`} className="text-sm">Document Title *</Label>
+                            <Input
+                              id={`inline-title-${item.id}`}
+                              placeholder="Enter document title"
+                              value={proposalTitle}
+                              onChange={(e) => setProposalTitle(e.target.value)}
+                              className="bg-white mt-1"
+                              autoFocus
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor={`inline-desc-${item.id}`} className="text-sm">Description (Optional)</Label>
+                            <Textarea
+                              id={`inline-desc-${item.id}`}
+                              placeholder="Brief description"
+                              value={proposalDescription}
+                              onChange={(e) => setProposalDescription(e.target.value)}
+                              rows={2}
+                              className="bg-white mt-1"
+                            />
+                          </div>
+                          <div className="flex justify-end gap-2 pt-2">
+                            <Button variant="outline" size="sm" onClick={cancelInlineCreation} disabled={isSubmitting}>
+                              Cancel
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              onClick={handleCreateDocumentProposal}
+                              disabled={isSubmitting || !proposalTitle.trim()}
+                            >
+                              {isSubmitting ? 'Creating...' : 'Create'}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Document Item */}
+                    <div
+                      className={`flex items-start gap-3 p-3 rounded-lg border transition-colors cursor-pointer group ${
+                        item.type === 'proposal' && !item.approved
+                          ? 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                          : 'hover:bg-gray-50'
+                      }`}
+                      style={{ marginLeft: `${(item.level - 1) * 24}px` }}
+                      onClick={() => handleItemClick(item)}
+                    >
                   {/* Numbering */}
                   <div className="flex-shrink-0 w-12 text-sm font-mono text-gray-600 pt-0.5">
-                    {generateNumbering(index, item.level)}.
+                    {generateNumbering(item, index, allItems)}
                   </div>
 
                   {/* Content */}
@@ -380,35 +582,38 @@ export function DocumentsTab({
                         <Button
                           variant="outline"
                           size="sm"
-                          className="h-7 px-2 text-xs"
+                          className="h-7 px-2 text-xs gap-1"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleVote(item.id, 'PRO');
                           }}
                         >
-                          👍 PRO
+                          <ThumbsUp className="h-3 w-3" />
+                          PRO
                         </Button>
                         <Button
                           variant="outline"
                           size="sm"
-                          className="h-7 px-2 text-xs"
+                          className="h-7 px-2 text-xs gap-1"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleVote(item.id, 'NEUTRAL');
                           }}
                         >
-                          🤔 NEUTRAL
+                          <Minus className="h-3 w-3" />
+                          NEUTRAL
                         </Button>
                         <Button
                           variant="outline"
                           size="sm"
-                          className="h-7 px-2 text-xs"
+                          className="h-7 px-2 text-xs gap-1"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleVote(item.id, 'CONTRA');
                           }}
                         >
-                          👎 CONTRA
+                          <ThumbsDown className="h-3 w-3" />
+                          CONTRA
                         </Button>
                       </div>
                     )}
@@ -416,14 +621,102 @@ export function DocumentsTab({
 
                   {/* Actions - only show on hover */}
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {item.type === 'document' && permissions.canCreateDocuments && (
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Add sub-document">
-                        <Plus className="h-4 w-4" />
-                    </Button>
+                    {permissions.canCreateDocuments && (
+                      <>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-7 w-7 p-0" 
+                          title="Insert document before this"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleInsertBefore(item, allItems, index);
+                          }}
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                        {item.type === 'document' && (
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0" 
+                            title="Add sub-document"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setInlineCreationPosition({
+                                parentId: item.id,
+                                level: item.level + 1
+                              });
+                              setProposalTitle('');
+                              setProposalDescription('');
+                            }}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
-              ))}
+
+                {/* Insert After Form */}
+                {showInsertAfter && (
+                  <div 
+                    className="p-4 border-2 border-blue-200 bg-blue-50 rounded-lg animate-in slide-in-from-top-2 duration-300"
+                    style={{ marginLeft: `${(inlineCreationPosition.level - 1) * 24}px` }}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-semibold text-blue-900">Insert New Document</h4>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={cancelInlineCreation}
+                        className="h-6 w-6 p-0"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="space-y-3">
+                      <div>
+                        <Label htmlFor={`inline-title-after-${item.id}`} className="text-sm">Document Title *</Label>
+                        <Input
+                          id={`inline-title-after-${item.id}`}
+                          placeholder="Enter document title"
+                          value={proposalTitle}
+                          onChange={(e) => setProposalTitle(e.target.value)}
+                          className="bg-white mt-1"
+                          autoFocus
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor={`inline-desc-after-${item.id}`} className="text-sm">Description (Optional)</Label>
+                        <Textarea
+                          id={`inline-desc-after-${item.id}`}
+                          placeholder="Brief description"
+                          value={proposalDescription}
+                          onChange={(e) => setProposalDescription(e.target.value)}
+                          rows={2}
+                          className="bg-white mt-1"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2 pt-2">
+                        <Button variant="outline" size="sm" onClick={cancelInlineCreation} disabled={isSubmitting}>
+                          Cancel
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          onClick={handleCreateDocumentProposal}
+                          disabled={isSubmitting || !proposalTitle.trim()}
+                        >
+                          {isSubmitting ? 'Creating...' : 'Create'}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </Fragment>
+                );
+              })}
             </div>
           )}
         </CardContent>

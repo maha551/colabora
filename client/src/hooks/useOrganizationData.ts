@@ -127,7 +127,102 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
 
     try {
       const response = await organizationsApi.getOrganizationDocuments(organizationId);
-      setDocuments(response.documents || []);
+      let docs = response.documents || [];
+      
+      // Add example hierarchical documents for demonstration if no documents exist
+      if (docs.length === 0) {
+        const now = new Date().toISOString();
+        const exampleOwner = { id: 'example', name: 'System', email: 'system@example.com' };
+        
+        docs = [
+          {
+            id: 'doc-1',
+            title: 'Organization Charter',
+            description: 'The foundational document defining our organization',
+            ownerId: 'example',
+            createdAt: now,
+            updatedAt: now,
+            owner: exampleOwner,
+            collaborators: [],
+            paragraphs: [],
+            parentId: undefined,
+          },
+          {
+            id: 'doc-1-1',
+            title: 'Mission Statement',
+            description: 'Our core mission and values',
+            ownerId: 'example',
+            createdAt: now,
+            updatedAt: now,
+            owner: exampleOwner,
+            collaborators: [],
+            paragraphs: [],
+            parentId: 'doc-1',
+          },
+          {
+            id: 'doc-1-2',
+            title: 'Code of Conduct',
+            description: 'Expected behavior and ethical guidelines',
+            ownerId: 'example',
+            createdAt: now,
+            updatedAt: now,
+            owner: exampleOwner,
+            collaborators: [],
+            paragraphs: [],
+            parentId: 'doc-1',
+          },
+          {
+            id: 'doc-2',
+            title: 'Governance Policies',
+            description: 'Policies governing organizational decision-making',
+            ownerId: 'example',
+            createdAt: now,
+            updatedAt: now,
+            owner: exampleOwner,
+            collaborators: [],
+            paragraphs: [],
+            parentId: undefined,
+          },
+          {
+            id: 'doc-2-1',
+            title: 'Voting Procedures',
+            description: 'How votes are conducted and counted',
+            ownerId: 'example',
+            createdAt: now,
+            updatedAt: now,
+            owner: exampleOwner,
+            collaborators: [],
+            paragraphs: [],
+            parentId: 'doc-2',
+          },
+          {
+            id: 'doc-2-1-1',
+            title: 'Election Rules',
+            description: 'Specific rules for representative elections',
+            ownerId: 'example',
+            createdAt: now,
+            updatedAt: now,
+            owner: exampleOwner,
+            collaborators: [],
+            paragraphs: [],
+            parentId: 'doc-2-1',
+          },
+          {
+            id: 'doc-3',
+            title: 'Financial Guidelines',
+            description: 'Budget and financial management policies',
+            ownerId: 'example',
+            createdAt: now,
+            updatedAt: now,
+            owner: exampleOwner,
+            collaborators: [],
+            paragraphs: [],
+            parentId: undefined,
+          },
+        ] as Document[];
+      }
+      
+      setDocuments(docs);
       documentsLoadedRef.current = true; // Mark as loaded
     } catch (error: any) {
       console.error('Failed to load organization documents:', error);
@@ -289,7 +384,22 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
       default:
         break;
     }
-  }, [activeTab, documents.length, governanceRules, analytics, loading.documents, loading.governance, loading.elections, loading.analytics]);
+  }, [
+    activeTab, 
+    documents.length, 
+    governanceRules, 
+    analytics, 
+    loading.documents, 
+    loading.governance, 
+    loading.elections, 
+    loading.analytics,
+    loadDocuments,
+    loadDocumentProposals,
+    loadPolicyVotes,
+    loadGovernanceRules,
+    loadElections,
+    loadAnalytics
+  ]);
 
   // Load elections for dashboard - only when needed
   // Note: Elections may not exist for new organizations where reps are appointed

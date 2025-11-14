@@ -9,6 +9,7 @@ const { v4: uuidv4 } = require('uuid');
 const { requireAuth } = require('../middleware/auth');
 const { requestLogger, errorLogger, securityLogger } = require('../middleware/logger');
 const { metricsCollector, requestMetrics } = require('../middleware/monitoring');
+const HealthCheckService = require('./health');
 
 // Server initialization and configuration
 class ServerManager {
@@ -18,10 +19,14 @@ class ServerManager {
     this.server = null;
     this.serverStarted = false;
     this.serverStartTimeout = null;
+    this.healthService = null;
   }
 
-  initialize() {
+  initialize(db = null) {
     this.app = express();
+
+    // Initialize health service (will be updated with DB later)
+    this.healthService = new HealthCheckService(this.config, db);
 
     this.setupSecurity();
     this.setupMiddleware();
@@ -29,6 +34,11 @@ class ServerManager {
     this.setupErrorHandling();
 
     return this.app;
+  }
+
+  // Update health service with database connection
+  updateHealthService(db) {
+    this.healthService = new HealthCheckService(this.config, db);
   }
 
   setupSecurity() {

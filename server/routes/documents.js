@@ -35,22 +35,22 @@ router.get('/', requireAuth, (req, res) => {
   const orgIds = [...new Set(documents.filter(doc => doc.organization_id).map(doc => doc.organization_id))];
 
   // Fetch all collaborators in batch
-  let collabQuery, collabParams;
+        let collabQuery, collabParams;
   if (documentIds.length > 0) {
-    collabQuery = `
-      SELECT
-        dc.document_id,
+          collabQuery = `
+            SELECT
+              dc.document_id,
         dc.id as collaborator_id,
-        dc.user_id,
-        dc.created_at,
-        u.name as user_name,
-        u.email as user_email
-      FROM document_collaborators dc
-      JOIN users u ON dc.user_id = u.id
+              dc.user_id,
+              dc.created_at,
+              u.name as user_name,
+              u.email as user_email
+            FROM document_collaborators dc
+            JOIN users u ON dc.user_id = u.id
       WHERE dc.document_id IN (${documentIds.map(() => '?').join(',')})
-    `;
+          `;
     collabParams = documentIds;
-  }
+        }
 
   // Fetch organizational collaborators in batch
   let orgCollabQuery, orgCollabParams;
@@ -71,13 +71,13 @@ router.get('/', requireAuth, (req, res) => {
   }
 
   // Fetch stats for all documents in batch
-  const statsQuery = `
-    SELECT
+        const statsQuery = `
+          SELECT
       p.document_id,
-      COUNT(DISTINCT p.id) as paragraph_count,
-      COUNT(DISTINCT pr.id) as proposal_count
-    FROM paragraphs p
-    LEFT JOIN proposals pr ON p.id = pr.paragraph_id
+            COUNT(DISTINCT p.id) as paragraph_count,
+            COUNT(DISTINCT pr.id) as proposal_count
+          FROM paragraphs p
+          LEFT JOIN proposals pr ON p.id = pr.paragraph_id
     WHERE p.document_id IN (${documentIds.map(() => '?').join(',')})
     GROUP BY p.document_id
   `;
@@ -93,15 +93,15 @@ router.get('/', requireAuth, (req, res) => {
         collabMap.set(collab.document_id, []);
       }
       collabMap.get(collab.document_id).push({
-        id: collab.collaborator_id,
-        document_id: collab.document_id,
-        user_id: collab.user_id,
-        created_at: collab.created_at,
-        user: {
-          id: collab.user_id,
-          name: collab.user_name,
-          email: collab.user_email
-        }
+                  id: collab.collaborator_id,
+                  document_id: collab.document_id,
+                  user_id: collab.user_id,
+                  created_at: collab.created_at,
+                  user: {
+                    id: collab.user_id,
+                    name: collab.user_name,
+                    email: collab.user_email
+                  }
       });
     });
 
@@ -142,35 +142,35 @@ router.get('/', requireAuth, (req, res) => {
 
       // Create minimal paragraph objects for counting
       const paragraphs = Array.from({ length: docStats.paragraphCount }, (_, index) => ({
-        id: `para-${doc.id}-${index}`,
+              id: `para-${doc.id}-${index}`,
         proposals: index === 0 ? Array.from({ length: docStats.proposalCount }, () => ({})) : []
-      }));
+            }));
 
       return {
-        ...doc,
-        parentId: doc.parent_id || undefined,
-        status: doc.status || 'draft',
-        proposalDeadline: doc.proposal_deadline || undefined,
-        owner: {
-          id: doc.owner_id,
-          name: doc.owner_name,
-          email: doc.owner_email
-        },
+              ...doc,
+              parentId: doc.parent_id || undefined,
+              status: doc.status || 'draft',
+              proposalDeadline: doc.proposal_deadline || undefined,
+              owner: {
+                id: doc.owner_id,
+                name: doc.owner_name,
+                email: doc.owner_email
+              },
         collaborators: docCollaborators,
-        paragraphs: paragraphs,
-        organization: doc.organization_id ? {
-          id: doc.organization_id,
-          name: doc.organization_name
-        } : undefined,
-        options: {
-          acceptanceThreshold: doc.acceptance_threshold || 75.0,
-          votingAnonymous: doc.voting_anonymous === 1,
-          structureProposalsEnabled: doc.structure_proposals_enabled === 1,
-          votingAnonymityLocked: doc.voting_anonymity_locked === 1,
-          voteChangeAllowed: doc.vote_change_allowed === 1
-        }
+              paragraphs: paragraphs,
+              organization: doc.organization_id ? {
+                id: doc.organization_id,
+                name: doc.organization_name
+              } : undefined,
+              options: {
+                acceptanceThreshold: doc.acceptance_threshold || 75.0,
+                votingAnonymous: doc.voting_anonymous === 1,
+                structureProposalsEnabled: doc.structure_proposals_enabled === 1,
+                votingAnonymityLocked: doc.voting_anonymity_locked === 1,
+                voteChangeAllowed: doc.vote_change_allowed === 1
+              }
       };
-    });
+            });
 
     res.json({ documents: processedDocuments });
   }

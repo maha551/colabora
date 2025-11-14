@@ -41,8 +41,8 @@ async function startApplication() {
     const app = serverManager.initialize();
     console.log('✅ Server initialized');
 
-    // Make database available to routes
-    app.locals.db = db;
+  // Make database available to routes
+  app.locals.db = db;
 
     // Register routes
     registerRoutes(app);
@@ -55,7 +55,7 @@ async function startApplication() {
       console.log('🎉 Application started successfully!');
     });
 
-  } catch (error) {
+    } catch (error) {
     console.error('❌ Failed to start application:', error);
     process.exit(1);
   }
@@ -66,6 +66,25 @@ startApplication();
 
 // Register routes function
 function registerRoutes(app) {
+  // Health check routes (detailed)
+  app.get('/api/health/detailed', (req, res) => {
+    const healthService = new (require('./modules/health'))(config, req.app.locals.db);
+    healthService.getDetailedHealth().then(health => {
+      res.json(health);
+    }).catch(err => {
+      res.status(500).json({ status: 'error', message: err.message });
+    });
+  });
+
+  app.get('/api/health/ready', (req, res) => {
+    const healthService = new (require('./modules/health'))(config, req.app.locals.db);
+    healthService.getReadiness().then(ready => {
+      res.json(ready);
+    }).catch(err => {
+      res.status(500).json({ status: 'not ready', message: err.message });
+    });
+  });
+
   // Routes
   app.use('/api/auth', authRoutes);
   app.use('/api/admin', adminRoutes);
@@ -134,28 +153,28 @@ async function initializeDatabase(db) {
     )`,
 
     `CREATE TABLE IF NOT EXISTS documents (
-      id TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
-      description TEXT,
-      owner_id TEXT NOT NULL,
-      collaborators TEXT, -- JSON array of collaborator objects (for legacy/personal docs)
-      ownership_type TEXT CHECK(ownership_type IN ('personal', 'shared', 'organizational')) DEFAULT 'personal',
-      creator_ids TEXT, -- JSON array for shared docs
-      organization_id TEXT, -- For organizational docs
-      parent_id TEXT, -- For hierarchical document structure
-      status TEXT CHECK(status IN ('proposal', 'draft', 'agreed')) DEFAULT 'draft',
-      proposal_deadline DATETIME, -- Deadline for proposal period (default 1 year from creation, configurable via governance)
-      acceptance_threshold REAL DEFAULT 75.0 NOT NULL,
-      voting_anonymous BOOLEAN DEFAULT 0 NOT NULL,
-      voting_anonymity_locked BOOLEAN DEFAULT 0 NOT NULL,
-      vote_change_allowed BOOLEAN DEFAULT 1 NOT NULL,
-      structure_proposals_enabled BOOLEAN DEFAULT 0 NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (owner_id) REFERENCES users(id),
-      FOREIGN KEY (organization_id) REFERENCES organizations(id),
-      FOREIGN KEY (parent_id) REFERENCES documents(id)
-    )`,
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        description TEXT,
+        owner_id TEXT NOT NULL,
+        collaborators TEXT, -- JSON array of collaborator objects (for legacy/personal docs)
+        ownership_type TEXT CHECK(ownership_type IN ('personal', 'shared', 'organizational')) DEFAULT 'personal',
+        creator_ids TEXT, -- JSON array for shared docs
+        organization_id TEXT, -- For organizational docs
+        parent_id TEXT, -- For hierarchical document structure
+        status TEXT CHECK(status IN ('proposal', 'draft', 'agreed')) DEFAULT 'draft',
+        proposal_deadline DATETIME, -- Deadline for proposal period (default 1 year from creation, configurable via governance)
+        acceptance_threshold REAL DEFAULT 75.0 NOT NULL,
+        voting_anonymous BOOLEAN DEFAULT 0 NOT NULL,
+        voting_anonymity_locked BOOLEAN DEFAULT 0 NOT NULL,
+        vote_change_allowed BOOLEAN DEFAULT 1 NOT NULL,
+        structure_proposals_enabled BOOLEAN DEFAULT 0 NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (owner_id) REFERENCES users(id),
+        FOREIGN KEY (organization_id) REFERENCES organizations(id),
+        FOREIGN KEY (parent_id) REFERENCES documents(id)
+      )`,
 
     `CREATE TABLE IF NOT EXISTS document_collaborators (
       id TEXT PRIMARY KEY,

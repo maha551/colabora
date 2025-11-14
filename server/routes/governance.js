@@ -772,12 +772,19 @@ router.post('/:organizationId/rule-proposals/:proposalId/complete', requireAuth,
               approvalRate
             }, req);
 
+            let newRuleValue;
+            try {
+              newRuleValue = JSON.parse(proposal.proposed_rule_value);
+            } catch (e) {
+              console.error('Error parsing proposed_rule_value for response:', e);
+              newRuleValue = proposal.proposed_rule_value; // Return raw value if parse fails
+            }
             res.json({
               success: true,
               message: 'Rule proposal approved and implemented',
               approved: true,
               approvalRate,
-              newRuleValue: JSON.parse(proposal.proposed_rule_value)
+              newRuleValue
             });
           });
       } else {

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Document, OrganizationGovernanceRules, RepresentativeElection, VotingAnalytics, DocumentProposal } from '../types';
-import { organizationsApi, governanceApi } from '../lib/api';
+import { organizationsApi, governanceApi, documentsApi } from '../lib/api';
 import { toast } from 'sonner';
 
 export interface OrganizationData {
@@ -43,7 +43,7 @@ export interface OrganizationActions {
   createDocumentProposal: (title: string, description?: string, contributors?: string[], options?: any) => Promise<void>;
   refreshDocumentProposals: () => Promise<void>;
   voteOnDocumentProposal: (proposalId: string, vote: 'PRO' | 'NEUTRAL' | 'CONTRA') => Promise<void>;
-  createDocument: (title: string, description?: string) => Promise<void>;
+  createDocument: (title: string, description?: string, parentId?: string) => Promise<void>;
 
   // Governance actions
   refreshGovernance: () => Promise<void>;
@@ -438,9 +438,31 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
         throw error;
       }
     },
-    createDocument: async (title: string, description?: string) => {
-      // TODO: Implement document creation
-      console.log('Creating document:', title, description);
+    createDocument: async (title: string, description?: string, parentId?: string) => {
+      try {
+        await documentsApi.createDocument(
+          title,
+          description,
+          undefined, // contributors - org members are auto-included
+          {
+            acceptanceThreshold: 75,
+            votingAnonymous: false,
+            votingAnonymityLocked: false,
+            voteChangeAllowed: true,
+            structureProposalsEnabled: true,
+            parentId: parentId
+          },
+          'organizational',
+          organizationId
+        );
+        // Refresh documents after creation
+        await loadDocuments();
+        toast.success('Document created successfully');
+      } catch (error) {
+        console.error('Failed to create document:', error);
+        toast.error('Failed to create document');
+        throw error;
+      }
     },
 
     refreshGovernance: loadGovernanceRules,

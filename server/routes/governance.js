@@ -118,6 +118,7 @@ router.get('/:organizationId/governance-rules', requireAuth, async (req, res) =>
       electionNoticeDays: 14,
       defaultVotingDeadlineHours: 168,
       defaultQuorumPercentage: 0.5,
+      documentProposalPeriodDays: 365, // Default 1 year proposal period for documents
       anonymousVotingEnabled: true,
       voteChangeAllowed: false,
       representativeCanCreateVotes: true,

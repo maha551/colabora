@@ -495,6 +495,8 @@ router.get('/:id', requireAuth, (req, res) => {
           const result = {
             ...document,
             parentId: document.parent_id || undefined,
+            status: document.status || 'draft',
+            proposalDeadline: document.proposal_deadline || undefined,
             owner: {
               id: document.owner_id,
               name: document.owner_name,
@@ -584,7 +586,7 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
     });
     return; // Don't continue execution, wait for async callback
   }
-  
+
   // For non-organizational documents, create immediately
   createDocument();
 
@@ -741,6 +743,7 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
               description: trimmedDescription,
               ownerId: userId,
               parentId: parentId || undefined,
+              status: 'draft', // New documents start as draft
               owner: {
                 id: userId,
                 name: user.name,
@@ -1210,5 +1213,217 @@ router.get('/organization/:organizationId', requireAuth, (req, res) => {
     });
   });
 });
+
+// Vote on entire document (document-level vote)
+router.post('/:id/vote', requireAuth, requireDocumentAccess, (req, res) => {
+  const db = req.app.locals.db;
+  const documentId = req.params.id;
+  const userId = req.user.id;
+  const { vote } = req.body;
+
+  if (!['PRO', 'NEUTRAL', 'CONTRA'].includes(vote)) {
+    return res.status(400).json({ error: 'Invalid vote type. Must be PRO, NEUTRAL, or CONTRA' });
+  }
+
+  // Check if document exists and user has access
+  db.get(`SELECT id, vote_change_allowed, status FROM documents WHERE id = ?`, [documentId], (err, document) => {
+    if (err) {
+      console.error('Error fetching document:', err);
+      return res.status(500).json({ error: 'Failed to fetch document' });
+    }
+
+    if (!document) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    // Check if user already voted
+    db.get(`SELECT id, vote FROM document_votes WHERE document_id = ? AND user_id = ?`, 
+      [documentId, userId], (err, existingVote) => {
+      if (err) {
+        console.error('Error checking existing vote:', err);
+        return res.status(500).json({ error: 'Failed to check existing vote' });
+      }
+
+      if (existingVote) {
+        // Check if vote changes are allowed
+        if (!document.vote_change_allowed || document.vote_change_allowed === 0) {
+          return res.status(403).json({ 
+            error: 'Votes are locked for this document. You cannot change your vote.' 
+          });
+        }
+
+        // Update existing vote
+        db.run(`UPDATE document_votes SET vote = ?, updated_at = CURRENT_TIMESTAMP WHERE document_id = ? AND user_id = ?`,
+          [vote, documentId, userId], function(err) {
+          if (err) {
+            console.error('Error updating vote:', err);
+            return res.status(500).json({ error: 'Failed to update vote' });
+          }
+
+          // Check if document should be marked as agreed
+          checkDocumentAgreementStatus(db, documentId);
+
+          res.json({ message: 'Vote updated successfully' });
+        });
+      } else {
+        // Insert new vote
+        const { v4: uuidv4 } = require('uuid');
+        const voteId = uuidv4();
+        
+        db.run(`INSERT INTO document_votes (id, document_id, user_id, vote) VALUES (?, ?, ?, ?)`,
+          [voteId, documentId, userId, vote], function(err) {
+          if (err) {
+            console.error('Error casting vote:', err);
+            return res.status(500).json({ error: 'Failed to cast vote' });
+          }
+
+          // Check if document should be marked as agreed
+          checkDocumentAgreementStatus(db, documentId);
+
+          res.json({ message: 'Vote recorded successfully', voteId });
+        });
+      }
+    });
+  });
+});
+
+// Get document-level votes
+router.get('/:id/votes', requireAuth, requireDocumentAccess, (req, res) => {
+  const db = req.app.locals.db;
+  const documentId = req.params.id;
+  const userId = req.user.id;
+
+  // Get document to check voting anonymity
+  db.get(`SELECT voting_anonymous FROM documents WHERE id = ?`, [documentId], (docErr, doc) => {
+    if (docErr) {
+      console.error('Error fetching document:', docErr);
+      return res.status(500).json({ error: 'Failed to fetch document' });
+    }
+
+    const isAnonymous = doc?.voting_anonymous === 1;
+
+    const votesQuery = isAnonymous
+      ? `SELECT id, vote, created_at, updated_at FROM document_votes WHERE document_id = ?`
+      : `SELECT dv.id, dv.vote, dv.created_at, dv.updated_at, u.id as user_id, u.name as user_name, u.email as user_email
+         FROM document_votes dv
+         JOIN users u ON dv.user_id = u.id
+         WHERE dv.document_id = ?`;
+
+    db.all(votesQuery, [documentId], (err, votes) => {
+      if (err) {
+        console.error('Error fetching votes:', err);
+        return res.status(500).json({ error: 'Failed to fetch votes' });
+      }
+
+      const formattedVotes = votes.map(vote => {
+        if (isAnonymous) {
+          return {
+            id: vote.id,
+            vote: vote.vote,
+            createdAt: vote.created_at,
+            updatedAt: vote.updated_at
+          };
+        } else {
+          return {
+            id: vote.id,
+            userId: vote.user_id,
+            vote: vote.vote,
+            createdAt: vote.created_at,
+            updatedAt: vote.updated_at,
+            user: {
+              id: vote.user_id,
+              name: vote.user_name,
+              email: vote.user_email
+            }
+          };
+        }
+      });
+
+      res.json({ votes: formattedVotes });
+    });
+  });
+});
+
+// Helper function to check if document-level votes reach agreement threshold
+function checkDocumentAgreementStatus(db, documentId) {
+  // Get document acceptance threshold, status, and proposal deadline
+  db.get(`SELECT acceptance_threshold, status, proposal_deadline FROM documents WHERE id = ?`, [documentId], (docErr, doc) => {
+    if (docErr) {
+      console.error('Error getting document threshold:', docErr);
+      return;
+    }
+
+    if (!doc || doc.status === 'agreed') {
+      // Already agreed or document not found
+      return;
+    }
+
+    // Only check for agreement if document is in 'proposal' status
+    if (doc.status !== 'proposal') {
+      return;
+    }
+
+    // Check if proposal deadline has passed
+    if (doc.proposal_deadline) {
+      const deadline = new Date(doc.proposal_deadline);
+      const now = new Date();
+      if (now < deadline) {
+        // Deadline has not passed yet - cannot agree
+        return;
+      }
+    }
+
+    const acceptanceThreshold = doc?.acceptance_threshold || 75.0;
+
+    // Get total collaborators
+    const collabQuery = `
+      SELECT COUNT(*) as total_users
+      FROM (
+        SELECT owner_id as user_id FROM documents WHERE id = ?
+        UNION
+        SELECT user_id FROM document_collaborators WHERE document_id = ?
+      )
+    `;
+
+    db.get(collabQuery, [documentId, documentId], (err, result) => {
+      if (err) {
+        console.error('Error getting user count:', err);
+        return;
+      }
+
+      const totalUsers = result.total_users || 1;
+
+      // Get document-level votes
+      db.all(`SELECT vote FROM document_votes WHERE document_id = ?`, [documentId], (err, votes) => {
+        if (err) {
+          console.error('Error getting document votes:', err);
+          return;
+        }
+
+        if (!votes || votes.length === 0) {
+          // No votes yet
+          return;
+        }
+
+        // Count PRO votes
+        const proVotes = votes.filter(v => v.vote === 'PRO').length;
+        const approvalPercentage = totalUsers > 0 ? (proVotes / totalUsers) * 100 : 0;
+
+        // Check if agreement threshold is met (quorum reached)
+        if (approvalPercentage >= acceptanceThreshold) {
+          // Update document status to 'agreed' (deadline passed AND quorum reached)
+          db.run(`UPDATE documents SET status = 'agreed', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+            [documentId], (updateErr) => {
+            if (updateErr) {
+              console.error('Error updating document status to agreed:', updateErr);
+            } else {
+              console.log(`Document ${documentId} status updated to 'agreed' - deadline passed and document-level votes reached threshold`);
+            }
+          });
+        }
+      });
+    });
+  });
+}
 
 module.exports = router;

@@ -222,6 +222,7 @@ export const documentsApi = {
       votingAnonymityLocked?: boolean;
       voteChangeAllowed?: boolean;
       structureProposalsEnabled?: boolean;
+      parentId?: string;
     },
     ownershipType?: 'personal' | 'shared' | 'organizational',
     organizationId?: string
@@ -233,7 +234,8 @@ export const documentsApi = {
         description,
         options,
         ownershipType: ownershipType || 'personal',
-        organizationId
+        organizationId,
+        parentId: options?.parentId || undefined
       }),
     })
   },

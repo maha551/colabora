@@ -1123,8 +1123,19 @@ function convertProposalToDocument(db, proposalId, callback) {
       // Use organization's voting threshold as acceptance threshold for the document
       const acceptanceThreshold = proposal.org_threshold || 75;
 
-      // Create organizational document with standard governance settings
-      const documentId = uuidv4();
+      // Get document proposal period from governance rules (default 1 year = 365 days)
+      db.get('SELECT document_proposal_period_days FROM organization_governance_rules WHERE organization_id = ?',
+        [proposal.organization_id], (govErr, govRules) => {
+        if (govErr) {
+          console.error('Error fetching governance rules for proposal period:', govErr);
+        }
+        
+        const proposalPeriodDays = govRules?.document_proposal_period_days || 365;
+        const proposalDeadline = new Date();
+        proposalDeadline.setDate(proposalDeadline.getDate() + proposalPeriodDays);
+        
+        // Create organizational document with standard governance settings
+        const documentId = uuidv4();
 
       // Extract parentId from documentOptions if provided
       let documentOptions = null;
@@ -1138,10 +1149,10 @@ function convertProposalToDocument(db, proposalId, callback) {
       }
 
       db.run(`INSERT INTO documents (
-        id, title, description, owner_id, collaborators, organization_id, parent_id,
+        id, title, description, owner_id, collaborators, organization_id, parent_id, status, proposal_deadline,
         acceptance_threshold, voting_anonymous, voting_anonymity_locked,
         vote_change_allowed, structure_proposals_enabled, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
         documentId,
         proposal.title,
         proposal.description || '',
@@ -1149,6 +1160,8 @@ function convertProposalToDocument(db, proposalId, callback) {
         JSON.stringify([]), // Empty array - org members are auto-collaborators
         proposal.organization_id,
         parentId, // parent_id from documentOptions
+        'proposal', // Status: starts as 'proposal' when created from approved proposal
+        proposalDeadline.toISOString(), // Deadline for proposal period (default 1 year, configurable via governance)
         acceptanceThreshold, // Use organization's voting threshold
         0, // voting_anonymous - organizations typically have transparent voting
         0, // voting_anonymity_locked - allow changes if governance allows
@@ -1179,10 +1192,12 @@ function convertProposalToDocument(db, proposalId, callback) {
           callback(true);
         });
       });
-    } catch (error) {
-      console.error('Unexpected error converting proposal to document:', error);
-      callback(false);
-    }
+        });
+      } catch (error) {
+        console.error('Unexpected error converting proposal to document:', error);
+        callback(false);
+      }
+    });
   });
 }
 

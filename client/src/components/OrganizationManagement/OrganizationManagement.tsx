@@ -96,6 +96,7 @@ export function OrganizationManagement({
             loading={data.loading.documents}
             error={data.errors.documents}
             onCreateDocumentProposal={actions.createDocumentProposal}
+            onCreateDocument={actions.createDocument}
             onVoteOnDocumentProposal={actions.voteOnDocumentProposal}
             onSelectDocument={onSelectDocument}
             onRefreshDocuments={actions.refreshDocuments}

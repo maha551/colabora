@@ -21,6 +21,7 @@ interface DocumentsTabProps {
   loading: boolean;
   error?: string | null;
   onCreateDocumentProposal?: (title: string, description?: string, contributors?: string[], options?: any) => Promise<void>;
+  onCreateDocument?: (title: string, description?: string, parentId?: string) => Promise<void>;
   onVoteOnDocumentProposal?: (proposalId: string, vote: 'PRO' | 'NEUTRAL' | 'CONTRA') => Promise<void>;
   onSelectDocument?: (document: Document) => void;
   onRefreshDocuments: () => Promise<void>;
@@ -38,6 +39,7 @@ export function DocumentsTab({
   loading,
   error,
   onCreateDocumentProposal,
+  onCreateDocument,
   onVoteOnDocumentProposal,
   onSelectDocument,
   onRefreshDocuments,
@@ -52,6 +54,7 @@ export function DocumentsTab({
     parentId?: string;
     level: number;
   } | null>(null);
+  const [creationMode, setCreationMode] = useState<'proposal' | 'document'>('document');
 
   // Form state for inline document creation
   const [proposalTitle, setProposalTitle] = useState('');
@@ -68,6 +71,40 @@ export function DocumentsTab({
   ];
   const availableContributors = demoUsers.filter(user => user.id !== currentUser.id);
 
+  // Build document items with parentId
+  const documentItems: DocumentItem[] = documents.map(doc => ({
+    type: 'document' as const,
+    id: doc.id,
+    title: doc.title,
+    description: doc.description,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+    owner: doc.owner,
+    collaborators: doc.collaborators,
+    openProposals: (doc.proposals || []).filter(p => !p.approved).length,
+    level: 1, // Will be recalculated
+    parentId: doc.parentId,
+  }));
+
+  // Add proposals
+  const proposalItems: DocumentItem[] = documentProposals.map(proposal => ({
+    type: 'proposal' as const,
+    id: proposal.id,
+    title: proposal.title,
+    description: proposal.description,
+    createdAt: proposal.createdAt,
+    updatedAt: proposal.updatedAt,
+    owner: proposal.user,
+    collaborators: proposal.contributors?.map(id => ({ id, name: 'Unknown' })) || [],
+    openProposals: 0,
+    level: 1,
+    approved: proposal.approved,
+    votes: proposal.votes,
+  }));
+
+  // Combine and build tree
+  const allItems = buildTree([...documentItems, ...proposalItems]);
+
   const handleCreateDocumentProposal = async () => {
     if (!proposalTitle.trim()) {
       toast.error('Please enter a document title');
@@ -76,42 +113,65 @@ export function DocumentsTab({
 
     setIsSubmitting(true);
     try {
-      if (onCreateDocumentProposal) {
-        // For organizational documents, use organization governance settings
-        // All organization members are automatically included
+      if (creationMode === 'document' && onCreateDocument) {
+        // Create document directly
+        await onCreateDocument(
+          proposalTitle.trim(),
+          proposalDescription.trim() || undefined,
+          inlineCreationPosition?.parentId
+        );
+        // Refresh documents after creation
+        await onRefreshDocuments();
+        toast.success('Document created successfully!');
+      } else if (onCreateDocumentProposal) {
+        // Create document proposal
         const allMemberIds = organization.members?.map(member => member.userId) || [];
+
+        // Determine the position for the new document
+        let positionParentId = inlineCreationPosition?.parentId;
+        
+        // If inserting after an item, use the same parent as that item
+        if (inlineCreationPosition?.afterItemId) {
+          const afterItem = allItems.find(item => item.id === inlineCreationPosition.afterItemId);
+          if (afterItem) {
+            positionParentId = afterItem.parentId;
+          }
+        }
+        
+        // If inserting before an item, use the same parent as that item
+        if (inlineCreationPosition?.beforeItemId) {
+          const beforeItem = allItems.find(item => item.id === inlineCreationPosition.beforeItemId);
+          if (beforeItem) {
+            positionParentId = beforeItem.parentId;
+          }
+        }
 
         await onCreateDocumentProposal(
           proposalTitle.trim(),
           proposalDescription.trim() || undefined,
           allMemberIds.length > 0 ? allMemberIds : undefined,
           {
-            // These will be overridden by organization governance rules
-            acceptanceThreshold: 75, // Default, will be overridden
-            votingAnonymous: false,  // Default, will be overridden
-            votingAnonymityLocked: false, // Default, will be overridden
-            voteChangeAllowed: true, // Default, will be overridden
-            structureProposalsEnabled: true, // Default, will be overridden
-            // Include parentId if creating inline between documents
-            parentId: inlineCreationPosition?.parentId
+            acceptanceThreshold: 75,
+            votingAnonymous: false,
+            votingAnonymityLocked: false,
+            voteChangeAllowed: true,
+            structureProposalsEnabled: true,
+            parentId: positionParentId
           }
         );
-      }
-
-      // Refresh the data to show the new proposal
-      if (onRefreshDocumentProposals) {
+        // Refresh the data to show the new proposal
         await onRefreshDocumentProposals();
+        toast.success('Document proposal created successfully!');
       }
 
-              // Reset form
-              setProposalTitle('');
-              setProposalDescription('');
-              setShowInlineCreation(false);
-
-      toast.success('Document proposal created successfully!');
+      // Reset form
+      setProposalTitle('');
+      setProposalDescription('');
+      setShowInlineCreation(false);
+      setInlineCreationPosition(null);
     } catch (error) {
-      console.error('Failed to create document proposal:', error);
-      toast.error('Failed to create document proposal. Please try again.');
+      console.error(`Failed to create ${creationMode}:`, error);
+      toast.error(`Failed to create ${creationMode}. Please try again.`);
     } finally {
       setIsSubmitting(false);
     }
@@ -172,6 +232,7 @@ export function DocumentsTab({
     children?: DocumentItem[];
     approved?: boolean;
     votes?: any[];
+    status?: 'proposal' | 'draft' | 'agreed'; // Document status
   }
 
   // Build document items with parentId
@@ -187,6 +248,7 @@ export function DocumentsTab({
     openProposals: (doc.proposals || []).filter(p => !p.approved).length,
     level: 1, // Will be recalculated
     parentId: doc.parentId,
+    status: doc.status, // Include document status
   }));
 
   // Add proposals
@@ -528,13 +590,19 @@ export function DocumentsTab({
 
                     {/* Document Item */}
                     <div
-                      className={`flex items-start gap-3 p-3 rounded-lg border transition-colors cursor-pointer group ${
+                      className={`flex items-start gap-3 p-3 rounded-lg border transition-colors group relative ${
                         item.type === 'proposal' && !item.approved
                           ? 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                          : item.type === 'document'
+                          ? 'bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-50 cursor-pointer'
                           : 'hover:bg-gray-50'
                       }`}
                       style={{ marginLeft: `${(item.level - 1) * 24}px` }}
-                      onClick={() => handleItemClick(item)}
+                      onClick={() => {
+                        if (item.type === 'document') {
+                          handleItemClick(item);
+                        }
+                      }}
                     >
                   {/* Numbering */}
                   <div className="flex-shrink-0 w-12 text-sm font-mono text-gray-600 pt-0.5">
@@ -545,7 +613,11 @@ export function DocumentsTab({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <h4 className={`font-medium truncate ${
-                        item.type === 'proposal' && !item.approved ? 'text-gray-700' : 'text-gray-900'
+                        item.type === 'proposal' && !item.approved 
+                          ? 'text-gray-700' 
+                          : item.type === 'document'
+                          ? 'text-blue-700 group-hover:text-blue-900 underline decoration-dotted underline-offset-2'
+                          : 'text-gray-900'
                       }`}>
                         {item.title}
                       </h4>
@@ -553,6 +625,22 @@ export function DocumentsTab({
                         <Badge variant="secondary" className="text-xs bg-yellow-100 text-yellow-800">
                           Pending Approval
                         </Badge>
+                      )}
+                      {item.type === 'document' && (
+                        <>
+                          <Badge 
+                            variant="outline" 
+                            className={`text-xs border-blue-300 ${
+                              item.status === 'agreed' 
+                                ? 'text-green-700 bg-green-50 border-green-300' 
+                                : item.status === 'proposal'
+                                ? 'text-orange-700 bg-orange-50 border-orange-300'
+                                : 'text-blue-600'
+                            }`}
+                          >
+                            {item.status === 'agreed' ? 'Agreed' : item.status === 'proposal' ? 'Proposal' : 'Document'}
+                          </Badge>
+                        </>
                       )}
                     </div>
 
@@ -620,29 +708,44 @@ export function DocumentsTab({
                   </div>
 
                   {/* Actions - only show on hover */}
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                     {permissions.canCreateDocuments && (
                       <>
                         <Button 
                           variant="ghost" 
                           size="sm" 
-                          className="h-7 w-7 p-0" 
+                          className="h-7 w-7 p-0 hover:bg-blue-100" 
                           title="Insert document before this"
                           onClick={(e) => {
                             e.stopPropagation();
+                            setCreationMode('document');
                             handleInsertBefore(item, allItems, index);
                           }}
                         >
                           <Plus className="h-3 w-3" />
                         </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-7 w-7 p-0 hover:bg-blue-100" 
+                          title="Insert document after this"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCreationMode('document');
+                            handleInsertAfter(item, allItems, index);
+                          }}
+                        >
+                          <Plus className="h-3 w-3 rotate-45" />
+                        </Button>
                         {item.type === 'document' && (
                           <Button 
                             variant="ghost" 
                             size="sm" 
-                            className="h-8 w-8 p-0" 
+                            className="h-8 w-8 p-0 hover:bg-blue-100" 
                             title="Add sub-document"
                             onClick={(e) => {
                               e.stopPropagation();
+                              setCreationMode('document');
                               setInlineCreationPosition({
                                 parentId: item.id,
                                 level: item.level + 1

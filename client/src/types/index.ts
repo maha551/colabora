@@ -129,6 +129,8 @@ export interface Document {
   createdAt: string;
   updatedAt: string;
   parentId?: string; // For hierarchical document structure
+  status?: 'proposal' | 'draft' | 'agreed'; // Document status: proposal (from approved proposal), draft, or agreed (deadline passed AND document-level votes reached threshold)
+  proposalDeadline?: string; // Deadline for proposal period (default 1 year from creation, configurable via governance)
   owner: {
     id: string;
     name: string;

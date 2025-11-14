@@ -1037,26 +1037,28 @@ function initializeDatabase(db) {
     )`,
 
     `CREATE TABLE IF NOT EXISTS documents (
-      id TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
-      description TEXT,
-      owner_id TEXT NOT NULL,
-      collaborators TEXT, -- JSON array of collaborator objects (for legacy/personal docs)
-      ownership_type TEXT CHECK(ownership_type IN ('personal', 'shared', 'organizational')) DEFAULT 'personal',
-      creator_ids TEXT, -- JSON array for shared docs
-      organization_id TEXT, -- For organizational docs
-      parent_id TEXT, -- For hierarchical document structure
-      acceptance_threshold REAL DEFAULT 75.0 NOT NULL,
-      voting_anonymous BOOLEAN DEFAULT 0 NOT NULL,
-      voting_anonymity_locked BOOLEAN DEFAULT 0 NOT NULL,
-      vote_change_allowed BOOLEAN DEFAULT 1 NOT NULL,
-      structure_proposals_enabled BOOLEAN DEFAULT 0 NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (owner_id) REFERENCES users(id),
-      FOREIGN KEY (organization_id) REFERENCES organizations(id),
-      FOREIGN KEY (parent_id) REFERENCES documents(id)
-    )`,
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        description TEXT,
+        owner_id TEXT NOT NULL,
+        collaborators TEXT, -- JSON array of collaborator objects (for legacy/personal docs)
+        ownership_type TEXT CHECK(ownership_type IN ('personal', 'shared', 'organizational')) DEFAULT 'personal',
+        creator_ids TEXT, -- JSON array for shared docs
+        organization_id TEXT, -- For organizational docs
+        parent_id TEXT, -- For hierarchical document structure
+        status TEXT CHECK(status IN ('proposal', 'draft', 'agreed')) DEFAULT 'draft',
+        proposal_deadline DATETIME, -- Deadline for proposal period (default 1 year from creation, configurable via governance)
+        acceptance_threshold REAL DEFAULT 75.0 NOT NULL,
+        voting_anonymous BOOLEAN DEFAULT 0 NOT NULL,
+        voting_anonymity_locked BOOLEAN DEFAULT 0 NOT NULL,
+        vote_change_allowed BOOLEAN DEFAULT 1 NOT NULL,
+        structure_proposals_enabled BOOLEAN DEFAULT 0 NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (owner_id) REFERENCES users(id),
+        FOREIGN KEY (organization_id) REFERENCES organizations(id),
+        FOREIGN KEY (parent_id) REFERENCES documents(id)
+      )`,
 
     `CREATE TABLE IF NOT EXISTS document_collaborators (
       id TEXT PRIMARY KEY,
@@ -1177,6 +1179,18 @@ function initializeDatabase(db) {
       UNIQUE(structure_proposal_id, user_id)
     )`,
 
+    `CREATE TABLE IF NOT EXISTS document_votes (
+      id TEXT PRIMARY KEY,
+      document_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      vote TEXT CHECK(vote IN ('PRO', 'NEUTRAL', 'CONTRA')) NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (document_id) REFERENCES documents(id),
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      UNIQUE(document_id, user_id)
+    )`,
+
     `CREATE TABLE IF NOT EXISTS structure_proposal_comments (
       id TEXT PRIMARY KEY,
       structure_proposal_id TEXT NOT NULL,
@@ -1234,6 +1248,7 @@ function initializeDatabase(db) {
       election_notice_days INTEGER DEFAULT 14,
       default_voting_deadline_hours INTEGER DEFAULT 168,
       default_quorum_percentage REAL DEFAULT 0.5,
+      document_proposal_period_days INTEGER DEFAULT 365,
       anonymous_voting_enabled BOOLEAN DEFAULT 1,
       vote_change_allowed BOOLEAN DEFAULT 0,
       representative_can_create_votes BOOLEAN DEFAULT 1,
@@ -1644,6 +1659,8 @@ function initializeDatabase(db) {
       
       // Ensure documents table has new option columns and parent_id
       ensureColumn(db, 'documents', 'parent_id', 'TEXT');
+      ensureColumn(db, 'documents', 'status', 'TEXT CHECK(status IN (\'proposal\', \'draft\', \'agreed\')) DEFAULT \'draft\'');
+      ensureColumn(db, 'documents', 'proposal_deadline', 'DATETIME');
       
       // Ensure documents table has new option columns
       ensureColumn(db, 'documents', 'acceptance_threshold', 'REAL DEFAULT 75.0 NOT NULL');
@@ -1651,6 +1668,30 @@ function initializeDatabase(db) {
       ensureColumn(db, 'documents', 'voting_anonymity_locked', 'BOOLEAN DEFAULT 0 NOT NULL');
       ensureColumn(db, 'documents', 'vote_change_allowed', 'BOOLEAN DEFAULT 1 NOT NULL');
       ensureColumn(db, 'documents', 'structure_proposals_enabled', 'BOOLEAN DEFAULT 0 NOT NULL');
+      
+      // Ensure governance rules table has document_proposal_period_days
+      ensureColumn(db, 'organization_governance_rules', 'document_proposal_period_days', 'INTEGER DEFAULT 365');
+      
+      // Create document_votes table if it doesn't exist
+      db.run(`
+        CREATE TABLE IF NOT EXISTS document_votes (
+          id TEXT PRIMARY KEY,
+          document_id TEXT NOT NULL,
+          user_id TEXT NOT NULL,
+          vote TEXT CHECK(vote IN ('PRO', 'NEUTRAL', 'CONTRA')) NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (document_id) REFERENCES documents(id),
+          FOREIGN KEY (user_id) REFERENCES users(id),
+          UNIQUE(document_id, user_id)
+        )
+      `, (err) => {
+        if (err) {
+          console.error('Error creating document_votes table:', err);
+        } else {
+          console.log('document_votes table ensured');
+        }
+      });
 
       // Ensure history table has accepted_at column
       ensureHistoryAcceptedAt(db).catch(err => {

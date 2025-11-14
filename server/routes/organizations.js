@@ -1137,67 +1137,66 @@ function convertProposalToDocument(db, proposalId, callback) {
         // Create organizational document with standard governance settings
         const documentId = uuidv4();
 
-      // Extract parentId from documentOptions if provided
-      let documentOptions = null;
-      let parentId = null;
-      try {
-        documentOptions = proposal.document_options ? JSON.parse(proposal.document_options) : null;
-        parentId = documentOptions?.parentId || null;
-      } catch (parseErr) {
-        console.error('Error parsing document_options for proposal:', proposalId, parseErr);
-        // Continue without parentId if parsing fails
-      }
-
-      db.run(`INSERT INTO documents (
-        id, title, description, owner_id, collaborators, organization_id, parent_id, status, proposal_deadline,
-        acceptance_threshold, voting_anonymous, voting_anonymity_locked,
-        vote_change_allowed, structure_proposals_enabled, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-        documentId,
-        proposal.title,
-        proposal.description || '',
-        proposal.proposed_by_user_id, // Original proposer becomes owner
-        JSON.stringify([]), // Empty array - org members are auto-collaborators
-        proposal.organization_id,
-        parentId, // parent_id from documentOptions
-        'proposal', // Status: starts as 'proposal' when created from approved proposal
-        proposalDeadline.toISOString(), // Deadline for proposal period (default 1 year, configurable via governance)
-        acceptanceThreshold, // Use organization's voting threshold
-        0, // voting_anonymous - organizations typically have transparent voting
-        0, // voting_anonymity_locked - allow changes if governance allows
-        1, // vote_change_allowed - typically allowed in organizations
-        1, // structure_proposals_enabled - organizations usually allow structure changes
-        new Date().toISOString()
-      ], function(err) {
-        if (err) {
-          console.error('Error creating organizational document from proposal:', err);
-          return callback(false);
+        // Extract parentId from documentOptions if provided
+        let documentOptions = null;
+        let parentId = null;
+        try {
+          documentOptions = proposal.document_options ? JSON.parse(proposal.document_options) : null;
+          parentId = documentOptions?.parentId || null;
+        } catch (parseErr) {
+          console.error('Error parsing document_options for proposal:', proposalId, parseErr);
+          // Continue without parentId if parsing fails
         }
 
-        console.log(`Created organizational document ${documentId} from proposal ${proposalId}`);
-        console.log(`Document settings: threshold=${acceptanceThreshold}%, all org members are collaborators`);
-
-        // Mark proposal as applied
-        db.run('UPDATE document_proposals SET applied = 1, updated_at = ? WHERE id = ?',
-          [new Date().toISOString(), proposalId], (err) => {
+        db.run(`INSERT INTO documents (
+          id, title, description, owner_id, collaborators, organization_id, parent_id, status, proposal_deadline,
+          acceptance_threshold, voting_anonymous, voting_anonymity_locked,
+          vote_change_allowed, structure_proposals_enabled, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+          documentId,
+          proposal.title,
+          proposal.description || '',
+          proposal.proposed_by_user_id, // Original proposer becomes owner
+          JSON.stringify([]), // Empty array - org members are auto-collaborators
+          proposal.organization_id,
+          parentId, // parent_id from documentOptions
+          'proposal', // Status: starts as 'proposal' when created from approved proposal
+          proposalDeadline.toISOString(), // Deadline for proposal period (default 1 year, configurable via governance)
+          acceptanceThreshold, // Use organization's voting threshold
+          0, // voting_anonymous - organizations typically have transparent voting
+          0, // voting_anonymity_locked - allow changes if governance allows
+          1, // vote_change_allowed - typically allowed in organizations
+          1, // structure_proposals_enabled - organizations usually allow structure changes
+          new Date().toISOString()
+        ], function(err) {
           if (err) {
-            console.error('Error marking proposal as applied:', err);
-            // Document was created but proposal marking failed
-            // This is a serious inconsistency - log it
-            console.error(`CRITICAL: Document ${documentId} created but proposal ${proposalId} not marked as applied`);
+            console.error('Error creating organizational document from proposal:', err);
             return callback(false);
           }
 
-          console.log(`Proposal ${proposalId} marked as applied`);
-          callback(true);
+          console.log(`Created organizational document ${documentId} from proposal ${proposalId}`);
+          console.log(`Document settings: threshold=${acceptanceThreshold}%, all org members are collaborators`);
+
+          // Mark proposal as applied
+          db.run('UPDATE document_proposals SET applied = 1, updated_at = ? WHERE id = ?',
+            [new Date().toISOString(), proposalId], (err) => {
+            if (err) {
+              console.error('Error marking proposal as applied:', err);
+              // Document was created but proposal marking failed
+              // This is a serious inconsistency - log it
+              console.error(`CRITICAL: Document ${documentId} created but proposal ${proposalId} not marked as applied`);
+              return callback(false);
+            }
+
+            console.log(`Proposal ${proposalId} marked as applied`);
+            callback(true);
+          });
         });
       });
-        });
-      } catch (error) {
-        console.error('Unexpected error converting proposal to document:', error);
-        callback(false);
-      }
-    });
+    } catch (error) {
+      console.error('Unexpected error converting proposal to document:', error);
+      callback(false);
+    }
   });
 }
 

@@ -95,6 +95,9 @@ router.get('/', requireAuth, (req, res) => {
             console.error('Error fetching collaborators:', err);
             return resolve({
               ...doc,
+              parentId: doc.parent_id || undefined,
+              status: doc.status || 'draft',
+              proposalDeadline: doc.proposal_deadline || undefined,
               owner: {
                 id: doc.owner_id,
                 name: doc.owner_name,
@@ -105,7 +108,7 @@ router.get('/', requireAuth, (req, res) => {
               organization: doc.organization_id ? {
                 id: doc.organization_id,
                 name: doc.organization_name
-              } : null,
+              } : undefined,
               options: {
                 acceptanceThreshold: doc.acceptance_threshold || 75.0,
                 votingAnonymous: doc.voting_anonymous === 1,
@@ -164,6 +167,9 @@ router.get('/', requireAuth, (req, res) => {
 
             resolve({
               ...doc,
+              parentId: doc.parent_id || undefined,
+              status: doc.status || 'draft',
+              proposalDeadline: doc.proposal_deadline || undefined,
               owner: {
                 id: doc.owner_id,
                 name: doc.owner_name,
@@ -171,6 +177,10 @@ router.get('/', requireAuth, (req, res) => {
               },
               collaborators: normalizedCollaborators,
               paragraphs: paragraphs,
+              organization: doc.organization_id ? {
+                id: doc.organization_id,
+                name: doc.organization_name
+              } : undefined,
               options: {
                 acceptanceThreshold: doc.acceptance_threshold || 75.0,
                 votingAnonymous: doc.voting_anonymous === 1,

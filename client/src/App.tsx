@@ -159,6 +159,27 @@ export default function App() {
     checkAuth();
   }, []);
 
+  // Monitor URL hash for document links
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash;
+      if (hash.startsWith('#document/')) {
+        const documentId = hash.replace('#document/', '');
+        if (currentUser && documentId) {
+          loadDocumentById(documentId);
+        }
+      }
+    };
+
+    // Check hash on mount and when user becomes available
+    if (currentUser) {
+      handleHashChange();
+    }
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [currentUser]);
+
   const checkAuth = async () => {
     try {
       const response = await authApi.getCurrentUser();
@@ -254,6 +275,8 @@ export default function App() {
   const handleBackToDocuments = () => {
     setCurrentDocument(null);
     setCurrentView('activity');
+    // Clear URL hash when navigating away from document
+    window.location.hash = '';
   };
 
   // Handle document selection
@@ -266,6 +289,8 @@ export default function App() {
         setCurrentDocument(normalizedDocument);
         setDocumentLoadKey(Date.now()); // Force remount of all components to collapse comments
         setCurrentView('document');
+        // Update URL hash for sharing
+        window.location.hash = `#document/${document.id}`;
         // Load structure proposals for this document
         await loadStructureProposals();
       }
@@ -410,6 +435,52 @@ export default function App() {
     }
     
     throw lastError || new Error('Failed to reload document after retries');
+  };
+
+  // Load document by ID (for URL hash links)
+  const loadDocumentById = async (documentId: string) => {
+    if (!currentUser) {
+      console.warn('Cannot load document: user not authenticated');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Load document data
+      const response = await documentsApi.getDocument(documentId);
+      const normalizedDocument = mapDocumentWithSuggestions(response.document);
+
+      if (normalizedDocument) {
+        setCurrentDocument(normalizedDocument);
+        setCurrentView('document');
+        setActiveTab('discussion'); // Default to discussion tab
+
+        // Load structure proposals
+        await loadStructureProposals();
+
+        toast.success(`Loaded document: ${normalizedDocument.title}`);
+      } else {
+        throw new Error('Failed to load document');
+      }
+    } catch (err: any) {
+      console.error('Failed to load document by ID:', err);
+      setError('Document not found or access denied');
+
+      // Clear URL hash if document couldn't be loaded
+      window.location.hash = '';
+
+      if (err.message?.includes('404')) {
+        toast.error('Document not found');
+      } else if (err.message?.includes('403')) {
+        toast.error('You do not have access to this document');
+      } else {
+        toast.error('Failed to load document');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleAddSuggestion = async (
@@ -762,6 +833,24 @@ export default function App() {
           </div>
         )}
 
+        {/* Share button */}
+        <div className="text-center mb-6">
+          <Button
+            onClick={() => {
+              const url = `${window.location.origin}${window.location.pathname}#document/${currentDocument.id}`;
+              navigator.clipboard.writeText(url);
+              toast.success('Document link copied to clipboard!');
+            }}
+            variant="outline"
+            size="sm"
+            className="gap-2"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
+            </svg>
+            Share Document
+          </Button>
+        </div>
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "discussion" | "agreed" | "history")}>

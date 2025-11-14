@@ -49,6 +49,9 @@ function RepresentativeSelector({ users, selectedRepresentatives, onSelectionCha
   const [open, setOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
 
+  console.log('RepresentativeSelector received users:', users);
+  console.log('Selected representatives:', selectedRepresentatives);
+
   const filteredUsers = users.filter(user =>
     user.name.toLowerCase().includes(searchValue.toLowerCase()) ||
     user.email.toLowerCase().includes(searchValue.toLowerCase())
@@ -166,6 +169,10 @@ export function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
   const loadDashboardData = async () => {
     setLoading(true);
     try {
+      // Debug: Check what's available on documentsApi
+      console.log('documentsApi object:', documentsApi);
+      console.log('getAdminDashboard function:', documentsApi.getAdminDashboard);
+
       const [statsResponse, orgsResponse, usersResponse] = await Promise.all([
         documentsApi.getAdminDashboard(),
         documentsApi.getAllOrganizationsAdmin(),
@@ -184,6 +191,9 @@ export function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
   };
 
   const handleCreateOrganization = async () => {
+    console.log('Create organization called');
+    console.log('Form data:', orgForm);
+
     if (!orgForm.name.trim() || orgForm.representatives.length === 0) {
       toast.error('Please fill in all required fields and select at least one representative');
       return;
@@ -191,6 +201,7 @@ export function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
 
     setCreatingOrg(true);
     try {
+      console.log('Calling documentsApi.createOrganizationAdmin...');
       await documentsApi.createOrganizationAdmin(
         orgForm.name,
         orgForm.representatives,
@@ -208,6 +219,7 @@ export function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
         }
       );
 
+      console.log('Organization created successfully');
       toast.success('Organization created successfully');
       setCreateOrgDialogOpen(false);
       setOrgForm({
@@ -339,7 +351,7 @@ export function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
             </DialogHeader>
 
             <Tabs defaultValue="basic" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="w-full">
                 <TabsTrigger value="basic">Basic Info</TabsTrigger>
                 <TabsTrigger value="representatives">Representatives</TabsTrigger>
                 <TabsTrigger value="governance">Governance</TabsTrigger>

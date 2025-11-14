@@ -908,10 +908,8 @@ export const governanceApi = {
           const query = queryParams.toString();
           return apiRequest(`/api/governance/${organizationId}/public-audit-logs${query ? `?${query}` : ''}`)
         },
-      }
     }
-
-}
+  }
 
 // Auth API functions
 export const authApi = {

@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Badge } from "./ui/badge";
 import { Checkbox } from "./ui/checkbox";
 import { Progress } from "./ui/progress";
+import { VoteProgressBar } from "./VoteProgressBar";
 import { ThumbsUp, ThumbsDown, MessageSquare, CheckCircle2, Users, FileText, History } from "lucide-react";
 import { Textarea } from "./ui/textarea";
 import { DiffViewer } from "./DiffViewer";
@@ -414,7 +415,23 @@ export function SuggestionCard({
               </div>
             </div>
             </div>
-            
+
+            {/* Visual Progress Bar */}
+            <div className="py-2">
+              <VoteProgressBar
+                totalUsers={totalUsers}
+                proVotes={proCount}
+                neutralVotes={neutralCount}
+                contraVotes={contraCount}
+                className="h-3 rounded-full"
+                showTooltips={true}
+              />
+              <div className="flex justify-between items-center mt-1 text-xs text-muted-foreground">
+                <span>{approvalPercentage.toFixed(0)}% approved</span>
+                <span>{totalVotes}/{totalUsers} votes</span>
+              </div>
+            </div>
+
             {/* Vote details expansion */}
             <div className="space-y-2 p-3 bg-muted/30 rounded-lg text-xs">
               {proVotes.length > 0 && (

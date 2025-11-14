@@ -40,8 +40,13 @@ export function AgreedDocument({ document, totalUsers }: AgreedDocumentProps) {
     // Count paragraphs with accepted changes and non-empty content
     const acceptedParagraphsCount = sortedParagraphs.filter(p => hasAcceptedChanges(p) && (p.title || p.text) && (p.title || p.text).trim() !== '').length;
 
-    // Count all paragraphs with any content (for agreed view - includes both changed and unchanged paragraphs)
-    const paragraphsWithContent = sortedParagraphs.filter(p => !p.isDocumentTitle && (p.title || p.text) && (p.title || p.text).trim() !== '');
+    // Only show paragraphs that have been approved through voting (have history meeting threshold)
+    // OR paragraphs that are part of the document structure (headings) but have been approved
+    const agreedParagraphs = sortedParagraphs.filter(p => {
+      if (p.isDocumentTitle) return false; // Document title is shown in header
+      if (hasAcceptedChanges(p)) return true; // Has approved changes
+      return false; // Don't show unapproved content
+    });
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -49,22 +54,22 @@ export function AgreedDocument({ document, totalUsers }: AgreedDocumentProps) {
         <div className="space-y-6">
 
         {/* Empty State - No consensus reached */}
-        {paragraphsWithContent.length === 0 && (
+        {agreedParagraphs.length === 0 && (
           <div className="text-center py-16">
             <div className="max-w-md mx-auto">
               <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-                No Consensus Reached
+                No Approved Content Yet
               </h3>
               <p className="text-gray-500 dark:text-gray-400">
-                The document has no content yet. Start collaborating by adding paragraphs in the discussion view.
+                No content has reached consensus yet. Proposals need to meet the {document.options?.acceptanceThreshold || 75}% approval threshold to appear here.
               </p>
             </div>
           </div>
         )}
 
         {/* Paper-like Document */}
-        {paragraphsWithContent.length > 0 && (
+        {agreedParagraphs.length > 0 && (
           <Card className="p-12 rounded-none shadow-2xl bg-white dark:bg-gray-900 relative overflow-hidden border-2 border-gray-200 dark:border-gray-700">
           {/* Realistic paper texture and effects */}
           
@@ -90,7 +95,7 @@ export function AgreedDocument({ document, totalUsers }: AgreedDocumentProps) {
 
           {/* Document Content */}
           <div className="relative space-y-8 text-gray-900 dark:text-gray-100">
-            {sortedParagraphs.map((paragraph, index) => {
+            {agreedParagraphs.map((paragraph, index) => {
               const hasChanges = hasAcceptedChanges(paragraph);
               const highestApprovedChange = getHighestApprovedChangeInfo(paragraph);
 
@@ -166,7 +171,7 @@ export function AgreedDocument({ document, totalUsers }: AgreedDocumentProps) {
               <div className="flex items-center gap-4">
                 <span className="flex items-center gap-1">
                   <FileText className="h-4 w-4" />
-                  {paragraphsWithContent.length} agreed sections
+                  {agreedParagraphs.length} agreed sections
                 </span>
                 <span className="flex items-center gap-1">
                   <CheckCircle2 className="h-4 w-4 text-green-600" />

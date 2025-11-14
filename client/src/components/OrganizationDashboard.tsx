@@ -148,11 +148,12 @@ export function OrganizationDashboard({ currentUser, onSelectOrganization }: Org
           <h1 className="text-2xl font-bold">Organizations</h1>
           <p className="text-gray-600">Collaborative spaces for democratic decision-making</p>
         </div>
-        {/* Temporarily disabled admin check to debug JavaScript error */}
-        <Button className="gap-2" onClick={() => setShowCreateDialog(true)}>
-          <Plus className="h-4 w-4" />
-          Create Organization
-        </Button>
+        {currentUser.role === 'admin' && (
+          <Button className="gap-2" onClick={() => setShowCreateDialog(true)}>
+            <Plus className="h-4 w-4" />
+            Create Organization
+          </Button>
+        )}
       </div>
 
       {organizations.length === 0 ? (

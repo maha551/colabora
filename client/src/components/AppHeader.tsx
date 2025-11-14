@@ -11,6 +11,7 @@ interface AppHeaderProps {
   onShowProfile?: () => void;
   onShowDocuments?: () => void;
   onShowOrganizations?: () => void;
+  onShowAdmin?: () => void;
   showBackButton?: boolean;
   onBack?: () => void;
   title?: string;
@@ -25,6 +26,7 @@ export function AppHeader({
   onShowProfile,
   onShowDocuments,
   onShowOrganizations,
+  onShowAdmin,
   showBackButton = false,
   onBack,
   title,
@@ -68,6 +70,7 @@ export function AppHeader({
               onShowProfile={onShowProfile}
               onShowDocuments={onShowDocuments}
               onShowOrganizations={onShowOrganizations}
+              onShowAdmin={onShowAdmin}
             />
           </div>
         </div>

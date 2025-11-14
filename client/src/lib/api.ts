@@ -552,18 +552,42 @@ export const organizationsApi = {
     })
   },
 
-  // Create organization (admin only)
-  async createOrganization(name: string, description?: string, representatives: string[], membershipPolicy?: 'open' | 'invitation', votingEnabled?: boolean, votingThreshold?: number) {
-    return apiRequest('/api/organizations', {
+  // Admin API functions
+  async getAdminDashboard() {
+    return apiRequest('/api/admin/dashboard')
+  },
+
+  async createOrganizationAdmin(name: string, description?: string, membershipPolicy?: 'open' | 'invitation', votingThreshold?: number, firstRepresentativeId?: string) {
+    return apiRequest('/api/admin/organizations', {
       method: 'POST',
       body: JSON.stringify({
         name,
         description,
-        representatives,
-        membershipPolicy,
-        votingEnabled,
-        votingThreshold
+        membershipPolicy: membershipPolicy || 'invitation',
+        votingThreshold: votingThreshold || 0.75,
+        firstRepresentativeId
       }),
+    })
+  },
+
+  async getAllOrganizationsAdmin() {
+    return apiRequest('/api/admin/organizations')
+  },
+
+  async updateOrganizationStatus(id: string, isActive: boolean) {
+    return apiRequest(`/api/admin/organizations/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isActive }),
+    })
+  },
+
+  async getAllUsersAdmin() {
+    return apiRequest('/api/admin/users')
+  },
+
+  async promoteUserToAdmin(userId: string) {
+    return apiRequest(`/api/admin/promote-admin/${userId}`, {
+      method: 'POST',
     })
   },
 

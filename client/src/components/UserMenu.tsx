@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
-import { Activity, UserCircle, LogOut, FileText, Users } from 'lucide-react';
+import { Activity, UserCircle, LogOut, FileText, Users, Shield } from 'lucide-react';
 
 interface UserMenuProps {
   currentUser: User;
@@ -18,6 +18,7 @@ interface UserMenuProps {
   onShowProfile?: () => void;
   onShowDocuments?: () => void;
   onShowOrganizations?: () => void;
+  onShowAdmin?: () => void;
 }
 
 export function UserMenu({
@@ -27,6 +28,7 @@ export function UserMenu({
   onShowProfile,
   onShowDocuments,
   onShowOrganizations,
+  onShowAdmin,
 }: UserMenuProps) {
   return (
     <DropdownMenu>
@@ -65,6 +67,12 @@ export function UserMenu({
           <DropdownMenuItem onClick={onShowOrganizations}>
             <Users className="h-4 w-4 mr-2" />
             Organizations
+          </DropdownMenuItem>
+        )}
+        {onShowAdmin && (
+          <DropdownMenuItem onClick={onShowAdmin}>
+            <Shield className="h-4 w-4 mr-2" />
+            Admin Dashboard
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />

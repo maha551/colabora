@@ -12,6 +12,7 @@ import { StructureProposalCard } from "./components/StructureProposalCard";
 import { StructureHistory } from "./components/StructureHistory";
 import { OrganizationDashboard } from "./components/OrganizationDashboard";
 import { OrganizationManagement } from "./components/OrganizationManagement/OrganizationManagement";
+import { AdminDashboard } from "./components/AdminDashboard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { Avatar, AvatarFallback } from "./components/ui/avatar";
 import { CollaboratorManagement } from "./components/CollaboratorManagement";
@@ -29,7 +30,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<"discussion" | "agreed" | "history">("discussion");
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [currentView, setCurrentView] = useState<'documents' | 'activity' | 'document' | 'profile' | 'organizations' | 'organization'>('activity');
+  const [currentView, setCurrentView] = useState<'documents' | 'activity' | 'document' | 'profile' | 'organizations' | 'organization' | 'admin'>('activity');
   const [selectedOrganization, setSelectedOrganization] = useState<Organization | null>(null);
   const [documentLoadKey, setDocumentLoadKey] = useState<number>(Date.now());
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -243,6 +244,11 @@ export default function App() {
   const handleShowOrganizations = () => {
     setCurrentDocument(null);
     setCurrentView('organizations');
+  };
+
+  const handleShowAdmin = () => {
+    setCurrentDocument(null);
+    setCurrentView('admin');
   };
 
   const handleBackToDocuments = () => {
@@ -639,7 +645,8 @@ export default function App() {
         onShowProfile={handleShowProfile}
         onShowDocuments={handleShowDocuments}
         onShowOrganizations={handleShowOrganizations}
-        showBackButton={currentView === 'document' || currentView === 'profile' || currentView === 'organizations' || currentView === 'organization' || currentView === 'documents'}
+        onShowAdmin={currentUser?.role === 'admin' ? handleShowAdmin : undefined}
+        showBackButton={currentView === 'document' || currentView === 'profile' || currentView === 'organizations' || currentView === 'organization' || currentView === 'documents' || currentView === 'admin'}
         onBack={handleBackToDocuments}
         title={
           currentView === 'document' && currentDocument ? currentDocument.title :
@@ -648,6 +655,7 @@ export default function App() {
           currentView === 'organizations' ? 'Organizations' :
           currentView === 'organization' && selectedOrganization ? selectedOrganization.name :
           currentView === 'documents' ? 'Documents' :
+          currentView === 'admin' ? 'Admin Dashboard' :
           undefined
         }
         showCreateButton={currentView === 'documents'}
@@ -730,6 +738,13 @@ export default function App() {
             setCurrentView('organizations');
           }}
           onSelectDocument={handleDocumentSelect}
+        />
+      )}
+
+      {currentView === 'admin' && currentUser?.role === 'admin' && (
+        <AdminDashboard
+          currentUser={currentUser}
+          onBack={handleBackToDocuments}
         />
       )}
 

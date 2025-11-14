@@ -67,8 +67,15 @@ router.get('/', requireAuth, requireDocumentAccess, requireStructureProposalsEna
       changeType: version.change_type,
       proposalTitle: version.proposal_title,
       createdAt: version.created_at,
-      structureSnapshot: JSON.parse(version.structure_snapshot)
-    }));
+      structureSnapshot: (() => {
+        try {
+          return JSON.parse(version.structure_snapshot);
+        } catch (e) {
+          console.error('Error parsing structure_snapshot:', e);
+          return null;
+        }
+      })()
+    })).filter(v => v.structureSnapshot !== null);
 
     res.json({ versions: formattedVersions });
   });
@@ -125,9 +132,30 @@ router.get('/:versionId', requireAuth, requireDocumentAccess, requireStructurePr
         paragraphId: change.paragraph_id,
         paragraphTitle: change.paragraph_title,
         currentText: change.current_paragraph_text,
-        oldData: JSON.parse(change.old_data || '[]'),
-        newData: JSON.parse(change.new_data || '{}'),
-        metadata: JSON.parse(change.operation_metadata || '{}'),
+        oldData: (() => {
+          try {
+            return JSON.parse(change.old_data || '[]');
+          } catch (e) {
+            console.error('Error parsing old_data:', e);
+            return [];
+          }
+        })(),
+        newData: (() => {
+          try {
+            return JSON.parse(change.new_data || '{}');
+          } catch (e) {
+            console.error('Error parsing new_data:', e);
+            return {};
+          }
+        })(),
+        metadata: (() => {
+          try {
+            return JSON.parse(change.operation_metadata || '{}');
+          } catch (e) {
+            console.error('Error parsing operation_metadata:', e);
+            return {};
+          }
+        })(),
         createdAt: change.created_at
       }));
 
@@ -144,7 +172,14 @@ router.get('/:versionId', requireAuth, requireDocumentAccess, requireStructurePr
         changeType: version.change_type,
         proposalTitle: version.proposal_title,
         createdAt: version.created_at,
-        structureSnapshot: JSON.parse(version.structure_snapshot),
+        structureSnapshot: (() => {
+          try {
+            return JSON.parse(version.structure_snapshot);
+          } catch (e) {
+            console.error('Error parsing structure_snapshot:', e);
+            return null;
+          }
+        })(),
         changes: formattedChanges
       };
 
@@ -190,7 +225,13 @@ router.post('/:versionId/restore', requireAuth, requireDocumentAccess, requireSt
         return res.status(404).json({ error: 'Version not found' });
       }
 
-      const snapshot = JSON.parse(version.structure_snapshot);
+      let snapshot;
+      try {
+        snapshot = JSON.parse(version.structure_snapshot);
+      } catch (e) {
+        console.error('Error parsing structure_snapshot for restore:', e);
+        return res.status(500).json({ error: 'Invalid snapshot data' });
+      }
 
       // Create a new version before restoring (backup current state)
       const currentBackupId = require('uuid').v4();

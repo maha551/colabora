@@ -735,7 +735,12 @@ router.post('/:organizationId/rule-proposals/:proposalId/complete', requireAuth,
       if (approved) {
         // Update governance rules
         const updates = {};
-        updates[proposal.current_rule_field] = JSON.parse(proposal.proposed_rule_value);
+        try {
+          updates[proposal.current_rule_field] = JSON.parse(proposal.proposed_rule_value);
+        } catch (parseErr) {
+          console.error('Error parsing proposed_rule_value:', parseErr);
+          return res.status(500).json({ error: 'Invalid rule value format' });
+        }
 
         const updateFields = Object.keys(updates);
         const updateValues = Object.values(updates);

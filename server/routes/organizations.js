@@ -1127,8 +1127,15 @@ function convertProposalToDocument(db, proposalId, callback) {
       const documentId = uuidv4();
 
       // Extract parentId from documentOptions if provided
-      const documentOptions = proposal.document_options ? JSON.parse(proposal.document_options) : null;
-      const parentId = documentOptions?.parentId || null;
+      let documentOptions = null;
+      let parentId = null;
+      try {
+        documentOptions = proposal.document_options ? JSON.parse(proposal.document_options) : null;
+        parentId = documentOptions?.parentId || null;
+      } catch (parseErr) {
+        console.error('Error parsing document_options for proposal:', proposalId, parseErr);
+        // Continue without parentId if parsing fails
+      }
 
       db.run(`INSERT INTO documents (
         id, title, description, owner_id, collaborators, organization_id, parent_id,

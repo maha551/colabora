@@ -1,6 +1,7 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { requireAuth, requireDocumentAccess } = require('../middleware/auth');
+const { paragraphValidation } = require('../middleware/validation');
 
 const router = express.Router({ mergeParams: true });
 
@@ -423,7 +424,13 @@ router.post('/', requireAuth, requireDocumentAccess, checkNoActiveStructurePropo
           `
           UPDATE documents SET updated_at = CURRENT_TIMESTAMP WHERE id = ?
         `,
-          [documentId]
+          [documentId],
+          (updateErr) => {
+            if (updateErr) {
+              console.error('Error updating document timestamp during paragraph creation:', updateErr);
+              // Don't fail the request, but log the error
+            }
+          }
         );
 
         normalizeParagraphOrder(db, documentId)
@@ -540,7 +547,7 @@ router.post('/', requireAuth, requireDocumentAccess, checkNoActiveStructurePropo
 });
 
 // Update a paragraph
-router.put('/:paragraphId', requireAuth, requireDocumentAccess, checkNoActiveStructureProposals, (req, res) => {
+router.put('/:paragraphId', requireAuth, requireDocumentAccess, checkNoActiveStructureProposals, paragraphValidation.update, (req, res) => {
   const db = req.app.locals.db;
   const documentId = req.params.documentId;
   const paragraphId = req.params.paragraphId;
@@ -563,55 +570,105 @@ router.put('/:paragraphId', requireAuth, requireDocumentAccess, checkNoActiveStr
       return res.status(404).json({ error: 'Paragraph not found' });
     }
 
-    // Update paragraph
-    const updateData = {
-      title: title || null,
-      text: text.trim(),
-      order_index: order !== undefined ? order : undefined
-    };
-
-    let updateQuery = 'UPDATE paragraphs SET ';
-    const params = [];
-    const updates = [];
-
-    if (updateData.title !== undefined) {
-      updates.push('title = ?');
-      params.push(updateData.title);
-    }
-    if (updateData.text !== undefined) {
-      updates.push('text = ?');
-      params.push(updateData.text);
-    }
-    if (updateData.order_index !== undefined) {
-      updates.push('order_index = ?');
-      params.push(updateData.order_index);
-    }
-    updates.push('updated_at = CURRENT_TIMESTAMP');
-
-    updateQuery += updates.join(', ') + ' WHERE id = ? AND document_id = ?';
-    params.push(paragraphId, documentId);
-
-    db.run(updateQuery, params, function(err) {
-      if (err) {
-        console.error('Error updating paragraph:', err);
+    // Use transaction for atomic paragraph update
+    db.run('BEGIN TRANSACTION', (beginErr) => {
+      if (beginErr) {
+        console.error('Error beginning transaction:', beginErr);
         return res.status(500).json({ error: 'Failed to update paragraph' });
       }
 
-      // Create history entry if text changed
-      if (currentParagraph.text !== text.trim()) {
-        const historyId = uuidv4();
-        db.run(`
-          INSERT INTO history (id, paragraph_id, user_id, old_text, new_text, approval_percentage, proposal_id)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-        `, [historyId, paragraphId, req.user.id, currentParagraph.text, text.trim(), 0, null]);
+      // Update paragraph
+      const updateData = {
+        title: title || null,
+        text: text.trim(),
+        order_index: order !== undefined ? order : undefined
+      };
+
+      let updateQuery = 'UPDATE paragraphs SET ';
+      const params = [];
+      const updates = [];
+
+      if (updateData.title !== undefined) {
+        updates.push('title = ?');
+        params.push(updateData.title);
       }
+      if (updateData.text !== undefined) {
+        updates.push('text = ?');
+        params.push(updateData.text);
+      }
+      if (updateData.order_index !== undefined) {
+        updates.push('order_index = ?');
+        params.push(updateData.order_index);
+      }
+      updates.push('updated_at = CURRENT_TIMESTAMP');
 
-      // Update document timestamp
-      db.run(`
-        UPDATE documents SET updated_at = CURRENT_TIMESTAMP WHERE id = ?
-      `, [documentId]);
+      updateQuery += updates.join(', ') + ' WHERE id = ? AND document_id = ?';
+      params.push(paragraphId, documentId);
 
-      res.json({ message: 'Paragraph updated successfully' });
+      db.run(updateQuery, params, function(err) {
+        if (err) {
+          console.error('Error updating paragraph:', err);
+          db.run('ROLLBACK', () => {
+            return res.status(500).json({ error: 'Failed to update paragraph' });
+          });
+          return;
+        }
+
+        // Track operations for transaction completion
+        let operationsCompleted = 0;
+        const totalOperations = (currentParagraph.text !== text.trim() ? 1 : 0) + 1; // history + document timestamp
+        let hasError = false;
+
+        const checkCompletion = () => {
+          operationsCompleted++;
+          if (operationsCompleted >= totalOperations && !hasError) {
+            db.run('COMMIT', (commitErr) => {
+              if (commitErr) {
+                console.error('Error committing transaction:', commitErr);
+                db.run('ROLLBACK', () => {
+                  return res.status(500).json({ error: 'Failed to update paragraph: commit failed' });
+                });
+                return;
+              }
+              res.json({ message: 'Paragraph updated successfully' });
+            });
+          }
+        };
+
+        // Create history entry if text changed
+        if (currentParagraph.text !== text.trim()) {
+          const historyId = uuidv4();
+          db.run(`
+            INSERT INTO history (id, paragraph_id, user_id, old_text, new_text, approval_percentage, proposal_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+          `, [historyId, paragraphId, req.user.id, currentParagraph.text, text.trim(), 0, null], (historyErr) => {
+            if (historyErr) {
+              console.error('Error creating history entry:', historyErr);
+              hasError = true;
+              db.run('ROLLBACK', () => {
+                return res.status(500).json({ error: 'Failed to update paragraph: history creation failed' });
+              });
+              return;
+            }
+            checkCompletion();
+          });
+        }
+
+        // Update document timestamp
+        db.run(`
+          UPDATE documents SET updated_at = CURRENT_TIMESTAMP WHERE id = ?
+        `, [documentId], (timestampErr) => {
+          if (timestampErr) {
+            console.error('Error updating document timestamp:', timestampErr);
+            hasError = true;
+            db.run('ROLLBACK', () => {
+              return res.status(500).json({ error: 'Failed to update paragraph: document timestamp update failed' });
+            });
+            return;
+          }
+          checkCompletion();
+        });
+      });
     });
   });
 });

@@ -670,114 +670,160 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
       ];
     }
 
-    db.run(sql, params, function(err) {
-      if (err) {
-        console.error('Error creating document:', err);
-        console.error('SQL Error details:', err.message);
-        console.error('SQL Error code:', err.code);
-        console.error('SQL:', sql);
-        console.error('Params:', params);
+    // Use transaction for atomic document creation
+    db.run('BEGIN TRANSACTION', (beginErr) => {
+      if (beginErr) {
+        console.error('Error beginning transaction:', beginErr);
         return res.status(500).json({
           error: 'Failed to create document',
-          details: err.message,
-          code: err.code
+          details: beginErr.message
         });
       }
 
-      console.log('Document created in database, now creating initial paragraph...');
-
-      // Create initial title paragraph
-      const paragraphId = uuidv4();
-      db.run(`
-        INSERT INTO paragraphs (
-          id, document_id, title, text, order_index, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      `, [paragraphId, documentId, trimmedTitle, trimmedDescription || trimmedTitle, -1], function(err) {
+      db.run(sql, params, function(err) {
         if (err) {
-          console.error('Error creating title paragraph:', err);
-          console.error('Paragraph creation error details:', err.message);
-          console.error('Paragraph creation SQL error code:', err.code);
-          // Don't fail the whole request if paragraph creation fails
-          console.error('Title paragraph creation failed:', err);
+          console.error('Error creating document:', err);
+          console.error('SQL Error details:', err.message);
+          console.error('SQL Error code:', err.code);
+          db.run('ROLLBACK', () => {
+            return res.status(500).json({
+              error: 'Failed to create document',
+              details: err.message,
+              code: err.code
+            });
+          });
+          return;
         }
 
-        // Add creators as collaborators if it's a shared document
-        if (ownershipType === 'shared' && creatorIds) {
-          let collaboratorsAdded = 0;
-          const totalCollaborators = creatorIds.length - 1; // Excluding the owner
+        console.log('Document created in database, now creating initial paragraph...');
 
-          creatorIds.forEach(creatorId => {
-            if (creatorId !== userId) { // Don't add owner as collaborator
-              const collabId = uuidv4();
-              db.run(`
-                INSERT INTO document_collaborators (id, document_id, user_id)
-                VALUES (?, ?, ?)
-              `, [collabId, documentId, creatorId], function(err) {
-                if (err) {
-                  console.error('Error adding collaborator:', creatorId, err);
-                }
-                collaboratorsAdded++;
-                if (collaboratorsAdded >= totalCollaborators) {
-                  sendResponse();
-                }
+        // Create initial title paragraph - CRITICAL: must succeed
+        const paragraphId = uuidv4();
+        db.run(`
+          INSERT INTO paragraphs (
+            id, document_id, title, text, order_index, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `, [paragraphId, documentId, trimmedTitle, trimmedDescription || trimmedTitle, -1], function(err) {
+          if (err) {
+            console.error('Error creating title paragraph:', err);
+            console.error('Paragraph creation error details:', err.message);
+            console.error('Paragraph creation SQL error code:', err.code);
+            db.run('ROLLBACK', () => {
+              return res.status(500).json({
+                error: 'Failed to create document: title paragraph creation failed',
+                details: err.message,
+                code: err.code
               });
-            } else {
-              collaboratorsAdded++;
-              if (collaboratorsAdded >= totalCollaborators) {
-                sendResponse();
+            });
+            return;
+          }
+
+          // Add creators as collaborators if it's a shared document
+          if (ownershipType === 'shared' && creatorIds) {
+            // Use Promise.all to handle all collaborator additions atomically
+            const collaboratorPromises = creatorIds
+              .filter(creatorId => creatorId !== userId) // Don't add owner as collaborator
+              .map(creatorId => {
+                return new Promise((resolve, reject) => {
+                  const collabId = uuidv4();
+                  db.run(`
+                    INSERT INTO document_collaborators (id, document_id, user_id)
+                    VALUES (?, ?, ?)
+                  `, [collabId, documentId, creatorId], function(err) {
+                    if (err) {
+                      console.error('Error adding collaborator:', creatorId, err);
+                      reject(err);
+                    } else {
+                      resolve();
+                    }
+                  });
+                });
+              });
+
+            Promise.all(collaboratorPromises)
+              .then(() => {
+                // All collaborators added successfully, commit transaction
+                db.run('COMMIT', (commitErr) => {
+                  if (commitErr) {
+                    console.error('Error committing transaction:', commitErr);
+                    db.run('ROLLBACK', () => {
+                      return res.status(500).json({ error: 'Failed to create document: commit failed' });
+                    });
+                    return;
+                  }
+                  sendResponse();
+                });
+              })
+              .catch((collabErr) => {
+                console.error('Error adding collaborators:', collabErr);
+                db.run('ROLLBACK', () => {
+                  return res.status(500).json({
+                    error: 'Failed to create document: collaborator addition failed',
+                    details: collabErr.message
+                  });
+                });
+              });
+          } else {
+            // No collaborators to add, commit transaction
+            db.run('COMMIT', (commitErr) => {
+              if (commitErr) {
+                console.error('Error committing transaction:', commitErr);
+                db.run('ROLLBACK', () => {
+                  return res.status(500).json({ error: 'Failed to create document: commit failed' });
+                });
+                return;
               }
-            }
-          });
-        } else {
-          sendResponse();
-        }
+              sendResponse();
+            });
+          }
 
-        function sendResponse() {
-          // Get user details for owner information
-          db.get('SELECT name, email FROM users WHERE id = ?', [userId], (err, user) => {
-            if (err) {
-              console.error('Error fetching user details:', err);
-              return res.status(500).json({ error: 'Failed to create document' });
-            }
+          function sendResponse() {
+            // Get user details for owner information
+            db.get('SELECT name, email FROM users WHERE id = ?', [userId], (err, user) => {
+              if (err) {
+                console.error('Error fetching user details:', err);
+                return res.status(500).json({ error: 'Failed to create document' });
+              }
 
-            const result = {
-              id: documentId,
-              title: trimmedTitle,
-              description: trimmedDescription,
-              ownerId: userId,
-              parentId: parentId || undefined,
-              status: 'draft', // New documents start as draft
-              owner: {
-                id: userId,
-                name: user.name,
-                email: user.email
-              },
-              ownershipType,
-              organizationId: ownershipType === 'organizational' ? organizationId : null,
-              options: {
-                acceptanceThreshold,
-                votingAnonymous: votingAnonymous === 1,
-                votingAnonymityLocked: votingAnonymityLocked === 1,
-                voteChangeAllowed: voteChangeAllowed === 1,
-                structureProposalsEnabled: structureProposalsEnabled === 1
-              },
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString()
-            };
+              const result = {
+                id: documentId,
+                title: trimmedTitle,
+                description: trimmedDescription,
+                ownerId: userId,
+                parentId: parentId || undefined,
+                status: 'draft', // New documents start as draft
+                owner: {
+                  id: userId,
+                  name: user.name,
+                  email: user.email
+                },
+                ownershipType,
+                organizationId: ownershipType === 'organizational' ? organizationId : null,
+                options: {
+                  acceptanceThreshold,
+                  votingAnonymous: votingAnonymous === 1,
+                  votingAnonymityLocked: votingAnonymityLocked === 1,
+                  voteChangeAllowed: voteChangeAllowed === 1,
+                  structureProposalsEnabled: structureProposalsEnabled === 1
+                },
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+              };
 
-          console.log('Document created successfully:', { id: documentId, title: trimmedTitle });
+              console.log('Document created successfully:', { id: documentId, title: trimmedTitle });
 
-          // Record business metrics
-          metricsCollector.recordBusinessEvent('document_created', {
-            documentId,
-            ownerId: userId,
-            ownershipType,
-            organizationId: ownershipType === 'organizational' ? organizationId : null
-          });
+              // Record business metrics
+              metricsCollector.recordBusinessEvent('document_created', {
+                documentId,
+                ownerId: userId,
+                ownershipType,
+                organizationId: ownershipType === 'organizational' ? organizationId : null
+              });
 
-          res.status(201).json({ document: result });
-          });
-        }
+              res.status(201).json({ document: result });
+            });
+          }
+        });
       });
     });
   }

@@ -965,7 +965,11 @@ router.post('/:organizationId/document-proposals/:proposalId/vote', requireAuth,
           ], function(err) {
             if (err) {
               console.error('Error casting vote:', err);
-              db.run('ROLLBACK');
+              db.run('ROLLBACK', (rollbackErr) => {
+                if (rollbackErr) {
+                  console.error('Error rolling back transaction:', rollbackErr);
+                }
+              });
               return res.status(500).json({ error: 'Failed to cast vote' });
             }
 
@@ -1048,13 +1052,21 @@ function checkProposalApproval(db, proposalId, organizationId, callback) {
           [new Date().toISOString(), proposalId], function(err) {
           if (err) {
             console.error('Error approving proposal:', err);
-            db.run('ROLLBACK');
+            db.run('ROLLBACK', (rollbackErr) => {
+              if (rollbackErr) {
+                console.error('Error rolling back transaction:', rollbackErr);
+              }
+            });
             return callback();
           }
 
           if (this.changes === 0) {
             // Proposal was already approved by another process
-            db.run('COMMIT');
+            db.run('COMMIT', (commitErr) => {
+              if (commitErr) {
+                console.error('Error committing transaction:', commitErr);
+              }
+            });
             return callback();
           }
 

@@ -370,6 +370,42 @@ export default function App() {
     }
   };
 
+  // Helper function to reload document with retry logic
+  const reloadDocumentWithRetry = async (documentId: string, maxRetries: number = 3): Promise<Document | null> => {
+    let lastError: Error | null = null;
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const response = await documentsApi.getDocument(documentId);
+        const normalizedDocument = mapDocumentWithSuggestions(response.document);
+        if (normalizedDocument) {
+          return normalizedDocument;
+        }
+        throw new Error('Failed to normalize document');
+      } catch (err) {
+        lastError = err as Error;
+        console.error(`Document reload attempt ${attempt + 1}/${maxRetries} failed:`, err);
+        
+        // Don't retry on auth errors or permanent client errors
+        if (err instanceof Error && (
+          err.message.includes('401') || 
+          err.message.includes('403') ||
+          err.message.includes('404')
+        )) {
+          throw err;
+        }
+        
+        // Wait before retrying (exponential backoff)
+        if (attempt < maxRetries - 1) {
+          const delay = Math.min(1000 * Math.pow(2, attempt), 5000);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+    
+    throw lastError || new Error('Failed to reload document after retries');
+  };
+
   const handleAddSuggestion = async (
     paragraphId: string,
     data: {
@@ -388,15 +424,23 @@ export default function App() {
         type,
         headingLevel: data.headingLevel
       });
-      // Reload document to get updated proposals
-      const response = await documentsApi.getDocument(currentDocument.id);
-      const normalizedDocument = mapDocumentWithSuggestions(response.document);
-      if (normalizedDocument) {
-        setCurrentDocument(normalizedDocument);
-        setDocuments(prev => prev.map(doc => (doc.id === normalizedDocument.id ? normalizedDocument : doc)));
+      
+      // Reload document to get updated proposals with retry logic
+      try {
+        const normalizedDocument = await reloadDocumentWithRetry(currentDocument.id);
+        if (normalizedDocument) {
+          setCurrentDocument(normalizedDocument);
+          setDocuments(prev => prev.map(doc => (doc.id === normalizedDocument.id ? normalizedDocument : doc)));
+          toast.success('Suggestion added');
+        }
+      } catch (reloadErr) {
+        console.error('Failed to reload document after adding suggestion:', reloadErr);
+        toast.warning('Suggestion added, but failed to refresh document. Please refresh the page.');
+        // Operation succeeded but reload failed - still show success for the operation
+        toast.success('Suggestion added');
       }
-      toast.success('Suggestion added');
     } catch (err) {
+      console.error('Failed to add suggestion:', err);
       toast.error('Failed to add suggestion');
     }
   };
@@ -419,15 +463,22 @@ export default function App() {
 
       await votesApi.castVote(currentDocument.id, paragraphId, suggestionId, voteType);
 
-      // Reload document to get updated votes
-      const response = await documentsApi.getDocument(currentDocument.id);
-      const normalizedDocument = mapDocumentWithSuggestions(response.document);
-      if (normalizedDocument) {
-        setCurrentDocument(normalizedDocument);
-        setDocuments(prev => prev.map(doc => (doc.id === normalizedDocument.id ? normalizedDocument : doc)));
+      // Reload document to get updated votes with retry logic
+      try {
+        const normalizedDocument = await reloadDocumentWithRetry(currentDocument.id);
+        if (normalizedDocument) {
+          setCurrentDocument(normalizedDocument);
+          setDocuments(prev => prev.map(doc => (doc.id === normalizedDocument.id ? normalizedDocument : doc)));
+          toast.success('Vote cast');
+        }
+      } catch (reloadErr) {
+        console.error('Failed to reload document after casting vote:', reloadErr);
+        toast.warning('Vote cast, but failed to refresh document. Please refresh the page.');
+        // Operation succeeded but reload failed - still show success for the operation
+        toast.success('Vote cast');
       }
-      toast.success('Vote cast');
     } catch (err) {
+      console.error('Failed to cast vote:', err);
       toast.error('Failed to cast vote');
     }
   };
@@ -450,15 +501,22 @@ export default function App() {
 
       await commentsApi.addComment(currentDocument.id, paragraphId, suggestionId, { text, parentId });
 
-      // Reload document to get updated comments
-      const response = await documentsApi.getDocument(currentDocument.id);
-      const normalizedDocument = mapDocumentWithSuggestions(response.document);
-      if (normalizedDocument) {
-        setCurrentDocument(normalizedDocument);
-        setDocuments(prev => prev.map(doc => (doc.id === normalizedDocument.id ? normalizedDocument : doc)));
+      // Reload document to get updated comments with retry logic
+      try {
+        const normalizedDocument = await reloadDocumentWithRetry(currentDocument.id);
+        if (normalizedDocument) {
+          setCurrentDocument(normalizedDocument);
+          setDocuments(prev => prev.map(doc => (doc.id === normalizedDocument.id ? normalizedDocument : doc)));
+          toast.success(parentId ? 'Reply added' : 'Comment added');
+        }
+      } catch (reloadErr) {
+        console.error('Failed to reload document after adding comment:', reloadErr);
+        toast.warning('Comment added, but failed to refresh document. Please refresh the page.');
+        // Operation succeeded but reload failed - still show success for the operation
+        toast.success(parentId ? 'Reply added' : 'Comment added');
       }
-      toast.success(parentId ? 'Reply added' : 'Comment added');
     } catch (err) {
+      console.error('Failed to add comment:', err);
       toast.error(parentId ? 'Failed to add reply' : 'Failed to add comment');
     }
   };
@@ -502,15 +560,21 @@ export default function App() {
         asSuggestion: true,
       });
 
-      // Reload document
-      const response = await documentsApi.getDocument(currentDocument.id);
-      const normalizedDocument = mapDocumentWithSuggestions(response.document);
-      if (normalizedDocument) {
-        setCurrentDocument(normalizedDocument);
-        setDocuments(prev => prev.map(doc => (doc.id === normalizedDocument.id ? normalizedDocument : doc)));
-        setDocumentLoadKey(Date.now()); // Force remount of DocumentEditor to show new paragraph
+      // Reload document with retry logic
+      try {
+        const normalizedDocument = await reloadDocumentWithRetry(currentDocument.id);
+        if (normalizedDocument) {
+          setCurrentDocument(normalizedDocument);
+          setDocuments(prev => prev.map(doc => (doc.id === normalizedDocument.id ? normalizedDocument : doc)));
+          setDocumentLoadKey(Date.now()); // Force remount of DocumentEditor to show new paragraph
+          toast.success('Paragraph suggestion created');
+        }
+      } catch (reloadErr) {
+        console.error('Failed to reload document after creating paragraph:', reloadErr);
+        toast.warning('Paragraph created, but failed to refresh document. Please refresh the page.');
+        // Operation succeeded but reload failed - still show success for the operation
+        toast.success('Paragraph suggestion created');
       }
-      toast.success('Paragraph suggestion created');
     } catch (err) {
       throw err;
     }

@@ -86,7 +86,7 @@ export class RateLimitError extends ApiError {
 }
 
 // Helper function to make authenticated requests with enhanced error handling
-async function apiRequest(
+export async function apiRequest(
   endpoint: string,
   options: RequestInit = {},
   retries: number = 2

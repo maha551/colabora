@@ -178,19 +178,9 @@ export default function App() {
     }
   };
 
-  const handleLogin = async (user: User) => {
+  const handleLogin = (user: User) => {
     setCurrentUser(user);
-
-    // After login, fetch complete user info including role
-    try {
-      const response = await authApi.getCurrentUser();
-      setCurrentUser(response.user);
-      loadDocuments(response.user);
-    } catch (error) {
-      console.error('Failed to fetch user info after login:', error);
-      // Fallback to loading documents with the basic user info
-      loadDocuments(user);
-    }
+    loadDocuments(user);
   };
 
   const handleLogout = async () => {
@@ -648,6 +638,9 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Global Header */}
+      {/* Debug: Check admin role */}
+      {console.log('Current user role check:', currentUser?.role, 'is admin?', currentUser?.role === 'admin')}
+
       <AppHeader
         currentUser={currentUser}
         onLogout={handleLogout}

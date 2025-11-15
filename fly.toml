@@ -6,6 +6,8 @@ primary_region = 'fra'
 
 [build]
   dockerfile = "Dockerfile"
+  # Increase build timeout for slower builds
+  build_timeout = "15m"
 
 [http_service]
   internal_port = 3000
@@ -20,13 +22,18 @@ primary_region = 'fra'
   NODE_ENV = "production"
   PORT = "3000"
   FRONTEND_URL = "https://colabora-fresh.fly.dev"
-  ALLOWED_ORIGINS = "https://colabora-fresh.fly.dev"
+  ALLOWED_ORIGINS = "https://colabora-fresh.fly.dev,https://*.colabora-fresh.fly.dev"
   LOG_LEVEL = "info"
-  JWT_EXPIRES_IN = "24h"
+  JWT_EXPIRES_IN = "8h"
   RATE_LIMIT_WINDOW_MS = "900000"
-  RATE_LIMIT_MAX_REQUESTS = "100"
+  RATE_LIMIT_MAX_REQUESTS = "500"
 
-# Mount persistent volume for SQLite database
+# Required secrets (will be set via fly secrets set)
+# SESSION_SECRET - Required for session security
+# JWT_SECRET - Required for JWT token signing
+# DATABASE_URL - Set to /data/colabora.db (volume mount)
+
+# Mount persistent volume for SQLite database (3GB)
 [mounts]
   source = "colabora_data"
   destination = "/data"

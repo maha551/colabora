@@ -257,8 +257,12 @@ class ServerManager {
       const staticPath = path.join(__dirname, '../../client/build');
       this.app.use(express.static(staticPath));
 
-      // Catch-all route to serve React app
+      // Catch-all route to serve React app (for SPA routing)
       this.app.get('*', (req, res) => {
+        // Skip API routes
+        if (req.path.startsWith('/api')) {
+          return res.status(404).json({ error: 'API endpoint not found' });
+        }
         res.sendFile(path.join(staticPath, 'index.html'));
       });
     }

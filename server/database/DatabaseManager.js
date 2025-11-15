@@ -25,6 +25,7 @@ class DatabaseManager {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         console.log(`🔌 Database initialization attempt ${attempt}/${maxRetries}`);
+        console.log(`📍 Database path: ${this.config.DATABASE_URL}`);
 
         // Initialize connection
         this.db = await this.connection.initialize();

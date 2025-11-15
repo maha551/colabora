@@ -67,15 +67,15 @@ fly launch --name colabora-fresh --region fra --no-deploy
 
 # Create volume
 echo "💾 Creating persistent volume..."
-fly volumes create colabora_data --size 1 --region fra
+fly volumes create colabora_data --size 3 --region fra
 
 # Deploy
 echo "🚀 Deploying application..."
 fly deploy
 
-# Scale to 2 machines
-echo "⚖️ Scaling to 2 machines..."
-fly scale count 2
+# Keep single machine (sessions don't work across multiple machines with memory store)
+echo "⚖️ Keeping single machine for session compatibility..."
+# fly scale count 2  # Disabled due to session store limitations
 
 # Get URL
 echo "🌐 Getting app URL..."

@@ -58,4 +58,4 @@
 
 # Database backups
 **\*.db.backup
-fly.toml
+**\fly.toml

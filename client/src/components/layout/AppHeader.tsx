@@ -1,7 +1,7 @@
 import React from 'react';
 import { User } from '../types';
-import { UserMenu } from './UserMenu';
-import { Button } from './ui/button';
+import { UserMenu } from '../UserMenu';
+import { Button } from '../ui/button';
 import { Plus } from 'lucide-react';
 
 interface AppHeaderProps {

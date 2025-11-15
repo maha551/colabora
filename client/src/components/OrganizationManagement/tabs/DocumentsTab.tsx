@@ -62,6 +62,107 @@ export function DocumentsTab({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Hierarchical document structure
+  const buildDocumentHierarchy = (documents: Document[]) => {
+    const hierarchyMap = new Map<string | null, Document[]>();
+    const documentMap = new Map<string, Document>();
+
+    // Initialize maps
+    documents.forEach(doc => {
+      documentMap.set(doc.id, doc);
+      const parentId = doc.parentId || null;
+      if (!hierarchyMap.has(parentId)) {
+        hierarchyMap.set(parentId, []);
+      }
+      hierarchyMap.get(parentId)!.push(doc);
+    });
+
+    // Sort documents by hierarchy level and order
+    hierarchyMap.forEach(docs => {
+      docs.sort((a, b) => (a as any).sortOrder - (b as any).sortOrder);
+    });
+
+    return { hierarchyMap, documentMap };
+  };
+
+  const { hierarchyMap } = buildDocumentHierarchy(documents);
+
+  // Render hierarchical document tree
+  const renderDocumentTree = (parentId: string | null = null, level: number = 1) => {
+    const docsAtLevel = hierarchyMap.get(parentId) || [];
+
+    return docsAtLevel.map((doc, index) => {
+      const isLast = index === docsAtLevel.length - 1;
+      const hasChildren = hierarchyMap.has(doc.id);
+
+      return (
+        <div key={doc.id} className="relative">
+          {/* Insert button before first item */}
+          {index === 0 && level === 1 && (
+            <InsertButton
+              onClick={() => setInlineCreationPosition({
+                level: 1,
+                beforeItemId: doc.id,
+                parentId: null
+              })}
+              className="mb-2"
+            />
+          )}
+
+          {/* Document item */}
+          <div className="flex items-center gap-2 p-2 rounded hover:bg-gray-50">
+            <div className="flex-1">
+              <button
+                onClick={() => onSelectDocument?.(doc)}
+                className="text-left hover:text-blue-600 font-medium"
+              >
+                {doc.title}
+              </button>
+              <div className="text-sm text-gray-500 ml-4">
+                {doc.description && <span>{doc.description}</span>}
+                <span className="ml-2 text-xs bg-gray-100 px-2 py-1 rounded">
+                  Level {level}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Insert button between items */}
+          {!isLast && (
+            <InsertButton
+              onClick={() => setInlineCreationPosition({
+                level,
+                afterItemId: doc.id,
+                beforeItemId: docsAtLevel[index + 1].id,
+                parentId
+              })}
+              className="my-1"
+            />
+          )}
+
+          {/* Children */}
+          {hasChildren && level < 3 && (
+            <div className="ml-6 border-l border-gray-200 pl-4">
+              {renderDocumentTree(doc.id, level + 1)}
+            </div>
+          )}
+
+          {/* Insert button after last item */}
+          {isLast && level < 3 && (
+            <InsertButton
+              onClick={() => setInlineCreationPosition({
+                level: level + 1,
+                parentId: level === 1 ? doc.id : parentId,
+                afterItemId: doc.id
+              })}
+              className="mt-1"
+            />
+          )}
+        </div>
+      );
+    });
+  };
+
   // Get available contributors (all demo users except current user)
   const demoUsers = [
     { id: 'cmgxlfj9z0000orjgnfy3revt', name: 'Alice Johnson', email: 'alice@example.com' },

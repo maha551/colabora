@@ -1,11 +1,13 @@
 const express = require('express');
 const { metricsCollector } = require('../middleware/monitoring');
 const { requireAuth, requireDocumentAccess } = require('../middleware/auth');
+const VoterManager = require('../modules/voting');
+const documentLockManager = require('../modules/locks');
 
 const router = express.Router({ mergeParams: true });
 
 // Cast or update a vote on a proposal
-router.post('/', requireAuth, requireDocumentAccess, (req, res) => {
+router.post('/', requireAuth, requireDocumentAccess, async (req, res) => {
   const db = req.app.locals.db;
   const documentId = req.params.documentId;
   const paragraphId = req.params.paragraphId;
@@ -15,6 +17,31 @@ router.post('/', requireAuth, requireDocumentAccess, (req, res) => {
 
   if (!['PRO', 'NEUTRAL', 'CONTRA'].includes(vote)) {
     return res.status(400).json({ error: 'Invalid vote type. Must be PRO, NEUTRAL, or CONTRA' });
+  }
+
+  // Check if voting deadline has passed for this document
+  try {
+    const doc = await new Promise((resolve, reject) => {
+      db.get(`SELECT voting_deadline, status FROM documents WHERE id = ?`, [documentId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (doc.voting_deadline && new Date() > new Date(doc.voting_deadline)) {
+      return res.status(403).json({
+        error: 'Voting deadline has passed for this document',
+        deadline: doc.voting_deadline
+      });
+    }
+
+    // Check document status - prevent voting on agreed documents
+    if (doc.status === 'agreed') {
+      return res.status(403).json({ error: 'Cannot vote on agreed documents' });
+    }
+  } catch (error) {
+    console.error('Error checking document status:', error);
+    return res.status(500).json({ error: 'Failed to validate document status' });
   }
 
   // Verify proposal exists and belongs to the correct paragraph and document
@@ -69,8 +96,10 @@ router.post('/', requireAuth, requireDocumentAccess, (req, res) => {
               return res.status(500).json({ error: 'Failed to update vote' });
             }
 
-            // Check if proposal should be approved (using document threshold)
-            checkAndUpdateProposalApproval(db, proposalId, documentId);
+          // Check if proposal should be approved (using document threshold)
+          checkAndUpdateProposalApproval(db, proposalId, documentId).catch(err =>
+            console.error('Error updating proposal approval:', err)
+          );
 
             res.json({ message: 'Vote updated successfully' });
           });
@@ -90,7 +119,9 @@ router.post('/', requireAuth, requireDocumentAccess, (req, res) => {
           }
 
           // Check if proposal should be approved
-          checkAndUpdateProposalApproval(db, proposalId, documentId);
+          checkAndUpdateProposalApproval(db, proposalId, documentId).catch(err =>
+            console.error('Error updating proposal approval:', err)
+          );
 
           // Record business metrics
           metricsCollector.recordBusinessEvent('vote_cast', {
@@ -109,165 +140,167 @@ router.post('/', requireAuth, requireDocumentAccess, (req, res) => {
 });
 
 // Helper function to check and update proposal approval status
-function checkAndUpdateProposalApproval(db, proposalId, documentId) {
-  // Get document acceptance threshold
-  db.get(`SELECT acceptance_threshold FROM documents WHERE id = ?`, [documentId], (docErr, doc) => {
-    if (docErr) {
-      console.error('Error getting document threshold:', docErr);
-      return;
-    }
+async function checkAndUpdateProposalApproval(db, proposalId, documentId) {
+  try {
+    // Get document acceptance threshold
+    const doc = await new Promise((resolve, reject) => {
+      db.get(`SELECT acceptance_threshold FROM documents WHERE id = ?`, [documentId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
 
     const acceptanceThreshold = doc?.acceptance_threshold || 75.0;
 
-    // Get total collaborators for the document
-    const collabQuery = `
-      SELECT COUNT(*) as total_users
-      FROM (
-        SELECT owner_id as user_id FROM documents WHERE id = ?
-        UNION
-        SELECT user_id FROM document_collaborators WHERE document_id = ?
-      )
-    `;
+    // Get total eligible voters using VoterManager
+    const totalUsers = await VoterManager.getEligibleVoterCount(db, documentId);
 
-    db.get(collabQuery, [documentId, documentId], (err, result) => {
-      if (err) {
-        console.error('Error getting user count:', err);
-        return;
-      }
-
-      const totalUsers = result.total_users;
-
-      // Get PRO vote count for this proposal
-      db.get(`
-        SELECT COUNT(*) as pro_votes FROM votes WHERE proposal_id = ? AND vote = 'PRO'
-      `, [proposalId], (err, voteResult) => {
-        if (err) {
-          console.error('Error getting vote count:', err);
-          return;
+    // Get PRO vote count for this proposal
+    const voteResult = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT COUNT(*) as pro_votes FROM votes WHERE proposal_id = ? AND vote = 'PRO'`,
+        [proposalId],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
         }
+      );
+    });
 
-        const proVotes = voteResult.pro_votes;
-        const approvalPercentage = totalUsers > 0 ? (proVotes / totalUsers) * 100 : 0;
-        const shouldApprove = approvalPercentage >= acceptanceThreshold;
+    const proVotes = voteResult.pro_votes;
+    const approvalPercentage = totalUsers > 0 ? (proVotes / totalUsers) * 100 : 0;
+    const shouldApprove = approvalPercentage >= acceptanceThreshold;
 
-        // Update proposal approval status
-        db.run(`
-          UPDATE proposals SET approved = ? WHERE id = ?
-        `, [shouldApprove ? 1 : 0, proposalId], function(err) {
-        if (err) {
-          console.error('Error updating proposal approval:', err);
-          return;
+    console.log(`Proposal ${proposalId}: ${proVotes}/${totalUsers} PRO votes (${approvalPercentage.toFixed(1)}%) - ${shouldApprove ? 'APPROVED' : 'NOT APPROVED'}`);
+
+    // Update proposal approval status
+    await new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE proposals SET approved = ? WHERE id = ?`,
+        [shouldApprove ? 1 : 0, proposalId],
+        function(err) {
+          if (err) reject(err);
+          else resolve();
         }
+      );
+    });
 
-          // Always update the agreed view based on the highest approved proposal
-          // regardless of whether this specific proposal was just approved or not
-          updateAgreedViewForParagraph(db, proposalId, documentId);
+    // Always update the agreed view based on the highest approved proposal
+    // regardless of whether this specific proposal was just approved or not
+    await updateAgreedViewForParagraph(db, proposalId, documentId);
 
-          // Also check if this proposal should be unapproved (if votes dropped below threshold)
-          if (!shouldApprove) {
-            // Check if this was the currently accepted proposal in the agreed view
-            db.get(`
-              SELECT p.text, p.title
-              FROM paragraphs p
-              WHERE p.id = (SELECT paragraph_id FROM proposals WHERE id = ?)
-            `, [proposalId], (err, currentParagraph) => {
-              if (err || !currentParagraph) return;
-
-              // Get the proposal that was used for the current paragraph content
-              db.get(`
-                SELECT pr.text, pr.type
-                FROM proposals pr
-                JOIN history h ON pr.id = h.proposal_id
-                WHERE h.paragraph_id = (SELECT paragraph_id FROM proposals WHERE id = ?)
-                ORDER BY h.approval_percentage DESC, h.created_at DESC
-                LIMIT 1
-              `, [proposalId], (err, currentProposal) => {
-                if (err || !currentProposal) return;
-
-                // If the current paragraph content matches this now-unapproved proposal,
-                // we need to update to the next best approved proposal
-                const isTitleChange = currentProposal.type === 'TITLE';
-                const currentContent = isTitleChange ? currentParagraph.title : currentParagraph.text;
-                const proposalContent = currentProposal.text;
-
-                if (currentContent === proposalContent) {
-                  // This was the active proposal, update to next best
-                  updateAgreedViewForParagraph(db, proposalId, documentId);
-                }
-              });
-            });
-          }
+    // Also check if this proposal should be unapproved (if votes dropped below threshold)
+    if (!shouldApprove) {
+      // Check if this was the currently accepted proposal in the agreed view
+      const currentParagraph = await new Promise((resolve, reject) => {
+        db.get(`
+          SELECT p.text, p.title
+          FROM paragraphs p
+          WHERE p.id = (SELECT paragraph_id FROM proposals WHERE id = ?)
+        `, [proposalId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
         });
       });
-    });
-  });
+
+      if (currentParagraph) {
+        // Get the proposal that was used for the current paragraph content
+        const currentProposal = await new Promise((resolve, reject) => {
+          db.get(`
+            SELECT pr.text, pr.type
+            FROM proposals pr
+            JOIN history h ON pr.id = h.proposal_id
+            WHERE h.paragraph_id = (SELECT paragraph_id FROM proposals WHERE id = ?)
+            ORDER BY h.approval_percentage DESC, h.created_at DESC
+            LIMIT 1
+          `, [proposalId], (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          });
+        });
+
+        if (currentProposal) {
+          // If the current paragraph content matches this now-unapproved proposal,
+          // we need to update to the next best approved proposal
+          const isTitleChange = currentProposal.type === 'TITLE';
+          const currentContent = isTitleChange ? currentParagraph.title : currentParagraph.text;
+          const proposalContent = currentProposal.text;
+
+          if (currentContent === proposalContent) {
+            // This was the active proposal, update to next best
+            await updateAgreedViewForParagraph(db, proposalId, documentId);
+          }
+        }
+      }
+    }
+
+  } catch (error) {
+    console.error('Error in checkAndUpdateProposalApproval:', error);
+  }
 }
 
 // Helper function to update the agreed view for a paragraph based on the highest approved proposal
-function updateAgreedViewForParagraph(db, proposalId, documentId) {
-  // First get the paragraph_id from the proposal
-  db.get(`SELECT paragraph_id FROM proposals WHERE id = ?`, [proposalId], (err, proposalData) => {
-    if (err || !proposalData) {
-      console.error('Error getting paragraph_id from proposal:', err);
-      return;
-    }
+async function updateAgreedViewForParagraph(db, proposalId, documentId) {
+  // Use document-level locking to prevent race conditions
+  return documentLockManager.withLock(documentId, async () => {
+    try {
+      // First get the paragraph_id from the proposal
+      const proposalData = await new Promise((resolve, reject) => {
+        db.get(`SELECT paragraph_id FROM proposals WHERE id = ?`, [proposalId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
 
-    const paragraphId = proposalData.paragraph_id;
-
-    // Get all proposals for this paragraph with their current vote counts to determine approval status
-    const allProposalsQuery = `
-      SELECT
-        pr.id,
-        pr.text,
-        pr.type,
-        pr.heading_level,
-        pr.user_id,
-        COUNT(v.id) as pro_votes,
-        pr.approved
-      FROM proposals pr
-      LEFT JOIN votes v ON pr.id = v.proposal_id AND v.vote = 'PRO'
-      WHERE pr.paragraph_id = ?
-      GROUP BY pr.id
-      ORDER BY COUNT(v.id) DESC, pr.created_at ASC
-    `;
-
-    db.all(allProposalsQuery, [paragraphId], (err, allProposals) => {
-      if (err) {
-        console.error('Error getting proposals:', err);
+      if (!proposalData) {
+        console.error('Proposal not found:', proposalId);
         return;
       }
 
-      // Get document acceptance threshold and total collaborators count
-      db.get(`SELECT acceptance_threshold FROM documents WHERE id = ?`, [documentId], (docErr, doc) => {
-        if (docErr) {
-          console.error('Error getting document threshold:', docErr);
-          return;
-        }
+      const paragraphId = proposalData.paragraph_id;
 
-        const acceptanceThreshold = doc?.acceptance_threshold || 75.0;
+      // Get all proposals for this paragraph with their current vote counts to determine approval status
+      const allProposalsQuery = `
+        SELECT
+          pr.id,
+          pr.text,
+          pr.type,
+          pr.heading_level,
+          pr.user_id,
+          COUNT(v.id) as pro_votes,
+          pr.approved
+        FROM proposals pr
+        LEFT JOIN votes v ON pr.id = v.proposal_id AND v.vote = 'PRO'
+        WHERE pr.paragraph_id = ?
+        GROUP BY pr.id
+        ORDER BY COUNT(v.id) DESC, pr.created_at ASC
+      `;
 
-        const collabQuery = `
-          SELECT COUNT(*) as total_users
-          FROM (
-            SELECT owner_id as user_id FROM documents WHERE id = ?
-            UNION
-            SELECT user_id FROM document_collaborators WHERE document_id = ?
-          )
-        `;
+      const allProposals = await new Promise((resolve, reject) => {
+        db.all(allProposalsQuery, [paragraphId], (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        });
+      });
 
-        db.get(collabQuery, [documentId, documentId], (err, result) => {
-          if (err) {
-            console.error('Error getting user count:', err);
-            return;
-          }
+      // Get document acceptance threshold
+      const doc = await new Promise((resolve, reject) => {
+        db.get(`SELECT acceptance_threshold FROM documents WHERE id = ?`, [documentId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
 
-          const totalUsers = result?.total_users || 0;
-          
-          // Fix: Add validation for zero users
-          if (totalUsers === 0) {
-            console.warn(`Document ${documentId} has no collaborators - cannot calculate approval percentage`);
-            return;
-          }
+      const acceptanceThreshold = doc?.acceptance_threshold || 75.0;
+
+      // Get total eligible voters using VoterManager
+      const totalUsers = await VoterManager.getEligibleVoterCount(db, documentId);
+
+      // Fix: Add validation for zero users
+      if (totalUsers === 0) {
+        console.warn(`Document ${documentId} has no eligible voters - cannot calculate approval percentage`);
+        return;
+      }
 
           // Find the proposal with the highest approval percentage that meets the threshold
           let bestProposal = null;
@@ -552,6 +585,11 @@ function updateAgreedViewForParagraph(db, proposalId, documentId) {
         });
       });
     });
+  });
+    } catch (error) {
+      console.error('Error updating agreed view for paragraph:', error);
+      throw error;
+    }
   });
 }
 

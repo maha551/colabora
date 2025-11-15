@@ -1,55 +1,71 @@
-import { useState, useEffect } from "react";
-import { Document, User, VersionHistory, ElementType, HeadingLevel, StructureProposal, Organization } from "./types";
-import { DocumentEditor } from "./components/DocumentEditor";
-import { AgreedDocument } from "./components/AgreedDocument";
-import { DocumentDashboard } from "./components/DocumentDashboard";
-import { ActivityFeedView } from "./components/ActivityFeedView";
-import { UserProfile } from "./components/UserProfile";
-import { Login } from "./components/Login";
-import { AppHeader } from "./components/AppHeader";
-import { StructureProposalMode } from "./components/StructureProposalMode";
-import { StructureProposalCard } from "./components/StructureProposalCard";
-import { StructureHistory } from "./components/StructureHistory";
-import { OrganizationDashboard } from "./components/OrganizationDashboard";
-import { OrganizationManagement } from "./components/OrganizationManagement/OrganizationManagement";
-import { AdminDashboard } from "./components/AdminDashboard";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
-import { Avatar, AvatarFallback } from "./components/ui/avatar";
-import { CollaboratorManagement } from "./components/CollaboratorManagement";
-import { Users, FileText, Edit3, Clock, CheckCircle2 } from "lucide-react";
-import { Badge } from "./components/ui/badge";
-import { Button } from "./components/ui/button";
-import { documentsApi, authApi, proposalsApi, votesApi, commentsApi, paragraphsApi, structureProposalsApi, structureHistoryApi, organizationsApi, governanceApi } from "./lib/api";
-import { toast } from "sonner";
+import React, { useState, useEffect } from 'react';
+import { Organization } from './types';
+
+// Hooks
+import { useAuth } from './hooks/useAuth';
+import { useDocuments } from './hooks/useDocuments';
+import { useDocumentView } from './hooks/useDocumentView';
+
+// Layout and Pages
+import { AppLayout } from './components/layout/AppLayout';
+import { DocumentsPage } from './pages/DocumentsPage';
+import { ActivityPage } from './pages/ActivityPage';
+import { ProfilePage } from './pages/ProfilePage';
+import { DocumentViewPage } from './pages/DocumentViewPage';
+import { OrganizationDashboard } from './components/OrganizationDashboard';
+import { OrganizationManagement } from './components/OrganizationManagement/OrganizationManagement';
+import { AdminDashboard } from './components/AdminDashboard';
+import { Login } from './components/Login';
+
+// API and utilities
+import { proposalsApi, votesApi, commentsApi, paragraphsApi, structureProposalsApi, organizationsApi } from './lib/api';
+import { toast } from 'sonner';
 
 export default function App() {
-  const [documents, setDocuments] = useState<Document[]>([]);
-  const [currentDocument, setCurrentDocument] = useState<Document | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"discussion" | "agreed" | "history">("discussion");
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  // Authentication state
+  const {
+    currentUser,
+    authLoading,
+    error: authError,
+    handleLogin,
+    handleLogout,
+    handleProfileUpdate,
+    isAuthenticated,
+  } = useAuth();
+
+  // Document management state
+  const {
+    documents,
+    loading: documentsLoading,
+    createDocument,
+    deleteDocument,
+  } = useDocuments(currentUser);
+
+  // Document view state
+  const {
+    currentDocument,
+    documentLoadKey,
+    loading: documentLoading,
+    loadDocumentById,
+    selectDocument,
+    clearDocument,
+    reloadDocument,
+    mapDocumentWithSuggestions,
+  } = useDocumentView();
+
+  // UI state
   const [currentView, setCurrentView] = useState<'documents' | 'activity' | 'document' | 'profile' | 'organizations' | 'organization' | 'admin'>('activity');
   const [selectedOrganization, setSelectedOrganization] = useState<Organization | null>(null);
-  const [documentLoadKey, setDocumentLoadKey] = useState<number>(Date.now());
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [structureProposals, setStructureProposals] = useState<StructureProposal[]>([]);
+  const [structureProposals, setStructureProposals] = useState<any[]>([]);
   const [showStructureProposalMode, setShowStructureProposalMode] = useState(false);
 
   // Load structure proposals for current document
   const loadStructureProposals = async () => {
-    if (!currentDocument) {
-      console.log('loadStructureProposals: No current document');
-      return;
-    }
-
-    console.log('loadStructureProposals: Loading proposals for document:', currentDocument.id);
+    if (!currentDocument) return;
 
     try {
       const response = await structureProposalsApi.getStructureProposals(currentDocument.id);
-      console.log('loadStructureProposals: Received response:', response);
-      console.log('loadStructureProposals: Setting proposals:', response.structureProposals?.length || 0, 'items');
       setStructureProposals(response.structureProposals || []);
     } catch (error) {
       console.error('Failed to load structure proposals:', error);
@@ -62,103 +78,6 @@ export default function App() {
     loadStructureProposals();
   };
 
-  // Helper function to map proposals to suggestions for backward compatibility
-  const mapDocumentWithSuggestions = (document: any): Document | null => {
-    if (!document) {
-      return null;
-    }
-
-    const normalizedParagraphs = (document.paragraphs || []).map((paragraph: any) => {
-      const rawSuggestions = paragraph.proposals || paragraph.suggestions || [];
-      const proposals = rawSuggestions.map((proposal: any) => ({
-        ...proposal,
-        approved: Boolean(proposal.approved),
-        headingLevel: (proposal.headingLevel || proposal.heading_level || (proposal.type === 'TITLE' ? 'h2' : undefined)) as HeadingLevel | undefined,
-        votes: (proposal.votes || []).map((vote: any) => ({
-          ...vote,
-          createdAt: vote.createdAt || vote.created_at || null,
-        })),
-        comments: (proposal.comments || []).map((comment: any) => ({
-          ...comment,
-          createdAt: comment.createdAt || comment.created_at || null,
-          updatedAt: comment.updatedAt || comment.updated_at || null,
-        })),
-      }));
-
-      const history: VersionHistory[] = (paragraph.history || []).map((entry: any) => {
-        const acceptedAtSource = entry.acceptedAt || entry.createdAt || entry.updatedAt || null;
-        return {
-          id: entry.id,
-          paragraphId: entry.paragraphId || paragraph.id,
-          userId: entry.userId,
-          text: entry.text ?? entry.newText ?? paragraph.text,
-          oldText: entry.oldText ?? entry.old_text ?? null,
-          proposalId: entry.proposalId ?? entry.proposal_id ?? null,
-          acceptedAt: acceptedAtSource ? new Date(acceptedAtSource) : new Date(),
-          approvalPercentage: Number(entry.approvalPercentage ?? entry.approval_percentage ?? 0),
-          type: entry.type || entry.proposalType || 'BODY',
-          headingLevel: (entry.headingLevel || entry.heading_level || (entry.type === 'TITLE' ? 'h2' : undefined)) as HeadingLevel | undefined,
-          user: entry.user || {
-            id: entry.userId,
-            name: entry.userName || '',
-            email: entry.userEmail,
-          },
-        };
-      });
-
-      const orderIndex = Number(paragraph.order ?? paragraph.orderIndex ?? paragraph.order_index ?? 0);
-      const isDocumentTitle = orderIndex < 0 || (typeof paragraph.id === 'string' && paragraph.id.endsWith('-title'));
-      const paragraphTitle = paragraph.title ?? null;
-      const paragraphText = paragraph.text ?? '';
-      const headingLevel = (paragraph.headingLevel ?? paragraph.heading_level ?? (isDocumentTitle ? 'h1' : null)) as HeadingLevel | null;
-
-      return {
-        ...paragraph,
-        title: paragraphTitle ?? undefined,
-        text: paragraphText,
-        order: orderIndex,
-        isDocumentTitle,
-        headingLevel,
-        proposals,
-        suggestions: proposals,
-        history,
-      };
-    });
-
-    const sortedParagraphs = normalizedParagraphs.sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0));
-
-    const owner = document.owner || {
-      id: document.ownerId || document.owner_id,
-      name: document.ownerName || document.owner_name,
-      email: document.ownerEmail || document.owner_email,
-    };
-
-    const collaborators = (document.collaborators || []).map((collaborator: any) => ({
-      id: collaborator.id,
-      documentId: collaborator.documentId || collaborator.document_id || document.id,
-      userId: collaborator.userId || collaborator.user_id || collaborator.user?.id,
-      createdAt: collaborator.createdAt || collaborator.created_at || null,
-      user: collaborator.user || {
-        id: collaborator.userId || collaborator.user_id,
-        name: collaborator.userName || collaborator.user_name || '',
-        email: collaborator.userEmail || collaborator.user_email || '',
-      },
-    }));
-
-    return {
-      ...document,
-      ownerId: document.ownerId || owner.id,
-      owner,
-      collaborators,
-      paragraphs: sortedParagraphs,
-    } as Document;
-  };
-
-  // Check authentication on component mount
-  useEffect(() => {
-    checkAuth();
-  }, []);
-
   // Monitor URL hash for document links
   useEffect(() => {
     const handleHashChange = () => {
@@ -166,7 +85,7 @@ export default function App() {
       if (hash.startsWith('#document/')) {
         const documentId = hash.replace('#document/', '');
         if (currentUser && documentId) {
-          loadDocumentById(documentId);
+          loadDocumentById(documentId, currentUser);
         }
       }
     };
@@ -178,324 +97,60 @@ export default function App() {
 
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [currentUser]);
+  }, [currentUser, loadDocumentById]);
 
-  // Ensure activeTab is valid based on current document capabilities
+  // Load structure proposals when document changes
   useEffect(() => {
-    if (currentDocument && activeTab === 'history' && !currentDocument.structureProposalsEnabled) {
-      setActiveTab('discussion');
-    }
-  }, [currentDocument, activeTab]);
-
-  const checkAuth = async () => {
-    try {
-      const response = await authApi.getCurrentUser();
-      setCurrentUser(response.user);
-      loadDocuments(response.user);
-    } catch (error: any) {
-      // Check if it's a rate limit error
-      if (error.name === 'RateLimitError') {
-        console.warn('Rate limited during auth check, showing login')
-        setError('Too many requests. Please wait a moment before trying again.');
-      } else {
-        // Not authenticated, show login
-        setCurrentUser(null);
-      }
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  const handleLogin = (user: User) => {
-    setCurrentUser(user);
-    loadDocuments(user);
-  };
-
-  const handleLogout = async () => {
-    try {
-      await authApi.logout();
-      // Clear token from localStorage
-      localStorage.removeItem('authToken');
-      setCurrentUser(null);
-      setDocuments([]);
-      setCurrentDocument(null);
-      toast.success('Logged out successfully');
-    } catch (error) {
-      // Even if logout request fails, clear local data
-      localStorage.removeItem('authToken');
-      setCurrentUser(null);
-      setDocuments([]);
-      setCurrentDocument(null);
-      toast.error('Logout failed, but you have been logged out locally');
-    }
-  };
-
-  const handleProfileUpdate = (updatedUser: User) => {
-    setCurrentUser(updatedUser);
-    // Update documents list with new user info if user is owner/collaborator
-    setDocuments(prev => prev.map(doc => {
-      if (doc.ownerId === updatedUser.id) {
-        return { ...doc, owner: updatedUser };
-      }
-      return doc;
-    }));
-    // Update current document if viewing one
     if (currentDocument) {
-      if (currentDocument.ownerId === updatedUser.id) {
-        setCurrentDocument({
-          ...currentDocument,
-          owner: updatedUser,
-        });
-      }
+      loadStructureProposals();
     }
-    // Navigate back to documents after profile update
-    if (currentView === 'profile') {
-      setCurrentView('documents');
-    }
-  };
+  }, [currentDocument]);
 
+  // Navigation handlers
   const handleShowDocuments = () => {
-    setCurrentDocument(null);
+    clearDocument();
     setCurrentView('documents');
   };
 
   const handleShowActivity = () => {
-    setCurrentDocument(null);
+    clearDocument();
     setCurrentView('activity');
   };
 
   const handleShowProfile = () => {
-    setCurrentDocument(null);
+    clearDocument();
     setCurrentView('profile');
   };
 
   const handleShowOrganizations = () => {
-    setCurrentDocument(null);
+    clearDocument();
     setCurrentView('organizations');
   };
 
   const handleShowAdmin = () => {
-    setCurrentDocument(null);
+    clearDocument();
     setCurrentView('admin');
   };
 
   const handleBackToDocuments = () => {
-    setCurrentDocument(null);
+    clearDocument();
     setCurrentView('activity');
-    // Clear URL hash when navigating away from document
     window.location.hash = '';
   };
 
-  // Handle document selection
-  const handleDocumentSelect = async (document: Document) => {
-    try {
-      setLoading(true);
-      const response = await documentsApi.getDocument(document.id);
-      if (response && response.document) {
-        const normalizedDocument = mapDocumentWithSuggestions(response.document);
-        setCurrentDocument(normalizedDocument);
-        setDocumentLoadKey(Date.now()); // Force remount of all components to collapse comments
+  // Document selection handler
+  const handleDocumentSelect = async (document: any) => {
+    await selectDocument(document);
         setCurrentView('document');
-        // Update URL hash for sharing
-        window.location.hash = `#document/${document.id}`;
-        // Load structure proposals for this document
-        await loadStructureProposals();
-      }
-    } catch (err) {
-      toast.error('Failed to load document');
-    } finally {
-      setLoading(false);
-    }
   };
 
-  // Load documents on component mount (only when authenticated)
-  const loadDocuments = async (user?: User) => {
-    const userToUse = user || currentUser;
-    if (!userToUse) {
-      console.log('No user available for loadDocuments');
-      setLoading(false);
-      return;
-    }
-
-    console.log('Loading documents for user:', userToUse.name);
-    setLoading(true);
-    setError(null);
-
-    try {
-      const response = await documentsApi.getDocuments();
-      console.log('Documents API response:', response);
-
-      if (response && response.documents) {
-        const normalizedList = response.documents.map((doc: any) => mapDocumentWithSuggestions({ ...doc, paragraphs: doc.paragraphs || [] }))
-          .filter(Boolean) as Document[];
-        console.log('Setting documents:', normalizedList.length, 'documents');
-        console.log('Documents data:', normalizedList.map(d => ({ id: d.id, title: d.title })));
-        setDocuments(normalizedList);
-        console.log('Documents state updated');
-
-        // Don't auto-select any document - let user choose from dashboard
-      } else {
-        console.log('Invalid API response:', response);
-        setError('Invalid API response');
-        toast.error('Invalid API response');
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load documents';
-      console.error('loadDocuments error:', errorMessage, err);
-      setError(errorMessage);
-      toast.error(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-
-
-  const handleCreateDocument = async (
-    title: string,
-    _description?: string,
-    contributors?: string[],
-    options?: {
-      acceptanceThreshold?: number;
-      votingAnonymous?: boolean;
-      votingAnonymityLocked?: boolean;
-      voteChangeAllowed?: boolean;
-      structureProposalsEnabled?: boolean;
-    },
-    ownershipType?: 'personal' | 'shared' | 'organizational',
-    organizationId?: string
-  ) => {
-    try {
-      console.log('Creating document:', title, 'with contributors:', contributors, 'with options:', options, 'ownership:', ownershipType, 'org:', organizationId);
-      const response = await documentsApi.createDocument(title, _description, contributors, options, ownershipType, organizationId);
-      console.log('Document creation response:', response);
-
-      // Add collaborators if specified
-      if (contributors && contributors.length > 0 && response.document?.id) {
-        console.log('Adding contributors:', contributors);
-        for (const contributorId of contributors) {
-          try {
-            await documentsApi.addCollaborator(response.document.id, contributorId);
-            console.log('Added contributor:', contributorId);
-          } catch (error) {
-            console.error('Failed to add contributor:', contributorId, error);
-          }
-        }
-      }
-
-      toast.success('Document created successfully');
-      console.log('Reloading documents...');
-      await loadDocuments(); // Reload documents list
-      console.log('Documents reloaded');
-    } catch (err) {
-      console.error('Document creation failed:', err);
-      toast.error('Failed to create document');
-      throw err; // Re-throw to let the dashboard handle the error
-    }
-  };
-
-  const handleDeleteDocument = async (documentId: string) => {
-    try {
-      await documentsApi.deleteDocument(documentId);
-      await loadDocuments(); // Reload documents list
-      // If the currently selected document was deleted, clear the selection
-      if (currentDocument?.id === documentId) {
-        setCurrentDocument(null);
-      }
-    } catch (err) {
-      toast.error('Failed to delete document');
-      throw err; // Re-throw to let the dashboard handle the error
-    }
-  };
-
-  // Helper function to reload document with retry logic
-  const reloadDocumentWithRetry = async (documentId: string, maxRetries: number = 3): Promise<Document | null> => {
-    let lastError: Error | null = null;
-    
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        const response = await documentsApi.getDocument(documentId);
-        const normalizedDocument = mapDocumentWithSuggestions(response.document);
-        if (normalizedDocument) {
-          return normalizedDocument;
-        }
-        throw new Error('Failed to normalize document');
-      } catch (err) {
-        lastError = err as Error;
-        console.error(`Document reload attempt ${attempt + 1}/${maxRetries} failed:`, err);
-        
-        // Don't retry on auth errors or permanent client errors
-        if (err instanceof Error && (
-          err.message.includes('401') || 
-          err.message.includes('403') ||
-          err.message.includes('404')
-        )) {
-          throw err;
-        }
-        
-        // Wait before retrying (exponential backoff)
-        if (attempt < maxRetries - 1) {
-          const delay = Math.min(1000 * Math.pow(2, attempt), 5000);
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
-      }
-    }
-    
-    throw lastError || new Error('Failed to reload document after retries');
-  };
-
-  // Load document by ID (for URL hash links)
-  const loadDocumentById = async (documentId: string) => {
-    if (!currentUser) {
-      console.warn('Cannot load document: user not authenticated');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-
-      // Load document data
-      const response = await documentsApi.getDocument(documentId);
-      const normalizedDocument = mapDocumentWithSuggestions(response.document);
-
-      if (normalizedDocument) {
-        setCurrentDocument(normalizedDocument);
-        setCurrentView('document');
-        setActiveTab('discussion'); // Default to discussion tab
-
-        // Load structure proposals
-        await loadStructureProposals();
-
-        toast.success(`Loaded document: ${normalizedDocument.title}`);
-      } else {
-        throw new Error('Failed to load document');
-      }
-    } catch (err: any) {
-      console.error('Failed to load document by ID:', err);
-      setError('Document not found or access denied');
-
-      // Clear URL hash if document couldn't be loaded
-      window.location.hash = '';
-
-      if (err.message?.includes('404')) {
-        toast.error('Document not found');
-      } else if (err.message?.includes('403')) {
-        toast.error('You do not have access to this document');
-      } else {
-        toast.error('Failed to load document');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Document editing handlers
   const handleAddSuggestion = async (
     paragraphId: string,
     data: {
       text: string;
       type?: 'BODY' | 'TITLE';
-      headingLevel?: HeadingLevel;
+      headingLevel?: any;
     }
   ) => {
     if (!currentDocument) return;
@@ -509,18 +164,9 @@ export default function App() {
         headingLevel: data.headingLevel
       });
       
-      // Reload document to get updated proposals with retry logic
-      try {
-        const normalizedDocument = await reloadDocumentWithRetry(currentDocument.id);
+      // Reload document
+      const normalizedDocument = await reloadDocument();
         if (normalizedDocument) {
-          setCurrentDocument(normalizedDocument);
-          setDocuments(prev => prev.map(doc => (doc.id === normalizedDocument.id ? normalizedDocument : doc)));
-          toast.success('Suggestion added');
-        }
-      } catch (reloadErr) {
-        console.error('Failed to reload document after adding suggestion:', reloadErr);
-        toast.warning('Suggestion added, but failed to refresh document. Please refresh the page.');
-        // Operation succeeded but reload failed - still show success for the operation
         toast.success('Suggestion added');
       }
     } catch (err) {
@@ -547,18 +193,9 @@ export default function App() {
 
       await votesApi.castVote(currentDocument.id, paragraphId, suggestionId, voteType);
 
-      // Reload document to get updated votes with retry logic
-      try {
-        const normalizedDocument = await reloadDocumentWithRetry(currentDocument.id);
+      // Reload document
+      const normalizedDocument = await reloadDocument();
         if (normalizedDocument) {
-          setCurrentDocument(normalizedDocument);
-          setDocuments(prev => prev.map(doc => (doc.id === normalizedDocument.id ? normalizedDocument : doc)));
-          toast.success('Vote cast');
-        }
-      } catch (reloadErr) {
-        console.error('Failed to reload document after casting vote:', reloadErr);
-        toast.warning('Vote cast, but failed to refresh document. Please refresh the page.');
-        // Operation succeeded but reload failed - still show success for the operation
         toast.success('Vote cast');
       }
     } catch (err) {
@@ -585,18 +222,9 @@ export default function App() {
 
       await commentsApi.addComment(currentDocument.id, paragraphId, suggestionId, { text, parentId });
 
-      // Reload document to get updated comments with retry logic
-      try {
-        const normalizedDocument = await reloadDocumentWithRetry(currentDocument.id);
+      // Reload document
+      const normalizedDocument = await reloadDocument();
         if (normalizedDocument) {
-          setCurrentDocument(normalizedDocument);
-          setDocuments(prev => prev.map(doc => (doc.id === normalizedDocument.id ? normalizedDocument : doc)));
-          toast.success(parentId ? 'Reply added' : 'Comment added');
-        }
-      } catch (reloadErr) {
-        console.error('Failed to reload document after adding comment:', reloadErr);
-        toast.warning('Comment added, but failed to refresh document. Please refresh the page.');
-        // Operation succeeded but reload failed - still show success for the operation
         toast.success(parentId ? 'Reply added' : 'Comment added');
       }
     } catch (err) {
@@ -606,11 +234,11 @@ export default function App() {
   };
 
   const handleAddElement = async (
-    elementType: ElementType,
+    elementType: any,
     options?: {
       text?: string;
       title?: string;
-      headingLevel?: HeadingLevel;
+      headingLevel?: any;
       order?: number;
     }
   ) => {
@@ -644,24 +272,104 @@ export default function App() {
         asSuggestion: true,
       });
 
-      // Reload document with retry logic
-      try {
-        const normalizedDocument = await reloadDocumentWithRetry(currentDocument.id);
+      // Reload document
+      const normalizedDocument = await reloadDocument();
         if (normalizedDocument) {
-          setCurrentDocument(normalizedDocument);
-          setDocuments(prev => prev.map(doc => (doc.id === normalizedDocument.id ? normalizedDocument : doc)));
-          setDocumentLoadKey(Date.now()); // Force remount of DocumentEditor to show new paragraph
-          toast.success('Paragraph suggestion created');
-        }
-      } catch (reloadErr) {
-        console.error('Failed to reload document after creating paragraph:', reloadErr);
-        toast.warning('Paragraph created, but failed to refresh document. Please refresh the page.');
-        // Operation succeeded but reload failed - still show success for the operation
         toast.success('Paragraph suggestion created');
       }
     } catch (err) {
       throw err;
     }
+  };
+
+  // Collaborator management
+  const handleCollaboratorAdded = async (user: any) => {
+    console.log('onCollaboratorAdded called with user:', user);
+    // Refresh the document data to show the new collaborator
+    try {
+      console.log('Refreshing document after adding collaborator...');
+      const normalizedDocument = await reloadDocument();
+      if (normalizedDocument) {
+        console.log('Updated document collaborators count:', normalizedDocument.collaborators.length);
+      }
+    } catch (error) {
+      console.error('Failed to refresh document after adding collaborator:', error);
+    }
+  };
+
+  const handleCollaboratorRemoved = async (userId: string) => {
+    console.log('onCollaboratorRemoved called with userId:', userId);
+    // Refresh the document data to show removed collaborator
+    try {
+      console.log('Refreshing document after removing collaborator...');
+      const normalizedDocument = await reloadDocument();
+      if (normalizedDocument) {
+        console.log('Updated document collaborators count:', normalizedDocument.collaborators.length);
+      }
+    } catch (error) {
+      console.error('Failed to refresh document after removing collaborator:', error);
+    }
+  };
+
+  // Activity feed handlers
+  const handleNavigateToDocument = async (documentId: string) => {
+    try {
+      const response = await structureProposalsApi.getStructureProposals(documentId);
+      if (response.document) {
+        const normalizedDocument = mapDocumentWithSuggestions(response.document);
+        selectDocument(normalizedDocument);
+        setCurrentView('document');
+        // Load structure proposals for this document
+        await loadStructureProposals();
+      }
+    } catch (error) {
+      console.error('Failed to load document:', error);
+      toast.error('Failed to load document');
+    }
+  };
+
+  const handleAddComment = async (proposalId: string, documentId: string, paragraphId: string, text: string, parentId?: string) => {
+    try {
+      await commentsApi.addComment(documentId, paragraphId, proposalId, { text, parentId });
+      toast.success(parentId ? 'Reply added' : 'Comment added');
+    } catch (error) {
+      console.error('Failed to add comment:', error);
+      toast.error(parentId ? 'Failed to add reply' : 'Failed to add comment');
+      throw error;
+    }
+  };
+
+  // Organization handlers
+  const handleSelectOrganization = (org: Organization) => {
+    setSelectedOrganization(org);
+    setCurrentView('organization');
+  };
+
+  const handleBackFromOrganization = () => {
+    setSelectedOrganization(null);
+    setCurrentView('organizations');
+  };
+
+  // Document sharing
+  const handleShareDocument = () => {
+    const url = `${window.location.origin}${window.location.pathname}#document/${currentDocument?.id}`;
+    navigator.clipboard.writeText(url);
+    toast.success('Document link copied to clipboard!');
+  };
+
+  // Structure proposal handlers
+  const handleApplyStructureProposal = async (proposalId: string) => {
+    // Refresh document and structure proposals after applying
+    await reloadDocument();
+    refreshStructureProposals();
+  };
+
+  const handleCreateStructureProposal = () => {
+    setShowStructureProposalMode(true);
+  };
+
+  const handleCloseStructureProposalMode = () => {
+    setShowStructureProposalMode(false);
   };
 
   // Show loading while checking authentication
@@ -677,49 +385,23 @@ export default function App() {
   }
 
   // Show login if not authenticated
-  if (!currentUser) {
+  if (!isAuthenticated) {
     return <Login onLogin={handleLogin} />;
   }
 
-  // Calculate stats
-  const totalSuggestions = currentDocument?.paragraphs?.reduce(
-    (sum, p) => sum + (p.proposals?.length || 0),
-    0
-  ) || 0;
-
-  const acceptedSuggestions = currentDocument?.paragraphs?.reduce((sum, p) => {
-    return sum + (p.proposals?.filter((s) => s.approved).length || 0);
-  }, 0) || 0;
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading collaborative workspace...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-600 mb-4">{error}</p>
-          <Button onClick={() => loadDocuments()}>Try Again</Button>
-        </div>
-      </div>
-    );
-  }
+  // Calculate layout props
+  const showBackButton = currentView === 'document' || currentView === 'profile' || currentView === 'organizations' || currentView === 'organization' || currentView === 'documents' || currentView === 'admin';
+  const title = currentView === 'document' && currentDocument ? currentDocument.title :
+                currentView === 'activity' ? 'Activity Feed' :
+                currentView === 'profile' ? 'Edit Profile' :
+                currentView === 'organizations' ? 'Organizations' :
+                currentView === 'organization' && selectedOrganization ? selectedOrganization.name :
+                currentView === 'documents' ? 'Documents' :
+                currentView === 'admin' ? 'Admin Dashboard' :
+                undefined;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Global Header */}
-      {/* Debug: Check admin role */}
-      {console.log('Current user role check:', currentUser?.role, 'is admin?', currentUser?.role === 'admin')}
-
-      <AppHeader
+    <AppLayout
         currentUser={currentUser}
         onLogout={handleLogout}
         onShowActivity={handleShowActivity}
@@ -727,97 +409,53 @@ export default function App() {
         onShowDocuments={handleShowDocuments}
         onShowOrganizations={handleShowOrganizations}
         onShowAdmin={currentUser?.role === 'admin' ? handleShowAdmin : undefined}
-        showBackButton={currentView === 'document' || currentView === 'profile' || currentView === 'organizations' || currentView === 'organization' || currentView === 'documents' || currentView === 'admin'}
+      showBackButton={showBackButton}
         onBack={handleBackToDocuments}
-        title={
-          currentView === 'document' && currentDocument ? currentDocument.title :
-          currentView === 'activity' ? 'Activity Feed' :
-          currentView === 'profile' ? 'Edit Profile' :
-          currentView === 'organizations' ? 'Organizations' :
-          currentView === 'organization' && selectedOrganization ? selectedOrganization.name :
-          currentView === 'documents' ? 'Documents' :
-          currentView === 'admin' ? 'Admin Dashboard' :
-          undefined
-        }
+      title={title}
         showCreateButton={currentView === 'documents'}
         onCreateDocument={() => setIsCreateDialogOpen(true)}
-      />
-
-      {/* Main Content */}
+    >
       {currentView === 'documents' && (
-        <DocumentDashboard
+        <DocumentsPage
           documents={documents}
           currentUser={currentUser}
           onSelectDocument={handleDocumentSelect}
-          onCreateDocument={handleCreateDocument}
-          onDeleteDocument={handleDeleteDocument}
-          loading={loading}
+          onCreateDocument={createDocument}
+          onDeleteDocument={deleteDocument}
+          loading={documentsLoading}
           isCreateDialogOpen={isCreateDialogOpen}
           onSetCreateDialogOpen={setIsCreateDialogOpen}
         />
       )}
 
       {currentView === 'activity' && (
-        <ActivityFeedView
+        <ActivityPage
           documents={documents}
           currentUser={currentUser}
-          onNavigateToDocument={async (documentId) => {
-            try {
-              const response = await documentsApi.getDocument(documentId);
-              if (response.document) {
-                const normalizedDocument = mapDocumentWithSuggestions(response.document);
-                setCurrentDocument(normalizedDocument);
-                setCurrentView('document');
-                setActiveTab('discussion');
-                // Load structure proposals for this document
-                await loadStructureProposals();
-              }
-            } catch (error) {
-              console.error('Failed to load document:', error);
-              toast.error('Failed to load document');
-            }
-          }}
-          onAddComment={async (proposalId, documentId, paragraphId, text, parentId) => {
-            try {
-              await commentsApi.addComment(documentId, paragraphId, proposalId, { text, parentId });
-              toast.success(parentId ? 'Reply added' : 'Comment added');
-            } catch (error) {
-              console.error('Failed to add comment:', error);
-              toast.error(parentId ? 'Failed to add reply' : 'Failed to add comment');
-              throw error;
-            }
-          }}
+          onNavigateToDocument={handleNavigateToDocument}
+          onAddComment={handleAddComment}
         />
       )}
 
       {currentView === 'profile' && (
-        <div className="max-w-4xl mx-auto px-4 py-8">
-          <UserProfile
+        <ProfilePage
             user={currentUser}
             onProfileUpdate={handleProfileUpdate}
-            isModal={false}
           />
-        </div>
       )}
 
       {currentView === 'organizations' && (
         <OrganizationDashboard
-          currentUser={currentUser!}
-          onSelectOrganization={(org) => {
-            setSelectedOrganization(org);
-            setCurrentView('organization');
-          }}
+          currentUser={currentUser}
+          onSelectOrganization={handleSelectOrganization}
         />
       )}
 
       {currentView === 'organization' && selectedOrganization && (
         <OrganizationManagement
           organization={selectedOrganization}
-          currentUser={currentUser!}
-          onBack={() => {
-            setSelectedOrganization(null);
-            setCurrentView('organizations');
-          }}
+          currentUser={currentUser}
+          onBack={handleBackFromOrganization}
           onSelectDocument={handleDocumentSelect}
         />
       )}
@@ -830,258 +468,26 @@ export default function App() {
       )}
 
       {currentView === 'document' && currentDocument && (
-        <>
-          {/* Main Content */}
-          <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Centered workspace description */}
-        {currentDocument?.description && (
-          <div className="text-center mb-6">
-            <p className="text-sm text-gray-600">{currentDocument.description}</p>
-          </div>
-        )}
-
-        {/* Share button */}
-        <div className="text-center mb-6">
-          <Button
-            onClick={() => {
-              const url = `${window.location.origin}${window.location.pathname}#document/${currentDocument.id}`;
-              navigator.clipboard.writeText(url);
-              toast.success('Document link copied to clipboard!');
-            }}
-            variant="outline"
-            size="sm"
-            className="gap-2"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
-            </svg>
-            Share Document
-          </Button>
-        </div>
-
-        {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "discussion" | "agreed" | "history")}>
-          <div className="flex justify-center mb-6 px-4">
-            <TabsList className="w-full sm:w-auto">
-              <TabsTrigger value="discussion" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm" aria-label={`Draft tab with ${totalSuggestions} proposals`}>
-                <Edit3 className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
-                <span className="sm:hidden" aria-hidden="true">Draft</span>
-                <span className="hidden sm:inline" aria-hidden="true">Draft</span>
-                {totalSuggestions > 0 && (
-                  <Badge variant="secondary" className="ml-1 text-xs" aria-label={`${totalSuggestions} proposals`}>
-                    {totalSuggestions}
-                  </Badge>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="agreed" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm" aria-label={`Final tab with ${acceptedSuggestions} approved paragraphs`}>
-                <FileText className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
-                <span className="sm:hidden" aria-hidden="true">Final</span>
-                <span className="hidden sm:inline" aria-hidden="true">Final</span>
-                {acceptedSuggestions > 0 && (
-                  <Badge variant="default" className="ml-1 bg-green-600 text-xs" aria-label={`${acceptedSuggestions} approved paragraphs`}>
-                    {acceptedSuggestions}
-                  </Badge>
-                )}
-              </TabsTrigger>
-              {currentDocument?.structureProposalsEnabled && (
-              <TabsTrigger value="history" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm" aria-label="Document structure history">
-                <Clock className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
-                <span className="sm:hidden" aria-hidden="true">Hist</span>
-                <span className="hidden sm:inline" aria-hidden="true">History</span>
-              </TabsTrigger>
-              )}
-            </TabsList>
-          </div>
-
-          {/* Document Status - Only show in agreed view */}
-          {activeTab === 'agreed' && (
-            <div className="text-center mb-6">
-              <div className="flex items-center justify-center gap-4 text-sm text-gray-500">
-                <span className="flex items-center gap-1">
-                  <Clock className="h-4 w-4" />
-                  Last updated: {new Date(currentDocument.updatedAt).toLocaleDateString()}
-                </span>
-                <span className="flex items-center gap-1">
-                  <CheckCircle2 className="h-4 w-4 text-green-600" />
-                  {currentDocument.paragraphs.filter(p => !p.isDocumentTitle && (p.title || p.text) && (p.title || p.text).trim() !== '').length} sections agreed upon ({currentDocument.paragraphs.filter(p => p.history && p.history.length > 0).length} modified)
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Collaborators Display */}
-          <div className="flex justify-center mb-8">
-            <CollaboratorManagement
+        <DocumentViewPage
               document={currentDocument}
+          totalUsers={(currentDocument?.collaborators.length || 0) + 1}
               currentUser={currentUser}
-              onCollaboratorAdded={async (user) => {
-                console.log('onCollaboratorAdded called with user:', user);
-                // Refresh the document data to show the new collaborator
-                try {
-                  console.log('Refreshing document after adding collaborator...');
-                  const response = await documentsApi.getDocument(currentDocument.id);
-                  const normalizedDocument = mapDocumentWithSuggestions(response.document);
-                  if (normalizedDocument) {
-                    console.log('Updated document collaborators count:', normalizedDocument.collaborators.length);
-                    setCurrentDocument(normalizedDocument);
-                    // Update the document in the documents list as well
-                    setDocuments(prev => prev.map(doc =>
-                      (doc.id === normalizedDocument.id ? normalizedDocument : doc)
-                    ));
-                    console.log('Document state updated successfully');
-                  }
-                } catch (error) {
-                  console.error('Failed to refresh document after adding collaborator:', error);
-                }
-              }}
-              onCollaboratorRemoved={async (userId) => {
-                console.log('onCollaboratorRemoved called with userId:', userId);
-                // Refresh the document data to show removed collaborator
-                try {
-                  console.log('Refreshing document after removing collaborator...');
-                  const response = await documentsApi.getDocument(currentDocument.id);
-                  const normalizedDocument = mapDocumentWithSuggestions(response.document);
-                  if (normalizedDocument) {
-                    console.log('Updated document collaborators count:', normalizedDocument.collaborators.length);
-                    setCurrentDocument(normalizedDocument);
-                    // Update the document in the documents list as well
-                    setDocuments(prev => prev.map(doc =>
-                      (doc.id === normalizedDocument.id ? normalizedDocument : doc)
-                    ));
-                    console.log('Document state updated successfully');
-                  }
-                } catch (error) {
-                  console.error('Failed to refresh document after removing collaborator:', error);
-                }
-              }}
-            >
-              <div className="flex items-center gap-2 sm:gap-3 text-sm text-gray-600 cursor-pointer hover:text-gray-900 transition-colors">
-                <Users className="h-4 w-4" />
-                <div className="flex items-center -space-x-1 sm:-space-x-2">
-                  {/* Owner */}
-                  <Avatar className="h-6 w-6 sm:h-8 sm:w-8 border-2 border-white">
-                    <AvatarFallback className="text-xs bg-blue-100 text-blue-700">
-                      {currentDocument.owner.name.split(' ').map(n => n[0]).join('')}
-                    </AvatarFallback>
-                  </Avatar>
-                  {/* Collaborators */}
-                  {currentDocument.collaborators.slice(0, 3).map((collaborator) => (
-                    <Avatar key={collaborator.id} className="h-6 w-6 sm:h-8 sm:w-8 border-2 border-white">
-                      <AvatarFallback className="text-xs bg-gray-200 text-gray-700">
-                        {collaborator.user.name.split(' ').map(n => n[0]).join('')}
-                      </AvatarFallback>
-                    </Avatar>
-                  ))}
-                  {currentDocument.collaborators.length > 3 && (
-                    <Avatar className="h-6 w-6 sm:h-8 sm:w-8 border-2 border-white">
-                      <AvatarFallback className="text-xs bg-gray-200 text-gray-700">
-                        +{currentDocument.collaborators.length - 3}
-                      </AvatarFallback>
-                    </Avatar>
-                  )}
-                </div>
-                <span className="font-medium text-xs sm:text-sm">
-                  {(currentDocument.collaborators.length || 0) + 1} collab{(currentDocument.collaborators.length || 0) + 1 !== 1 ? 's' : ''}
-                </span>
-              </div>
-            </CollaboratorManagement>
-          </div>
-
-          <TabsContent value="discussion" className="mt-0">
-            <DocumentEditor
-              key={documentLoadKey}
-              document={currentDocument}
-              totalUsers={(currentDocument?.collaborators.length || 0) + 1} // Owner + collaborators
-              currentUser={currentUser}
+          documentLoadKey={documentLoadKey}
+          structureProposals={structureProposals}
+          showStructureProposalMode={showStructureProposalMode}
               onAddSuggestion={handleAddSuggestion}
               onVote={handleVote}
               onComment={handleComment}
               onAddElement={handleAddElement}
-            />
-          </TabsContent>
-
-          <TabsContent value="agreed" className="mt-0">
-            <AgreedDocument
-              document={currentDocument}
-              totalUsers={(currentDocument?.collaborators.length || 0) + 1} // Owner + collaborators
-            />
-          </TabsContent>
-
-          {currentDocument?.structureProposalsEnabled && (
-          <TabsContent value="history" className="mt-0">
-            <StructureHistory
-              documentId={currentDocument.id}
-              currentUserId={currentUser.id}
-            />
-          </TabsContent>
-          )}
-        </Tabs>
-
-        {/* Structure Proposals Section - Moved to end of document */}
-        {currentDocument?.structureProposalsEnabled && (
-          <div className="mt-12 pt-8 border-t">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <h2 className="text-xl font-semibold">🏗️ Structure Proposals</h2>
-              {structureProposals.length > 0 && (
-                <Badge variant="secondary" className="text-sm">
-                  {structureProposals.length}
-                </Badge>
-              )}
-            </div>
-            <Button
-              onClick={() => setShowStructureProposalMode(true)}
-              variant="outline"
-              size="sm"
-              className="gap-2"
-            >
-              🧩 Propose restructuring
-            </Button>
-          </div>
-
-          {structureProposals.length > 0 ? (
-            <div className="space-y-4">
-              {structureProposals.map((proposal) => (
-                <StructureProposalCard
-                  key={proposal.id}
-                  structureProposal={proposal}
-                  documentId={currentDocument.id}
-                  currentUserId={currentUser.id}
-                  onVote={refreshStructureProposals}
-                  onApply={() => {
-                    // Refresh document and structure proposals after applying
-                    loadDocuments();
-                    refreshStructureProposals();
-                  }}
-                  canApply={currentDocument.ownerId === currentUser.id}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-              <div className="text-5xl mb-3">🏗️</div>
-              <p className="text-base font-medium mb-1">No structure proposals yet.</p>
-              <p className="text-sm">Use "Propose restructuring" to suggest major document changes.</p>
-            </div>
-          )}
-        </div>
-        )}
-        </div>
-        </>
-      )}
-
-      {/* Structure Proposal Mode */}
-      {showStructureProposalMode && currentDocument && (
-        <StructureProposalMode
-          documentId={currentDocument.id}
-          paragraphs={currentDocument.paragraphs}
-          onClose={() => setShowStructureProposalMode(false)}
-          onSuccess={() => {
-            setShowStructureProposalMode(false);
-            refreshStructureProposals();
-          }}
+          onCollaboratorAdded={handleCollaboratorAdded}
+          onCollaboratorRemoved={handleCollaboratorRemoved}
+          onShareDocument={handleShareDocument}
+          onApplyStructureProposal={handleApplyStructureProposal}
+          onCreateStructureProposal={handleCreateStructureProposal}
+          onCloseStructureProposalMode={handleCloseStructureProposalMode}
+          refreshStructureProposals={refreshStructureProposals}
         />
       )}
-    </div>
+    </AppLayout>
   );
 }

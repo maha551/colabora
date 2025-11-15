@@ -219,6 +219,25 @@ class ServerManager {
     });
   }
 
+  /**
+   * Close the server gracefully
+   * @returns {Promise<void>}
+   */
+  async close() {
+    return new Promise((resolve) => {
+      if (this.server) {
+        this.server.close(() => {
+          console.log('✅ Server shutdown complete');
+          this.server = null;
+          this.serverStarted = false;
+          resolve();
+        });
+      } else {
+        resolve();
+      }
+    });
+  }
+
   start(port, callback) {
     if (this.serverStarted) {
       return;

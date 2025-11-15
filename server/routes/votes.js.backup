@@ -239,9 +239,7 @@ async function checkAndUpdateProposalApproval(db, proposalId, documentId) {
   }
 }
 
-// TEMPORARILY DISABLED: Complex function with syntax issues
 // Helper function to update the agreed view for a paragraph based on the highest approved proposal
-/*
 async function updateAgreedViewForParagraph(db, proposalId, documentId) {
   // Use document-level locking to prevent race conditions
   return documentLockManager.withLock(documentId, async () => {
@@ -588,18 +586,11 @@ async function updateAgreedViewForParagraph(db, proposalId, documentId) {
       });
     });
   });
-    } catch (error) {
-      console.error('Error updating agreed view for paragraph:', error);
-      throw error;
-    }
+  } catch (error) {
+    console.error('Error updating agreed view for paragraph:', error);
+    throw error;
+  }
   });
-}
-*/
-
-// Simple stub function to prevent errors
-async function updateAgreedViewForParagraph(db, proposalId, documentId) {
-  console.log(`updateAgreedViewForParagraph temporarily disabled for proposal ${proposalId}`);
-  return Promise.resolve();
 }
 
 module.exports = router;

@@ -19,12 +19,12 @@ const checkNoActiveStructureProposals = (req, res, next) => {
   db.get(activeProposalQuery, [documentId], (err, result) => {
     if (err) {
       // If table doesn't exist, allow the operation (table will be created on first use)
-      if (err.code === 'SQLITE_ERROR' && err.message.includes('no such table')) {
+      if (err.message && (err.message.includes('no such table') || err.message.includes('structure_proposals'))) {
         console.log('Structure proposals table does not exist yet, allowing paragraph modification');
         return next();
       }
       console.error('Error checking for active structure proposals:', err);
-      return res.status(500).json({ error: 'Failed to check document status' });
+      return res.status(500).json({ error: 'Failed to check active structure proposals' });
     }
 
     if (result && result.count > 0) {

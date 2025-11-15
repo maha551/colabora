@@ -49,12 +49,14 @@ COPY --from=builder --chown=nodejs:nodejs /app/client/build ./client/build
 COPY --from=builder --chown=nodejs:nodejs /app/server ./server
 COPY --from=builder --chown=nodejs:nodejs /app/scripts ./scripts
 
-# Create health check script
+# Create health check script with better error handling
 RUN echo '#!/bin/sh' > /healthcheck.sh && \
-    echo '# Wait for app to be ready' >> /healthcheck.sh && \
-    echo 'sleep 3' >> /healthcheck.sh && \
-    echo '# Check if server is responding' >> /healthcheck.sh && \
-    echo 'curl -f --max-time 5 --retry 3 --retry-delay 1 http://localhost:3000/health || exit 1' >> /healthcheck.sh && \
+    echo '# Health check for Colabora' >> /healthcheck.sh && \
+    echo 'set -e' >> /healthcheck.sh && \
+    echo '# Give app time to start' >> /healthcheck.sh && \
+    echo 'sleep 5' >> /healthcheck.sh && \
+    echo '# Check health endpoint with timeout' >> /healthcheck.sh && \
+    echo 'curl -f --max-time 10 --retry 2 --retry-delay 2 http://localhost:3000/api/health/ready || exit 1' >> /healthcheck.sh && \
     chmod +x /healthcheck.sh
 
 # Switch to non-root user
@@ -74,6 +76,20 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD /healthcheck.sh
 
+# Create startup script with better logging
+RUN echo '#!/bin/sh' > /start.sh && \
+    echo 'echo "🚀 Starting Colabora in Docker container"' >> /start.sh && \
+    echo 'echo "📍 Environment: $NODE_ENV"' >> /start.sh && \
+    echo 'echo "🚪 Port: $PORT"' >> /start.sh && \
+    echo 'echo "💾 Database: $DATABASE_URL"' >> /start.sh && \
+    echo 'echo "👤 User: $(id)"' >> /start.sh && \
+    echo 'echo "📁 Working directory: $(pwd)"' >> /start.sh && \
+    echo 'echo "💿 Disk usage:"' >> /start.sh && \
+    echo 'df -h /data 2>/dev/null || echo "No /data mount found"' >> /start.sh && \
+    echo 'echo "🔄 Starting application..."' >> /start.sh && \
+    echo 'exec npm start' >> /start.sh && \
+    chmod +x /start.sh
+
 # Use dumb-init for proper signal handling
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["npm", "start"]
+CMD ["/start.sh"]

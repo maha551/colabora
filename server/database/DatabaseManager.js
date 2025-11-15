@@ -19,20 +19,55 @@ class DatabaseManager {
    * @returns {Promise<Object>} Database instance
    */
   async initialize() {
-    try {
-      // Initialize connection
-      this.db = await this.connection.initialize();
+    const maxRetries = 3;
+    let lastError;
 
-      // Initialize schema and demo data
-      await this.initializeSchema();
-      await this.initializeDemoData();
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`🔌 Database initialization attempt ${attempt}/${maxRetries}`);
 
-      console.log('✅ Database fully initialized');
-      return this.db;
-    } catch (error) {
-      console.error('❌ Database initialization failed:', error);
-      throw error;
+        // Initialize connection
+        this.db = await this.connection.initialize();
+
+        // Initialize schema and demo data
+        await this.initializeSchema();
+        await this.initializeDemoData();
+
+        console.log('✅ Database fully initialized');
+        return this.db;
+
+      } catch (error) {
+        console.error(`❌ Database initialization attempt ${attempt}/${maxRetries} failed:`, error);
+        lastError = error;
+
+        // Clean up failed connection
+        if (this.db) {
+          try {
+            await this.connection.close();
+          } catch (closeError) {
+            console.warn('Warning: Failed to close failed database connection:', closeError);
+          }
+          this.db = null;
+        }
+
+        // Don't retry in production for faster startup
+        if (this.config.NODE_ENV === 'production') {
+          console.warn('⚠️  Production mode: Not retrying database initialization');
+          break;
+        }
+
+        // Wait before retrying (exponential backoff)
+        if (attempt < maxRetries) {
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+          console.log(`⏳ Retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
     }
+
+    // If we get here, all retries failed
+    console.error('💥 All database initialization attempts failed');
+    throw new Error(`Database initialization failed after ${maxRetries} attempts: ${lastError?.message || 'Unknown error'}`);
   }
 
   /**

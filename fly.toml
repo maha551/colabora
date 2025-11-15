@@ -1,13 +1,27 @@
-# fly.toml app configuration file for Colabora
+# fly.toml app configuration file generated for colabora-fresh on 2025-11-15T18:56:09+01:00
+#
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
 app = 'colabora-fresh'
 primary_region = 'fra'
 
 [build]
-  dockerfile = "Dockerfile"
-  # Increase build timeout for slower builds
-  build_timeout = "15m"
+  dockerfile = 'Dockerfile'
+
+[env]
+  ALLOWED_ORIGINS = 'https://colabora-fresh.fly.dev,https://*.colabora-fresh.fly.dev'
+  FRONTEND_URL = 'https://colabora-fresh.fly.dev'
+  JWT_EXPIRES_IN = '8h'
+  LOG_LEVEL = 'info'
+  NODE_ENV = 'production'
+  PORT = '3000'
+  RATE_LIMIT_MAX_REQUESTS = '500'
+  RATE_LIMIT_WINDOW_MS = '900000'
+
+[[mounts]]
+  source = 'colabora_data'
+  destination = '/data'
 
 [http_service]
   internal_port = 3000
@@ -17,39 +31,17 @@ primary_region = 'fra'
   min_machines_running = 0
   processes = ['app']
 
-# Environment variables for production
-[env]
-  NODE_ENV = "production"
-  PORT = "3000"
-  FRONTEND_URL = "https://colabora-fresh.fly.dev"
-  ALLOWED_ORIGINS = "https://colabora-fresh.fly.dev,https://*.colabora-fresh.fly.dev"
-  LOG_LEVEL = "info"
-  JWT_EXPIRES_IN = "8h"
-  RATE_LIMIT_WINDOW_MS = "900000"
-  RATE_LIMIT_MAX_REQUESTS = "500"
-
-# Required secrets (will be set via fly secrets set)
-# SESSION_SECRET - Required for session security
-# JWT_SECRET - Required for JWT token signing
-# DATABASE_URL - Set to /data/colabora.db (volume mount)
-
-# Mount persistent volume for SQLite database (3GB)
-[mounts]
-  source = "colabora_data"
-  destination = "/data"
+[checks]
+  [checks.health]
+    port = 3000
+    type = 'http'
+    interval = '30s'
+    timeout = '10s'
+    grace_period = '1m0s'
+    method = 'GET'
+    path = '/api/health/ready'
 
 [[vm]]
   memory = '2gb'
   cpu_kind = 'shared'
   cpus = 1
-
-# Health checks
-[checks]
-  [checks.health]
-    port = 3000
-    type = "http"
-    interval = "30s"
-    timeout = "10s"
-    grace_period = "60s"
-    method = "GET"
-    path = "/api/health/ready"

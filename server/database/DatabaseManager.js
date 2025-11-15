@@ -183,6 +183,7 @@ class DatabaseManager {
             parent_id TEXT, -- For hierarchical document structure
             status TEXT CHECK(status IN ('proposal', 'draft', 'agreed')) DEFAULT 'draft',
             proposal_deadline DATETIME, -- Deadline for proposal period (default 1 year from creation, configurable via governance)
+            voting_deadline DATETIME, -- Deadline for voting period
             acceptance_threshold REAL DEFAULT 75.0 NOT NULL,
             voting_anonymous BOOLEAN DEFAULT 0 NOT NULL,
             voting_anonymity_locked BOOLEAN DEFAULT 0 NOT NULL,
@@ -249,6 +250,22 @@ class DatabaseManager {
           FOREIGN KEY (proposal_id) REFERENCES proposals(id),
           FOREIGN KEY (user_id) REFERENCES users(id),
           UNIQUE(proposal_id, user_id)
+        )`
+      },
+      {
+        name: 'history',
+        sql: `CREATE TABLE IF NOT EXISTS history (
+          id TEXT PRIMARY KEY,
+          paragraph_id TEXT NOT NULL,
+          proposal_id TEXT NOT NULL,
+          user_id TEXT NOT NULL,
+          old_text TEXT,
+          new_text TEXT NOT NULL,
+          approval_percentage REAL NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (paragraph_id) REFERENCES paragraphs(id),
+          FOREIGN KEY (proposal_id) REFERENCES proposals(id),
+          FOREIGN KEY (user_id) REFERENCES users(id)
         )`
       },
       {
@@ -321,7 +338,7 @@ class DatabaseManager {
         // Check if user already exists
         const existingUser = await UserService.findByEmail(this.db, userData.email);
         if (existingUser) {
-          console.log(`⚠️  Demo user ${userData.name} already exists`);
+          console.log(`⚠️  Demo user ${userData.name} already exists, skipping`);
           continue;
         }
 
@@ -336,8 +353,14 @@ class DatabaseManager {
 
         console.log(`✅ Created demo user: ${userData.name} (${userData.role})`);
       } catch (error) {
-        console.error(`❌ Error creating demo user ${userData.name}:`, error);
-        throw error;
+        // Handle unique constraint violations gracefully
+        if (error.message && error.message.includes('UNIQUE constraint failed')) {
+          console.log(`⚠️  Demo user ${userData.name} already exists (constraint violation), skipping`);
+        } else {
+          console.error(`❌ Error creating demo user ${userData.name}:`, error);
+          // Don't throw error for demo user creation failures - they're not critical
+          console.warn('⚠️  Continuing despite demo user creation error');
+        }
       }
     }
 

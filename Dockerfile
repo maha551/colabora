@@ -49,7 +49,7 @@ COPY --from=builder --chown=nodejs:nodejs /app/client/build ./client/build
 COPY --from=builder --chown=nodejs:nodejs /app/server ./server
 COPY --from=builder --chown=nodejs:nodejs /app/scripts ./scripts
 
-# Create health check script with better error handling
+# Create health check script with better error handling (before switching to non-root user)
 RUN echo '#!/bin/sh' > /healthcheck.sh && \
     echo '# Health check for Colabora' >> /healthcheck.sh && \
     echo 'set -e' >> /healthcheck.sh && \
@@ -58,6 +58,20 @@ RUN echo '#!/bin/sh' > /healthcheck.sh && \
     echo '# Check health endpoint with timeout' >> /healthcheck.sh && \
     echo 'curl -f --max-time 10 --retry 2 --retry-delay 2 http://localhost:3000/api/health/ready || exit 1' >> /healthcheck.sh && \
     chmod +x /healthcheck.sh
+
+# Create startup script with better logging (before switching to non-root user)
+RUN echo '#!/bin/sh' > /start.sh && \
+    echo 'echo "🚀 Starting Colabora in Docker container"' >> /start.sh && \
+    echo 'echo "📍 Environment: $NODE_ENV"' >> /start.sh && \
+    echo 'echo "🚪 Port: $PORT"' >> /start.sh && \
+    echo 'echo "💾 Database: $DATABASE_URL"' >> /start.sh && \
+    echo 'echo "👤 User: $(id)"' >> /start.sh && \
+    echo 'echo "📁 Working directory: $(pwd)"' >> /start.sh && \
+    echo 'echo "💿 Disk usage:"' >> /start.sh && \
+    echo 'df -h /data 2>/dev/null || echo "No /data mount found"' >> /start.sh && \
+    echo 'echo "🔄 Starting application..."' >> /start.sh && \
+    echo 'exec npm start' >> /start.sh && \
+    chmod +x /start.sh
 
 # Switch to non-root user
 USER nodejs
@@ -75,20 +89,6 @@ EXPOSE 3000
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD /healthcheck.sh
-
-# Create startup script with better logging
-RUN echo '#!/bin/sh' > /start.sh && \
-    echo 'echo "🚀 Starting Colabora in Docker container"' >> /start.sh && \
-    echo 'echo "📍 Environment: $NODE_ENV"' >> /start.sh && \
-    echo 'echo "🚪 Port: $PORT"' >> /start.sh && \
-    echo 'echo "💾 Database: $DATABASE_URL"' >> /start.sh && \
-    echo 'echo "👤 User: $(id)"' >> /start.sh && \
-    echo 'echo "📁 Working directory: $(pwd)"' >> /start.sh && \
-    echo 'echo "💿 Disk usage:"' >> /start.sh && \
-    echo 'df -h /data 2>/dev/null || echo "No /data mount found"' >> /start.sh && \
-    echo 'echo "🔄 Starting application..."' >> /start.sh && \
-    echo 'exec npm start' >> /start.sh && \
-    chmod +x /start.sh
 
 # Use dumb-init for proper signal handling
 ENTRYPOINT ["dumb-init", "--"]

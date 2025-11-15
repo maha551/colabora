@@ -596,10 +596,155 @@ async function updateAgreedViewForParagraph(db, proposalId, documentId) {
 }
 */
 
-// Simple stub function to prevent errors
 async function updateAgreedViewForParagraph(db, proposalId, documentId) {
-  console.log(`updateAgreedViewForParagraph temporarily disabled for proposal ${proposalId}`);
-  return Promise.resolve();
+  // Use document-level locking to prevent race conditions
+  return documentLockManager.withLock(documentId, async () => {
+    try {
+      // First get the paragraph_id from the proposal
+      const proposalData = await new Promise((resolve, reject) => {
+        db.get(`SELECT paragraph_id FROM proposals WHERE id = ?`, [proposalId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+
+      if (!proposalData) {
+        console.log(`Proposal ${proposalId} not found`);
+        return;
+      }
+
+      const paragraphId = proposalData.paragraph_id;
+
+      // Get all approved proposals for this paragraph, ordered by approval percentage
+      const approvedProposals = await new Promise((resolve, reject) => {
+        db.all(`
+          SELECT pr.id, pr.text, pr.type, pr.user_id, pr.heading_level,
+                 COUNT(CASE WHEN v.vote = 'PRO' THEN 1 END) as pro_votes,
+                 COUNT(v.id) as total_votes
+          FROM proposals pr
+          LEFT JOIN votes v ON pr.id = v.proposal_id
+          WHERE pr.paragraph_id = ? AND pr.approved = 1
+          GROUP BY pr.id
+          HAVING COUNT(v.id) > 0  -- Only proposals that have been voted on
+          ORDER BY (COUNT(CASE WHEN v.vote = 'PRO' THEN 1 END) * 1.0 / COUNT(v.id)) DESC, pr.created_at DESC
+        `, [paragraphId], (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        });
+      });
+
+      if (approvedProposals.length === 0) {
+        console.log(`No approved proposals found for paragraph ${paragraphId}`);
+        return;
+      }
+
+      // Calculate approval percentages and find the best proposal
+      const proposalsWithPercentages = approvedProposals.map(p => ({
+        ...p,
+        approvalPercentage: p.total_votes > 0 ? (p.pro_votes / p.total_votes) * 100 : 0
+      }));
+
+      const bestProposal = proposalsWithPercentages[0];
+
+      // Get current paragraph content
+      const currentParagraph = await new Promise((resolve, reject) => {
+        db.get(`SELECT text, title FROM paragraphs WHERE id = ?`, [paragraphId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+
+      if (!currentParagraph) {
+        console.log(`Paragraph ${paragraphId} not found`);
+        return;
+      }
+
+      const newValue = bestProposal.text;
+      const oldValue = bestProposal.type === 'TITLE' ? currentParagraph.title : currentParagraph.text;
+      const bestApprovalPercentage = bestProposal.approvalPercentage;
+
+      console.log(`Applying approved proposal ${bestProposal.id} to paragraph ${paragraphId} (${bestApprovalPercentage.toFixed(1)}% approval)`);
+
+      // Check if we need to update the paragraph content
+      const needsUpdate = oldValue !== newValue;
+
+      if (!needsUpdate) {
+        console.log(`Paragraph ${paragraphId} already has the correct approved content`);
+        return;
+      }
+
+      // Start transaction for atomic update
+      await new Promise((resolve, reject) => {
+        db.run('BEGIN TRANSACTION', (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+
+      // Update paragraph content
+      const updateField = bestProposal.type === 'TITLE' ? 'title' : 'text';
+      await new Promise((resolve, reject) => {
+        db.run(
+          `UPDATE paragraphs SET ${updateField} = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+          [newValue, paragraphId],
+          function(err) {
+            if (err) {
+              console.error('Error updating paragraph:', err);
+              db.run('ROLLBACK', () => reject(err));
+            } else {
+              resolve();
+            }
+          }
+        );
+      });
+
+      // Create history entry to record this approval
+      const { v4: uuidv4 } = require('uuid');
+      const historyId = uuidv4();
+
+      await new Promise((resolve, reject) => {
+        db.run(`
+          INSERT OR REPLACE INTO history
+          (id, paragraph_id, user_id, old_text, new_text, approval_percentage, proposal_id, heading_level, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        `, [
+          historyId,
+          paragraphId,
+          bestProposal.user_id,
+          oldValue,
+          newValue,
+          bestApprovalPercentage,
+          bestProposal.id,
+          bestProposal.heading_level
+        ], function(err) {
+          if (err) {
+            console.error('Error creating history entry:', err);
+            db.run('ROLLBACK', () => reject(err));
+          } else {
+            console.log(`Created history entry ${historyId} for approved proposal`);
+            resolve();
+          }
+        });
+      });
+
+      // Commit transaction
+      await new Promise((resolve, reject) => {
+        db.run('COMMIT', (err) => {
+          if (err) {
+            console.error('Error committing transaction:', err);
+            reject(err);
+          } else {
+            console.log(`Successfully applied approved proposal to paragraph ${paragraphId}`);
+            resolve();
+          }
+        });
+      });
+
+    } catch (error) {
+      console.error('Error updating agreed view for paragraph:', error);
+      throw error;
+    }
+  });
 }
 
 module.exports = router;

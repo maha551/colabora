@@ -506,6 +506,22 @@ export const structureProposalsApi = {
 
 // Organization API functions
 export const organizationsApi = {
+  // Create organization (requires admin privileges)
+  async createOrganization(
+    name: string,
+    description?: string,
+    representatives?: string[],
+    membershipPolicy?: 'open' | 'invitation',
+    votingEnabled?: boolean,
+    votingThreshold?: number
+  ) {
+    return organizationsApi.createOrganizationAdmin(name, representatives || [], {
+      description,
+      membershipPolicy: membershipPolicy || 'invitation',
+      votingThreshold: votingThreshold || 0.75
+    })
+  },
+
   // Get user's organizations
   async getOrganizations() {
     return apiRequest('/api/organizations')

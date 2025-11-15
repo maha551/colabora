@@ -49,9 +49,10 @@ async function startApplication(options = {}) {
 
     // Initialize database manager and connection
     console.log('🔌 Initializing database...');
+    let db = null; // Declare db outside try block
     try {
       dbManager = new DatabaseManager(runtimeConfig);
-      const db = await dbManager.initialize();
+      db = await dbManager.initialize();
       console.log('✅ Database initialized successfully');
     } catch (dbError) {
       console.error('🚨 Database initialization failed:', dbError);
@@ -59,6 +60,7 @@ async function startApplication(options = {}) {
       if (runtimeConfig.NODE_ENV === 'production') {
         console.warn('⚠️  Continuing without database - app may not function properly');
         dbManager = null;
+        db = null;
       } else {
         throw dbError;
       }

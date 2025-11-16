@@ -1,27 +1,55 @@
 const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+const db = new sqlite3.Database('./colabora.db');
 
-const dbPath = path.join(__dirname, 'colabora.db');
-const db = new sqlite3.Database(dbPath);
+console.log('Checking database schema...');
 
-db.all("SELECT name FROM sqlite_master WHERE type='table'", (err, tables) => {
+// Get all tables
+db.all("SELECT name FROM sqlite_master WHERE type='table'", [], (err, rows) => {
   if (err) {
     console.error('Error:', err);
-    db.close();
     return;
   }
 
-  console.log('All tables:');
-  tables.forEach(table => {
-    console.log('  -', table.name);
+  console.log('\nTables found:');
+  rows.forEach(row => {
+    console.log(`- ${row.name}`);
   });
 
-  const orgTables = tables.filter(t => t.name.includes('organization'));
-  console.log('\nOrganization tables:', orgTables.length);
+  // Check organizations table
+  if (rows.some(r => r.name === 'organizations')) {
+    console.log('\nChecking organizations table...');
+    db.all("SELECT id, name, description, representatives FROM organizations LIMIT 5", [], (err, orgs) => {
+      if (err) {
+        console.error('Error getting organizations:', err);
+      } else {
+        console.log(`Found ${orgs.length} organizations:`);
+        orgs.forEach(org => {
+          console.log(`  - ${org.name} (${org.id}): ${org.description || 'No description'}`);
+          console.log(`    Reps: ${org.representatives ? JSON.parse(org.representatives).length : 0}`);
+        });
+      }
 
-  if (orgTables.length === 0) {
-    console.log('❌ No organization tables found!');
+      // Check documents table
+      if (rows.some(r => r.name === 'documents')) {
+        console.log('\nChecking documents table...');
+        db.all("SELECT id, title, organization_id, parent_id FROM documents LIMIT 10", [], (err, docs) => {
+          if (err) {
+            console.error('Error getting documents:', err);
+          } else {
+            console.log(`Found ${docs.length} documents:`);
+            docs.forEach(doc => {
+              console.log(`  - ${doc.title} (${doc.id})`);
+              console.log(`    Org: ${doc.organization_id || 'Personal'}, Parent: ${doc.parent_id || 'None'}`);
+            });
+          }
+          db.close();
+        });
+      } else {
+        db.close();
+      }
+    });
+  } else {
+    console.log('No organizations table found');
+    db.close();
   }
-
-  db.close();
 });

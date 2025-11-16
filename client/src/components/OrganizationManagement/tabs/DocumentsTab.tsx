@@ -428,31 +428,13 @@ export function DocumentsTab({
 
   return (
     <div className="space-y-6">
-      {/* Header with title and create button */}
-        <div className="flex justify-between items-center">
-          <div>
+      {/* Header with title */}
+        <div>
           <h3 className="text-lg font-semibold">Organization Document Structure</h3>
-            <p className="text-sm text-gray-600">
-            Table of contents for {organization.name} documents
-            </p>
-          </div>
-        {(permissions.canCreateDocuments || permissions.canCreateDocumentProposals) && (
-          <div className="relative">
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2 hover:bg-gray-50"
-              onClick={() => {
-                setCreationMode(permissions.canCreateDocuments ? 'document' : 'proposal');
-                handleSuggestDocumentClick();
-              }}
-            >
-            <Plus className="h-4 w-4" />
-            {permissions.canCreateDocuments ? 'Create Document' : 'Propose Document'}
-          </Button>
+          <p className="text-sm text-gray-600">
+            Table of contents for {organization.name} documents. Use the + buttons to create documents at specific positions in the hierarchy.
+          </p>
         </div>
-        )}
-      </div>
 
       {/* Inline Document Creation Form */}
       {showInlineCreation && (permissions.canCreateDocuments || permissions.canCreateDocumentProposals) && (
@@ -593,22 +575,57 @@ export function DocumentsTab({
                 }
               </p>
               {permissions.canCreateDocuments && (
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   className="gap-2"
-                  onClick={handleSuggestDocumentClick}
+                  onClick={() => {
+                    setCreationMode('document');
+                    setInlineCreationPosition({
+                      level: 1,
+                      parentId: null
+                    });
+                    setProposalTitle('');
+                    setProposalDescription('');
+                  }}
                 >
                   <Plus className="h-4 w-4" />
-                  Suggest First Document
+                  Create First Document
                 </Button>
               )}
             </div>
           ) : (
             <div className="space-y-2">
+              {/* Top-level create button */}
+              {permissions.canCreateDocuments && (
+                <div className="flex items-center gap-2 py-2">
+                  <div className="flex-1 border-t border-gray-200"></div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 text-gray-600 hover:text-blue-600 hover:border-blue-300"
+                    onClick={() => {
+                      setCreationMode('document');
+                      setInlineCreationPosition({
+                        level: 1,
+                        parentId: null
+                      });
+                      setProposalTitle('');
+                      setProposalDescription('');
+                    }}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Root Document
+                  </Button>
+                  <div className="flex-1 border-t border-gray-200"></div>
+                </div>
+              )}
+
               {allItems.map((item, index) => {
                 const showInsertBefore = inlineCreationPosition?.beforeItemId === item.id;
                 const showInsertAfter = inlineCreationPosition?.afterItemId === item.id;
-                
+                const nextItem = allItems[index + 1];
+                const isLastItemAtLevel = !nextItem || nextItem.level <= item.level;
+
                 return (
                   <Fragment key={item.id}>
                     {/* Insert Before Form */}
@@ -839,9 +856,54 @@ export function DocumentsTab({
                       </>
                     )}
                   </div>
-                </div>
+                  </div>
 
-                {/* Insert After Form */}
+                  {/* TOC-integrated create buttons */}
+                  {permissions.canCreateDocuments && (
+                    <div className="mt-2 flex items-center gap-1" style={{ marginLeft: `${item.level * 24}px` }}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs gap-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCreationMode('document');
+                          setInlineCreationPosition({
+                            afterItemId: item.id,
+                            parentId: item.parentId,
+                            level: item.level
+                          });
+                          setProposalTitle('');
+                          setProposalDescription('');
+                        }}
+                      >
+                        <Plus className="h-3 w-3" />
+                        Add Sibling
+                      </Button>
+                      {item.type === 'document' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-xs gap-1 text-gray-500 hover:text-green-600 hover:bg-green-50"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCreationMode('document');
+                            setInlineCreationPosition({
+                              parentId: item.id,
+                              level: item.level + 1
+                            });
+                            setProposalTitle('');
+                            setProposalDescription('');
+                          }}
+                        >
+                          <Plus className="h-3 w-3" />
+                          Add Child
+                        </Button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Insert After Form */}
                 {showInsertAfter && (
                   <div 
                     className="p-4 border-2 border-blue-200 bg-blue-50 rounded-lg animate-in slide-in-from-top-2 duration-300"
@@ -899,6 +961,31 @@ export function DocumentsTab({
               </Fragment>
                 );
               })}
+
+              {/* Final create button at the end */}
+              {permissions.canCreateDocuments && allItems.length > 0 && (
+                <div className="flex items-center gap-2 py-2 mt-4">
+                  <div className="flex-1 border-t border-gray-200"></div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 text-gray-600 hover:text-blue-600 hover:border-blue-300"
+                    onClick={() => {
+                      setCreationMode('document');
+                      setInlineCreationPosition({
+                        level: 1,
+                        parentId: null
+                      });
+                      setProposalTitle('');
+                      setProposalDescription('');
+                    }}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Another Root Document
+                  </Button>
+                  <div className="flex-1 border-t border-gray-200"></div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

@@ -77,10 +77,8 @@ export function DocumentsTab({
       hierarchyMap.get(parentId)!.push(doc);
     });
 
-    // Sort documents by hierarchy level and order
-    hierarchyMap.forEach(docs => {
-      docs.sort((a, b) => (a as any).sortOrder - (b as any).sortOrder);
-    });
+    // Documents are assumed to be returned from the database in correct order
+    // If custom ordering is needed in the future, it should be implemented in the database/API layer
 
     return { hierarchyMap, documentMap };
   };
@@ -195,24 +193,8 @@ export function DocumentsTab({
         // Create document proposal
         const allMemberIds = organization.members?.map(member => member.userId) || [];
 
-        // Determine the position for the new document
-        let positionParentId = inlineCreationPosition?.parentId;
-        
-        // If inserting after an item, use the same parent as that item
-        if (inlineCreationPosition?.afterItemId) {
-          const afterItem = allItems.find(item => item.id === inlineCreationPosition.afterItemId);
-          if (afterItem) {
-            positionParentId = afterItem.parentId;
-          }
-        }
-        
-        // If inserting before an item, use the same parent as that item
-        if (inlineCreationPosition?.beforeItemId) {
-          const beforeItem = allItems.find(item => item.id === inlineCreationPosition.beforeItemId);
-          if (beforeItem) {
-            positionParentId = beforeItem.parentId;
-          }
-        }
+        // Use the parentId directly from inlineCreationPosition (already set correctly by the buttons)
+        const parentId = inlineCreationPosition?.parentId;
 
         await onCreateDocumentProposal(
           proposalTitle.trim(),
@@ -224,7 +206,7 @@ export function DocumentsTab({
             votingAnonymityLocked: false,
             voteChangeAllowed: true,
             structureProposalsEnabled: true,
-            parentId: positionParentId
+            parentId: parentId
           }
         );
         // Refresh the data to show the new proposal
@@ -250,33 +232,7 @@ export function DocumentsTab({
     setInlineCreationPosition(null);
   };
 
-  const handleInsertAfter = (item: DocumentItem, allItems: DocumentItem[], index: number) => {
-    // Determine parent: if item has a parent, use it; otherwise, item is root level
-    const parentId = item.parentId || undefined;
-    const level = item.level;
-    
-    setInlineCreationPosition({
-      afterItemId: item.id,
-      parentId,
-      level
-    });
-    setProposalTitle('');
-    setProposalDescription('');
-  };
-
-  const handleInsertBefore = (item: DocumentItem, allItems: DocumentItem[], index: number) => {
-    // Determine parent: if item has a parent, use it; otherwise, item is root level
-    const parentId = item.parentId || undefined;
-    const level = item.level;
-    
-    setInlineCreationPosition({
-      beforeItemId: item.id,
-      parentId,
-      level
-    });
-    setProposalTitle('');
-    setProposalDescription('');
-  };
+  // Note: Old insert functions removed - now using TOC-integrated buttons
 
   const cancelInlineCreation = () => {
     setInlineCreationPosition(null);
@@ -379,34 +335,42 @@ export function DocumentsTab({
 
   // Generate hierarchical numbering based on position in tree
   const generateNumbering = (item: DocumentItem, index: number, allItems: DocumentItem[]): string => {
-    if (item.level === 1) {
-      return `${index + 1}.`;
+    if (!item.parentId) {
+      // Root level: count how many root items come before this one
+      let rootCount = 0;
+      for (let i = 0; i <= index; i++) {
+        if (!allItems[i].parentId) {
+          rootCount++;
+        }
+      }
+      return `${rootCount}.`;
     }
-    
-    // Find parent and count siblings at same level
-    let parentIndex = -1;
-    for (let i = index - 1; i >= 0; i--) {
+
+    // Child level: find parent and count siblings at same level before this item
+    let parentNumber = '';
+    let siblingCount = 1;
+
+    // First pass: find parent number
+    for (let i = 0; i < index; i++) {
       if (allItems[i].id === item.parentId) {
-        parentIndex = i;
+        parentNumber = generateNumbering(allItems[i], i, allItems);
         break;
       }
     }
-    
-    if (parentIndex >= 0) {
-      const parentNumber = generateNumbering(allItems[parentIndex], parentIndex, allItems);
-      // Count siblings with same parent at same level
-      let siblingCount = 1;
-      for (let i = index - 1; i >= 0; i--) {
-        if (allItems[i].parentId === item.parentId && allItems[i].level === item.level) {
-          siblingCount++;
-        } else if (allItems[i].level < item.level) {
-          break;
-        }
-      }
-      return `${parentNumber.replace(/\.$/, '')}.${siblingCount}.`;
+
+    if (!parentNumber) {
+      // Fallback if parent not found
+      return `${index + 1}.`;
     }
-    
-    return `${index + 1}.`;
+
+    // Second pass: count siblings at same level before this item
+    for (let i = 0; i < index; i++) {
+      if (allItems[i].parentId === item.parentId && allItems[i].level === item.level) {
+        siblingCount++;
+      }
+    }
+
+    return `${parentNumber.replace(/\.$/, '')}.${siblingCount}.`;
   };
 
   const handleItemClick = (item: typeof allItems[0]) => {
@@ -632,7 +596,7 @@ export function DocumentsTab({
                     {showInsertBefore && (
                       <div 
                         className="p-4 border-2 border-blue-200 bg-blue-50 rounded-lg animate-in slide-in-from-top-2 duration-300"
-                        style={{ marginLeft: `${(inlineCreationPosition.level - 1) * 24}px` }}
+                        style={{ marginLeft: `${(inlineCreationPosition.level - 1) * 32}px`, paddingLeft: inlineCreationPosition.level > 1 ? '16px' : '0' }}
                       >
                         <div className="flex items-center justify-between mb-3">
                           <h4 className="font-semibold text-blue-900">Insert New Document</h4>
@@ -693,7 +657,7 @@ export function DocumentsTab({
                           ? 'bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-50 cursor-pointer'
                           : 'hover:bg-gray-50'
                       }`}
-                      style={{ marginLeft: `${(item.level - 1) * 24}px` }}
+                      style={{ marginLeft: `${(item.level - 1) * 32}px`, paddingLeft: item.level > 1 ? '16px' : '0' }}
                       onClick={() => {
                         if (item.type === 'document') {
                           handleItemClick(item);
@@ -803,64 +767,13 @@ export function DocumentsTab({
                     )}
                   </div>
 
-                  {/* Actions - only show on hover */}
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                    {permissions.canCreateDocuments && (
-                      <>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="h-7 w-7 p-0 hover:bg-blue-100" 
-                          title="Insert document before this"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setCreationMode('document');
-                            handleInsertBefore(item, allItems, index);
-                          }}
-                        >
-                          <Plus className="h-3 w-3" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="h-7 w-7 p-0 hover:bg-blue-100" 
-                          title="Insert document after this"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setCreationMode('document');
-                            handleInsertAfter(item, allItems, index);
-                          }}
-                        >
-                          <Plus className="h-3 w-3 rotate-45" />
-                        </Button>
-                        {item.type === 'document' && (
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="h-8 w-8 p-0 hover:bg-blue-100" 
-                            title="Add sub-document"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setCreationMode('document');
-                              setInlineCreationPosition({
-                                parentId: item.id,
-                                level: item.level + 1
-                              });
-                              setProposalTitle('');
-                              setProposalDescription('');
-                            }}
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </>
-                    )}
-                  </div>
+                  {/* Space for alignment - actions now integrated into TOC below */}
+                  <div className="w-20"></div>
                   </div>
 
                   {/* TOC-integrated create buttons */}
                   {permissions.canCreateDocuments && (
-                    <div className="mt-2 flex items-center gap-1" style={{ marginLeft: `${item.level * 24}px` }}>
+                    <div className="mt-2 flex items-center gap-1" style={{ marginLeft: `${item.level * 32}px`, paddingLeft: item.level > 1 ? '16px' : '0' }}>
                       <Button
                         variant="ghost"
                         size="sm"

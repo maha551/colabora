@@ -38,17 +38,6 @@ export function OrganizationManagement({
 
   return (
     <div className="max-w-6xl mx-auto p-6">
-      {/* Page Header */}
-      <div className="mb-6">
-        <div className="flex items-center gap-3 mb-2">
-          <Building2 className="h-6 w-6 text-gray-600" />
-          <h1 className="text-3xl font-bold text-gray-900">{organization.name}</h1>
-        </div>
-        {organization.description && (
-          <p className="text-gray-600 ml-9">{organization.description}</p>
-        )}
-      </div>
-
       {/* Navigation Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-4 h-auto">

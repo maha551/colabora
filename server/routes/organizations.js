@@ -102,32 +102,107 @@ router.post('/', requireAdmin, (req, res) => {
   const orgId = uuidv4();
   const repsJson = JSON.stringify(representatives);
 
-  db.run(`INSERT INTO organizations (
-    id, name, description, representatives, membership_policy, voting_enabled, voting_threshold, created_by_admin_id
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [
-    orgId, name, description || '', repsJson,
-    membershipPolicy || 'invitation', votingEnabled ? 1 : 0, votingThreshold || 0.5, adminId
-  ], function(err) {
-    if (err) {
-      console.error('Error creating organization:', err);
+  // Use transaction to create organization and add representatives as members
+  db.run('BEGIN TRANSACTION', (beginErr) => {
+    if (beginErr) {
+      console.error('Error beginning transaction:', beginErr);
       return res.status(500).json({ error: 'Failed to create organization' });
     }
 
-    // Log audit event
-    logAudit(db, orgId, 'org_created', adminId, null, { name, representatives }, req);
-
-    res.status(201).json({
-      organization: {
-        id: orgId,
-        name,
-        description,
-        representatives,
-        membershipPolicy: membershipPolicy || 'invitation',
-        votingEnabled: votingEnabled || false,
-        votingThreshold: votingThreshold || 0.5,
-        isActive: true,
-        createdAt: new Date().toISOString()
+    db.run(`INSERT INTO organizations (
+      id, name, description, representatives, membership_policy, voting_enabled, voting_threshold, created_by_admin_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [
+      orgId, name, description || '', repsJson,
+      membershipPolicy || 'invitation', votingEnabled ? 1 : 0, votingThreshold || 0.5, adminId
+    ], function(orgErr) {
+      if (orgErr) {
+        console.error('Error creating organization:', orgErr);
+        db.run('ROLLBACK', () => {});
+        return res.status(500).json({ error: 'Failed to create organization' });
       }
+
+      // Add all representatives as active members
+      let membersAdded = 0;
+      const totalRepresentatives = representatives.length;
+
+      if (totalRepresentatives === 0) {
+        // No representatives to add, commit and respond
+        db.run('COMMIT', (commitErr) => {
+          if (commitErr) {
+            console.error('Error committing transaction:', commitErr);
+            db.run('ROLLBACK', () => {});
+            return res.status(500).json({ error: 'Failed to create organization' });
+          }
+
+          // Log audit event
+          logAudit(db, orgId, 'org_created', adminId, null, { name, representatives }, req);
+
+          res.status(201).json({
+            organization: {
+              id: orgId,
+              name,
+              description,
+              representatives,
+              membershipPolicy: membershipPolicy || 'invitation',
+              votingEnabled: votingEnabled || false,
+              votingThreshold: votingThreshold || 0.5,
+              isActive: true,
+              createdAt: new Date().toISOString()
+            }
+          });
+        });
+        return;
+      }
+
+      // Add each representative as a member
+      representatives.forEach(repId => {
+        const memberId = uuidv4();
+        db.run(`INSERT INTO organization_members (
+          id, organization_id, user_id, status, joined_at
+        ) VALUES (?, ?, ?, 'active', CURRENT_TIMESTAMP)`, [
+          memberId, orgId, repId
+        ], function(memberErr) {
+          if (memberErr) {
+            console.error('Error adding representative as member:', memberErr);
+            db.run('ROLLBACK', () => {});
+            return res.status(500).json({ error: 'Failed to add organization members' });
+          }
+
+          membersAdded++;
+          console.log(`Added representative ${repId} as member of organization ${orgId}`);
+
+          // Log audit event for member addition
+          logAudit(db, orgId, 'member_added', adminId, repId, { role: 'representative' }, req);
+
+          // When all members are added, commit transaction
+          if (membersAdded >= totalRepresentatives) {
+            db.run('COMMIT', (commitErr) => {
+              if (commitErr) {
+                console.error('Error committing transaction:', commitErr);
+                db.run('ROLLBACK', () => {});
+                return res.status(500).json({ error: 'Failed to create organization' });
+              }
+
+              // Log audit event for organization creation
+              logAudit(db, orgId, 'org_created', adminId, null, { name, representatives }, req);
+
+              res.status(201).json({
+                organization: {
+                  id: orgId,
+                  name,
+                  description,
+                  representatives,
+                  membershipPolicy: membershipPolicy || 'invitation',
+                  votingEnabled: votingEnabled || false,
+                  votingThreshold: votingThreshold || 0.5,
+                  isActive: true,
+                  createdAt: new Date().toISOString()
+                }
+              });
+            });
+          }
+        });
+      });
     });
   });
 });
@@ -445,26 +520,105 @@ router.post('/:organizationId/members', requireAuth, async (req, res) => {
           return res.status(400).json({ error: 'User is already a member' });
         }
 
-        // Add member
+        // Add member and automatically make them collaborators on all organizational documents
         const membershipId = uuidv4();
-        db.run(`INSERT INTO organization_members (
-          id, organization_id, user_id, invited_by_rep_id
-        ) VALUES (?, ?, ?, ?)`, [membershipId, organizationId, memberUserId, userId], function(err) {
-          if (err) {
-            console.error('Error adding member:', err);
+
+        // Use transaction to ensure member addition and collaborator setup are atomic
+        db.run('BEGIN TRANSACTION', (beginErr) => {
+          if (beginErr) {
+            console.error('Error beginning transaction:', beginErr);
             return res.status(500).json({ error: 'Failed to add member' });
           }
 
-          logAudit(db, organizationId, 'member_added', userId, memberUserId, {}, req);
-          res.json({
-            membership: {
-              id: membershipId,
-              organizationId,
-              userId: memberUserId,
-              status: 'active',
-              invitedBy: userId,
-              joinedAt: new Date().toISOString()
+          // Add member
+          db.run(`INSERT INTO organization_members (
+            id, organization_id, user_id, invited_by_rep_id, status
+          ) VALUES (?, ?, ?, ?, 'active')`, [membershipId, organizationId, memberUserId, userId], function(memberErr) {
+            if (memberErr) {
+              console.error('Error adding member:', memberErr);
+              db.run('ROLLBACK', () => {});
+              return res.status(500).json({ error: 'Failed to add member' });
             }
+
+            // Get all organizational documents for this organization
+            db.all('SELECT id FROM documents WHERE organization_id = ? AND ownership_type = ?', [organizationId, 'organizational'], (docsErr, docs) => {
+              if (docsErr) {
+                console.error('Error fetching organizational documents:', docsErr);
+                db.run('ROLLBACK', () => {});
+                return res.status(500).json({ error: 'Failed to set up document access' });
+              }
+
+              if (docs.length === 0) {
+                // No documents to add collaborators to, just commit
+                db.run('COMMIT', (commitErr) => {
+                  if (commitErr) {
+                    console.error('Error committing transaction:', commitErr);
+                    db.run('ROLLBACK', () => {});
+                    return res.status(500).json({ error: 'Failed to add member' });
+                  }
+
+                  logAudit(db, organizationId, 'member_added', userId, memberUserId, { autoCollaboratorSetup: true }, req);
+                  res.json({
+                    membership: {
+                      id: membershipId,
+                      organizationId,
+                      userId: memberUserId,
+                      status: 'active',
+                      invitedBy: userId,
+                      joinedAt: new Date().toISOString()
+                    }
+                  });
+                });
+                return;
+              }
+
+              // Add member as collaborator to all organizational documents
+              let collaboratorsAdded = 0;
+              const totalDocuments = docs.length;
+
+              docs.forEach(doc => {
+                const collabId = uuidv4();
+                db.run(`INSERT OR IGNORE INTO document_collaborators (
+                  id, document_id, user_id
+                ) VALUES (?, ?, ?)`, [collabId, doc.id, memberUserId], function(collabErr) {
+                  if (collabErr) {
+                    console.error('Error adding collaborator:', collabErr);
+                    db.run('ROLLBACK', () => {});
+                    return res.status(500).json({ error: 'Failed to set up document access' });
+                  }
+
+                  collaboratorsAdded++;
+
+                  // When all collaborators are added, commit transaction
+                  if (collaboratorsAdded >= totalDocuments) {
+                    db.run('COMMIT', (commitErr) => {
+                      if (commitErr) {
+                        console.error('Error committing transaction:', commitErr);
+                        db.run('ROLLBACK', () => {});
+                        return res.status(500).json({ error: 'Failed to add member' });
+                      }
+
+                      console.log(`Added member ${memberUserId} as collaborator to ${totalDocuments} organizational documents`);
+                      logAudit(db, organizationId, 'member_added', userId, memberUserId, {
+                        autoCollaboratorSetup: true,
+                        documentsAffected: totalDocuments
+                      }, req);
+
+                      res.json({
+                        membership: {
+                          id: membershipId,
+                          organizationId,
+                          userId: memberUserId,
+                          status: 'active',
+                          invitedBy: userId,
+                          joinedAt: new Date().toISOString()
+                        }
+                      });
+                    });
+                  }
+                });
+              });
+            });
           });
         });
       });

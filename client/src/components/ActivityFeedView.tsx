@@ -603,8 +603,7 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
                 aria-label={`Accepted versions tab with ${agreedVersions.length} accepted versions`}
               >
                 <CheckCircle2 className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
-                <span className="sm:hidden" aria-hidden="true">Done</span>
-                <span className="hidden sm:inline" aria-hidden="true">Accepted</span>
+                <span aria-hidden="true">Accepted</span>
                 {agreedVersions.length > 0 && (
                   <Badge variant="default" className="ml-1 bg-green-600 text-xs" aria-label={`${agreedVersions.length} accepted versions`}>
                     {agreedVersions.length}
@@ -617,8 +616,7 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
                 aria-label={`Discussed proposals tab with ${debatedProposals.length} discussed proposals`}
               >
                 <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
-                <span className="sm:hidden" aria-hidden="true">Disc</span>
-                <span className="hidden sm:inline" aria-hidden="true">Discussed</span>
+                <span aria-hidden="true">Discussed</span>
                 {debatedProposals.length > 0 && (
                   <Badge variant="secondary" className="ml-1 text-xs" aria-label={`${debatedProposals.length} discussed proposals`}>
                     {debatedProposals.length}
@@ -631,8 +629,7 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
                 aria-label={`Pending proposals tab with ${pendingProposals.length} pending proposals`}
               >
                 <Clock className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
-                <span className="sm:hidden" aria-hidden="true">Wait</span>
-                <span className="hidden sm:inline" aria-hidden="true">Pending</span>
+                <span aria-hidden="true">Pending</span>
                 {pendingProposals.length > 0 && (
                   <Badge variant="secondary" className="ml-1 text-xs" aria-label={`${pendingProposals.length} pending proposals`}>
                     {pendingProposals.length}

@@ -90,39 +90,23 @@ export function DocumentViewPage({
           </div>
         )}
 
-        {/* Share button */}
-        <div className="text-center mb-6">
-          <Button
-            onClick={onShareDocument}
-            variant="outline"
-            size="sm"
-            className="gap-2"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
-            </svg>
-            Share Document
-          </Button>
-        </div>
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "discussion" | "agreed" | "history")}>
           <div className="flex justify-center mb-6 px-4">
             <TabsList className="w-full sm:w-auto">
-              <TabsTrigger value="discussion" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm" aria-label={`Draft tab with ${totalSuggestions} proposals`}>
+              <TabsTrigger value="discussion" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm" aria-label={`Discussion tab with ${totalSuggestions} proposals`}>
                 <Edit3 className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
-                <span className="sm:hidden" aria-hidden="true">Draft</span>
-                <span className="hidden sm:inline" aria-hidden="true">Draft</span>
+                <span aria-hidden="true">Discussion</span>
                 {totalSuggestions > 0 && (
                   <Badge variant="secondary" className="ml-1 text-xs" aria-label={`${totalSuggestions} proposals`}>
                     {totalSuggestions}
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="agreed" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm" aria-label={`Final tab with ${acceptedSuggestions} approved paragraphs`}>
+              <TabsTrigger value="agreed" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm" aria-label={`Agreed tab with ${acceptedSuggestions} approved paragraphs`}>
                 <FileText className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
-                <span className="sm:hidden" aria-hidden="true">Final</span>
-                <span className="hidden sm:inline" aria-hidden="true">Final</span>
+                <span aria-hidden="true">Agreed</span>
                 {acceptedSuggestions > 0 && (
                   <Badge variant="default" className="ml-1 bg-green-600 text-xs" aria-label={`${acceptedSuggestions} approved paragraphs`}>
                     {acceptedSuggestions}
@@ -132,8 +116,7 @@ export function DocumentViewPage({
               {document?.structureProposalsEnabled && (
                 <TabsTrigger value="history" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm" aria-label="Document structure history">
                   <Clock className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
-                  <span className="sm:hidden" aria-hidden="true">Hist</span>
-                  <span className="hidden sm:inline" aria-hidden="true">History</span>
+                  <span aria-hidden="true">History</span>
                 </TabsTrigger>
               )}
             </TabsList>

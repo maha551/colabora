@@ -13,34 +13,29 @@ export function AgreedDocument({ document, totalUsers }: AgreedDocumentProps) {
 
   const sortedParagraphs = [...document.paragraphs].sort((a, b) => a.order - b.order);
 
-  // Get the highest approved change info (with highest approval percentage)
-  const getHighestApprovedChangeInfo = (paragraph: any) => {
-    if (!paragraph.history || paragraph.history.length === 0) return null;
+  // Get all approved changes (above acceptance threshold)
+  const getAllApprovedChanges = (paragraph: any) => {
+    if (!paragraph.history || paragraph.history.length === 0) return [];
     // Use document's acceptance threshold instead of hardcoded 75%
     const acceptanceThreshold = document.options?.acceptanceThreshold || 75.0;
-    // Sort by approval percentage descending, then by acceptance date descending
-    const highestApprovedChange = paragraph.history
+    // Get all changes that meet the acceptance threshold, sorted by acceptance date (most recent first)
+    const approvedChanges = paragraph.history
       .filter((change: any) => change.approvalPercentage >= acceptanceThreshold)
-      .sort((a: any, b: any) => {
-        // First sort by approval percentage (highest first)
-        if (b.approvalPercentage !== a.approvalPercentage) {
-          return b.approvalPercentage - a.approvalPercentage;
-        }
-        // Then by acceptance date (most recent first)
-        return new Date(b.acceptedAt).getTime() - new Date(a.acceptedAt).getTime();
-      })[0];
-    return highestApprovedChange;
+      .sort((a: any, b: any) => new Date(b.acceptedAt).getTime() - new Date(a.acceptedAt).getTime());
+    return approvedChanges;
   };
 
   // Check if a paragraph has accepted changes by looking at history that meets threshold
   const hasAcceptedChanges = (paragraph: any) => {
-    return getHighestApprovedChangeInfo(paragraph) !== null;
+    return getAllApprovedChanges(paragraph).length > 0;
   };
 
-  // Get the winning proposal content for display
+  // Get the most recent approved change content for display
   const getWinningProposalContent = (paragraph: any) => {
-    const winningChange = getHighestApprovedChangeInfo(paragraph);
-    if (winningChange) {
+    const approvedChanges = getAllApprovedChanges(paragraph);
+    if (approvedChanges.length > 0) {
+      // Use the most recent approved change
+      const winningChange = approvedChanges[0];
       return {
         text: winningChange.new_text,
         title: winningChange.heading_level ? winningChange.new_text : undefined,
@@ -108,43 +103,32 @@ export function AgreedDocument({ document, totalUsers }: AgreedDocumentProps) {
             <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-transparent via-transparent to-gray-200 dark:to-gray-600 opacity-20" />
           </div>
 
-          {/* Document Content */}
+          {/* Document Content - Agreed State */}
           <div className="relative space-y-8 text-gray-900 dark:text-gray-100">
             {approvedParagraphs.map((paragraph, index) => {
-              const hasChanges = hasAcceptedChanges(paragraph);
-              const highestApprovedChange = getHighestApprovedChangeInfo(paragraph);
-              const winningContent = getWinningProposalContent(paragraph);
+              const approvedChanges = getAllApprovedChanges(paragraph);
 
-              // Skip if no winning content (shouldn't happen since we filtered for approved paragraphs)
-              if (!winningContent) return null;
+              if (approvedChanges.length === 0) return null;
 
-              // Use winning proposal content for display
-              const displayText = winningContent.title || winningContent.text;
-              const isHeading = winningContent.title && winningContent.headingLevel;
+              // Get the highest approved change (most recent with highest approval)
+              const winningChange = approvedChanges[0];
+              const displayText = winningChange.heading_level ? winningChange.new_text : winningChange.new_text;
+              const isHeading = winningChange.heading_level;
 
+              // Render as normal document content, not discussion format
               if (isHeading) {
                 // Heading from winning proposal
-                const headingLevel = winningContent.headingLevel || 2;
                 return (
-                  <div key={paragraph.id} className="relative">
-                    <div className="flex flex-col sm:flex-row sm:items-start sm:gap-3 gap-2">
-                      {React.createElement(
-                        `h${headingLevel}`,
-                        { className: "text-xl font-bold text-gray-900 dark:text-gray-100 leading-tight whitespace-pre-wrap" },
-                        displayText.trim()
-                      )}
-                      <div className="hidden landscape:flex flex-col items-end text-xs text-green-600 gap-1 shrink-0">
-                        <div className="flex items-center gap-1 bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded">
-                          <CheckCircle2 className="h-3 w-3" />
-                          <span className="font-medium">Approved</span>
-                        </div>
-                        <span className="text-gray-500">
-                          {highestApprovedChange.approvalPercentage.toFixed(0)}% consensus
-                        </span>
-                        <span className="text-gray-500">
-                          {new Date(highestApprovedChange.acceptedAt).toLocaleDateString()}
-                        </span>
-                      </div>
+                  <div key={paragraph.id}>
+                    {React.createElement(
+                      `h${winningChange.heading_level}`,
+                      { className: "text-2xl font-bold text-gray-900 dark:text-gray-100 leading-tight whitespace-pre-wrap mb-4" },
+                      displayText.trim()
+                    )}
+                    {/* Optional metadata for transparency */}
+                    <div className="text-xs text-gray-500 mb-4 flex items-center gap-2">
+                      <CheckCircle2 className="h-3 w-3 text-green-600" />
+                      <span>Approved with {winningChange.approvalPercentage.toFixed(0)}% consensus</span>
                     </div>
                   </div>
                 );
@@ -153,22 +137,13 @@ export function AgreedDocument({ document, totalUsers }: AgreedDocumentProps) {
               // Regular paragraph from winning proposal
               return (
                 <div key={paragraph.id} className="relative">
-                  <div className="flex flex-col sm:flex-row sm:gap-4 gap-2">
-                    <p className="flex-1 leading-relaxed text-gray-800 dark:text-gray-200 text-justify indent-8 first-line:font-medium whitespace-pre-wrap">
-                      {displayText.trim()}
-                    </p>
-                    <div className="hidden landscape:flex flex-col items-end text-xs text-green-600 gap-1 shrink-0">
-                      <div className="flex items-center gap-1 bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded">
-                        <CheckCircle2 className="h-3 w-3" />
-                        <span className="font-medium">Approved</span>
-                      </div>
-                      <span className="text-gray-500">
-                        {highestApprovedChange.approvalPercentage.toFixed(0)}% consensus
-                      </span>
-                      <span className="text-gray-500">
-                        {new Date(highestApprovedChange.acceptedAt).toLocaleDateString()}
-                      </span>
-                    </div>
+                  <p className="leading-relaxed text-gray-800 dark:text-gray-200 text-justify indent-8 first-line:font-medium whitespace-pre-wrap mb-4">
+                    {displayText.trim()}
+                  </p>
+                  {/* Optional metadata for transparency */}
+                  <div className="text-xs text-gray-500 mb-6 flex items-center gap-2">
+                    <CheckCircle2 className="h-3 w-3 text-green-600" />
+                    <span>Approved with {winningChange.approvalPercentage.toFixed(0)}% consensus</span>
                   </div>
                 </div>
               );

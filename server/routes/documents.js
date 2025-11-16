@@ -553,7 +553,7 @@ router.get('/:id', requireAuth, (req, res) => {
 });
 
 // Create a new document
-router.post('/', requireAuth, documentValidation.create, (req, res) => {
+router.post('/', requireAuth, documentValidation.create, async (req, res) => {
   console.log(`[${new Date().toISOString()}] POST /api/documents - Creating document`);
   console.log('Request body:', req.body);
   console.log('User:', req.user ? req.user.name : 'No user');
@@ -589,32 +589,40 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
     db.get(`
       SELECT representatives FROM organizations
       WHERE id = ? AND representatives LIKE '%' || ? || '%' AND is_active = 1
-    `, [organizationId, userId], (err, org) => {
+    `, [organizationId, userId], async (err, org) => {
       if (err || !org) {
         return res.status(403).json({ error: 'Only organization representatives can create organizational documents' });
       }
-      
-      // If parentId is provided, validate it before creating document
-      if (parentId) {
-        db.get('SELECT id, organization_id, ownership_type FROM documents WHERE id = ?', [parentId], (parentErr, parentDoc) => {
-          if (parentErr || !parentDoc) {
+
+      try {
+        // If parentId is provided, validate it before creating document
+        if (parentId) {
+          const parentDoc = await new Promise((resolve, reject) => {
+            db.get('SELECT id, organization_id, ownership_type FROM documents WHERE id = ?', [parentId], (parentErr, row) => {
+              if (parentErr) reject(parentErr);
+              else resolve(row);
+            });
+          });
+
+          if (!parentDoc) {
             return res.status(400).json({ error: 'Parent document not found' });
           }
-          
+
           // Validate parent belongs to same organization
           if (parentDoc.organization_id !== organizationId) {
             return res.status(400).json({ error: 'Parent document must belong to the same organization' });
           }
-          
+
           // Validate parent ownership type matches
           if (parentDoc.ownership_type !== ownershipType) {
             return res.status(400).json({ error: 'Parent document must have the same ownership type' });
           }
-          
-          createDocument();
-        });
-      } else {
-        createDocument();
+        }
+
+        await createDocument();
+      } catch (error) {
+        console.error('Error in organizational document creation:', error);
+        return res.status(500).json({ error: 'Failed to create organizational document' });
       }
     });
     return; // Don't continue execution, wait for async callback
@@ -622,46 +630,115 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
 
   // Validate parent document if provided (for non-organizational documents)
   if (parentId) {
-    db.get('SELECT id, organization_id, ownership_type FROM documents WHERE id = ?', [parentId], (err, parentDoc) => {
+    db.get('SELECT id, organization_id, ownership_type FROM documents WHERE id = ?', [parentId], async (err, parentDoc) => {
       if (err || !parentDoc) {
         return res.status(400).json({ error: 'Parent document not found' });
       }
-      
+
       // Validate parent ownership type matches
       if (parentDoc.ownership_type !== ownershipType) {
         return res.status(400).json({ error: 'Parent document must have the same ownership type' });
       }
-      
-      createDocument();
+
+      try {
+        await createDocument();
+      } catch (error) {
+        console.error('Error in document creation:', error);
+        return res.status(500).json({ error: 'Failed to create document' });
+      }
     });
     return; // Don't continue execution, wait for async callback
   }
 
   // For non-organizational documents without parent, create immediately
-  createDocument();
+  await createDocument();
 
-  function createDocument() {
+  async function createDocument() {
     // Parse and validate options for all document types (personal, shared, organizational)
     let acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled;
 
-    // Parse and validate options for all document types
-    const validThresholds = [50, 75, 90, 100];
-    const requestedThreshold = options?.acceptanceThreshold !== undefined
-      ? parseFloat(options.acceptanceThreshold)
-      : 75.0;
-    acceptanceThreshold = validThresholds.includes(requestedThreshold)
-      ? requestedThreshold
-      : 75.0;
+    // For organizational documents, first inherit organization governance rules
+    if (ownershipType === 'organizational') {
+      try {
+        // Fetch organization governance rules
+        const orgRules = await new Promise((resolve, reject) => {
+          db.get(`
+            SELECT
+              voting_threshold,
+              voting_anonymous,
+              voting_anonymity_locked,
+              vote_change_allowed,
+              representative_term_months
+            FROM organization_governance_rules
+            WHERE organization_id = ?
+          `, [organizationId], (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          });
+        });
 
-    // Extract document options with defaults
-    votingAnonymous = options?.votingAnonymous === true ? 1 : 0;
-    votingAnonymityLocked = options?.votingAnonymityLocked === true ? 1 : 0;
-    voteChangeAllowed = options?.voteChangeAllowed !== false ? 1 : 0; // Default to true
-    structureProposalsEnabled = options?.structureProposalsEnabled === true ? 1 : 0;
+        if (orgRules) {
+          console.log('Applying organization governance rules:', orgRules);
+          // Apply organization rules as defaults, but allow explicit overrides
+          acceptanceThreshold = options?.acceptanceThreshold !== undefined
+            ? Math.min(100, Math.max(0, parseFloat(options.acceptanceThreshold)))
+            : (orgRules.voting_threshold * 100); // Convert decimal to percentage
 
-    if (ownershipType === 'personal') {
-      // Personal documents can use custom options
-      // Options are already parsed and validated above
+          votingAnonymous = options?.votingAnonymous !== undefined
+            ? (options.votingAnonymous ? 1 : 0)
+            : (orgRules.voting_anonymous ? 1 : 0);
+
+          votingAnonymityLocked = options?.votingAnonymityLocked !== undefined
+            ? (options.votingAnonymityLocked ? 1 : 0)
+            : (orgRules.voting_anonymity_locked ? 1 : 0);
+
+          voteChangeAllowed = options?.voteChangeAllowed !== undefined
+            ? (options.voteChangeAllowed ? 1 : 0)
+            : (orgRules.vote_change_allowed ? 1 : 0);
+
+          // Structure proposals enabled by default for organizational docs
+          structureProposalsEnabled = options?.structureProposalsEnabled !== undefined
+            ? (options.structureProposalsEnabled ? 1 : 0)
+            : 1; // Enable by default for organizational docs
+        } else {
+          console.log('No organization governance rules found, using defaults');
+          // Fall back to default values if no org rules exist
+          acceptanceThreshold = options?.acceptanceThreshold !== undefined
+            ? Math.min(100, Math.max(0, parseFloat(options.acceptanceThreshold)))
+            : 75.0;
+
+          votingAnonymous = options?.votingAnonymous === true ? 1 : 0;
+          votingAnonymityLocked = options?.votingAnonymityLocked === true ? 1 : 0;
+          voteChangeAllowed = options?.voteChangeAllowed !== false ? 1 : 0;
+          structureProposalsEnabled = options?.structureProposalsEnabled === true ? 1 : 0;
+        }
+      } catch (error) {
+        console.error('Error fetching organization governance rules:', error);
+        // Fall back to default values on error
+        acceptanceThreshold = options?.acceptanceThreshold !== undefined
+          ? Math.min(100, Math.max(0, parseFloat(options.acceptanceThreshold)))
+          : 75.0;
+
+        votingAnonymous = options?.votingAnonymous === true ? 1 : 0;
+        votingAnonymityLocked = options?.votingAnonymityLocked === true ? 1 : 0;
+        voteChangeAllowed = options?.voteChangeAllowed !== false ? 1 : 0;
+        structureProposalsEnabled = options?.structureProposalsEnabled === true ? 1 : 0;
+      }
+    } else {
+      // For personal and shared documents, use provided options or defaults
+      const validThresholds = [50, 75, 90, 100];
+      const requestedThreshold = options?.acceptanceThreshold !== undefined
+        ? parseFloat(options.acceptanceThreshold)
+        : 75.0;
+      acceptanceThreshold = validThresholds.includes(requestedThreshold)
+        ? requestedThreshold
+        : 75.0;
+
+      // Extract document options with defaults
+      votingAnonymous = options?.votingAnonymous === true ? 1 : 0;
+      votingAnonymityLocked = options?.votingAnonymityLocked === true ? 1 : 0;
+      voteChangeAllowed = options?.voteChangeAllowed !== false ? 1 : 0; // Default to true
+      structureProposalsEnabled = options?.structureProposalsEnabled === true ? 1 : 0;
     }
 
     const documentId = uuidv4();
@@ -955,8 +1032,111 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
               
               addNextCollaborator();
             }
+          } else if (ownershipType === 'organizational') {
+            // For organizational documents, add all active organization members as collaborators
+            db.all(`
+              SELECT user_id FROM organization_members
+              WHERE organization_id = ? AND status = 'active'
+            `, [organizationId], (membersErr, members) => {
+              if (membersErr) {
+                console.error('Error fetching organization members:', membersErr);
+                db.run('ROLLBACK', (rollbackErr) => {
+                  if (rollbackErr) {
+                    console.error('Error during rollback after member fetch failure:', rollbackErr);
+                  }
+                  if (!res.headersSent) {
+                    return res.status(500).json({
+                      error: 'Failed to create document: member fetch failed',
+                      details: membersErr.message
+                    });
+                  }
+                });
+                return;
+              }
+
+              if (members.length === 0) {
+                // No members to add as collaborators, just commit
+                db.run('COMMIT', (commitErr) => {
+                  if (commitErr) {
+                    console.error('Error committing transaction:', commitErr);
+                    db.run('ROLLBACK', (rollbackErr) => {
+                      if (rollbackErr) {
+                        console.error('Error during rollback after commit failure:', rollbackErr);
+                      }
+                      if (!res.headersSent) {
+                        return res.status(500).json({
+                          error: 'Failed to create document: commit failed',
+                          details: commitErr.message
+                        });
+                      }
+                    });
+                    return;
+                  }
+                  console.log(`Created organizational document ${documentId} - no members to add as collaborators`);
+                  sendResponse();
+                });
+                return;
+              }
+
+              // Add all organization members as collaborators
+              let collaboratorIndex = 0;
+              const totalCollaborators = members.length;
+
+              const addNextCollaborator = () => {
+                if (collaboratorIndex >= totalCollaborators) {
+                  // All collaborators added successfully, commit transaction
+                  db.run('COMMIT', (commitErr) => {
+                    if (commitErr) {
+                      console.error('Error committing transaction:', commitErr);
+                      db.run('ROLLBACK', (rollbackErr) => {
+                        if (rollbackErr) {
+                          console.error('Error during rollback after commit failure:', rollbackErr);
+                        }
+                        if (!res.headersSent) {
+                          return res.status(500).json({
+                            error: 'Failed to create document: commit failed',
+                            details: commitErr.message
+                          });
+                        }
+                      });
+                      return;
+                    }
+                    console.log(`Created organizational document ${documentId} - added ${totalCollaborators} collaborators`);
+                    sendResponse();
+                  });
+                  return;
+                }
+
+                const memberId = members[collaboratorIndex].user_id;
+                const collabId = uuidv4();
+                db.run(`
+                  INSERT INTO document_collaborators (id, document_id, user_id)
+                  VALUES (?, ?, ?)
+                `, [collabId, documentId, memberId], function(err) {
+                  if (err) {
+                    console.error('Error adding organizational collaborator:', memberId, err);
+                    db.run('ROLLBACK', (rollbackErr) => {
+                      if (rollbackErr) {
+                        console.error('Error during rollback after collaborator addition failure:', rollbackErr);
+                      }
+                      if (!res.headersSent) {
+                        return res.status(500).json({
+                          error: 'Failed to create document: collaborator addition failed',
+                          details: err.message
+                        });
+                      }
+                    });
+                    return;
+                  }
+                  collaboratorIndex++;
+                  addNextCollaborator();
+                });
+              };
+
+              addNextCollaborator();
+            });
           } else {
-            // No collaborators to add, commit transaction
+            // For personal documents, no collaborators to add, commit transaction
             db.run('COMMIT', (commitErr) => {
               if (commitErr) {
                 console.error('Error committing transaction:', commitErr);
@@ -966,7 +1146,7 @@ router.post('/', requireAuth, documentValidation.create, (req, res) => {
                     console.error('Error during rollback after commit failure:', rollbackErr);
                   }
                   if (!res.headersSent) {
-                    return res.status(500).json({ 
+                    return res.status(500).json({
                       error: 'Failed to create document: commit failed',
                       details: commitErr.message
                     });

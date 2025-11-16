@@ -1,11 +1,12 @@
 import React, { useState, Fragment } from 'react';
 import { Button } from '../../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
+import { Skeleton } from '../../ui/skeleton';
 import { Badge } from '../../ui/badge';
 import { Input } from '../../ui/input';
 import { Textarea } from '../../ui/textarea';
 import { Label } from '../../ui/label';
-import { FileText, Plus, X, ThumbsUp, ThumbsDown, Minus, AlertCircle } from 'lucide-react';
+import { FileText, Plus, X, ThumbsUp, ThumbsDown, Minus, AlertCircle, ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { Organization, User, Document, DocumentProposal } from '../../../types';
 import { OrganizationPermissions } from '../../../hooks/useOrganizationPermissions';
 import { RuleProposalDialog } from '../../governance/RuleProposalDialog';
@@ -62,8 +63,34 @@ export function DocumentsTab({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Hierarchical document structure
-  const buildDocumentHierarchy = (documents: Document[]) => {
+  // Expand/collapse state for document nodes
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+
+  // Search state
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Toggle expand/collapse for a node
+  const toggleExpanded = (nodeId: string) => {
+    setExpandedNodes(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(nodeId)) {
+        newSet.delete(nodeId);
+      } else {
+        newSet.add(nodeId);
+      }
+      return newSet;
+    });
+  };
+
+  // Set default expanded state for root level documents
+  React.useEffect(() => {
+    const rootDocs = hierarchyMap.get(null) || [];
+    const rootDocIds = rootDocs.map(doc => doc.id);
+    setExpandedNodes(new Set(rootDocIds));
+  }, [hierarchyMap]); // Re-run when hierarchy changes
+
+  // Hierarchical document structure - memoized for performance
+  const { hierarchyMap } = React.useMemo(() => {
     const hierarchyMap = new Map<string | null, Document[]>();
     const documentMap = new Map<string, Document>();
 
@@ -81,9 +108,7 @@ export function DocumentsTab({
     // If custom ordering is needed in the future, it should be implemented in the database/API layer
 
     return { hierarchyMap, documentMap };
-  };
-
-  const { hierarchyMap } = buildDocumentHierarchy(documents);
+  }, [documents]);
 
   // Render hierarchical document tree
   const renderDocumentTree = (parentId: string | null = null, level: number = 1) => {
@@ -109,6 +134,27 @@ export function DocumentsTab({
 
           {/* Document item */}
           <div className="flex items-center gap-2 p-2 rounded hover:bg-gray-50">
+            {/* Expand/collapse button */}
+            {hasChildren && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0 hover:bg-gray-200"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleExpanded(doc.id);
+                }}
+              >
+                {expandedNodes.has(doc.id) ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+            )}
+            {/* Spacer for alignment when no children */}
+            {!hasChildren && <div className="w-6"></div>}
+
             <div className="flex-1">
               <button
                 onClick={() => onSelectDocument?.(doc)}
@@ -139,14 +185,14 @@ export function DocumentsTab({
           )}
 
           {/* Children */}
-          {hasChildren && level < 3 && (
+          {hasChildren && expandedNodes.has(doc.id) && (
             <div className="ml-6 border-l border-gray-200 pl-4">
               {renderDocumentTree(doc.id, level + 1)}
             </div>
           )}
 
           {/* Insert button after last item */}
-          {isLast && level < 3 && (
+          {isLast && (
             <InsertButton
               onClick={() => setInlineCreationPosition({
                 level: level + 1,
@@ -291,18 +337,19 @@ export function DocumentsTab({
     votes: proposal.votes,
   }));
 
-  // Build tree structure
-  const buildTree = (items: DocumentItem[]): DocumentItem[] => {
+  // Build tree structure - memoized for performance
+  const allItems = React.useMemo(() => {
     const itemMap = new Map<string, DocumentItem>();
     const rootItems: DocumentItem[] = [];
+    const allSourceItems = [...documentItems, ...proposalItems];
 
     // First pass: create map and set initial levels
-    items.forEach(item => {
+    allSourceItems.forEach(item => {
       itemMap.set(item.id, { ...item, children: [] });
     });
 
     // Second pass: build tree
-    items.forEach(item => {
+    allSourceItems.forEach(item => {
       const node = itemMap.get(item.id)!;
       if (item.parentId && itemMap.has(item.parentId)) {
         const parent = itemMap.get(item.parentId)!;
@@ -328,10 +375,52 @@ export function DocumentsTab({
     };
 
     return flattenTree(rootItems);
-  };
+  }, [documentItems, documentProposals]);
 
-  // Combine and build tree
-  const allItems = buildTree([...documentItems, ...proposalItems]);
+  // Filter items based on search term
+  const filteredItems = React.useMemo(() => {
+    if (!searchTerm.trim()) {
+      return allItems;
+    }
+
+    const term = searchTerm.toLowerCase();
+    const matchingIds = new Set<string>();
+
+    // Find all items that match the search term
+    allItems.forEach(item => {
+      if (
+        item.title.toLowerCase().includes(term) ||
+        (item.description && item.description.toLowerCase().includes(term))
+      ) {
+        matchingIds.add(item.id);
+
+        // Also include all ancestors to show the full path
+        let currentItem = item;
+        while (currentItem.parentId) {
+          matchingIds.add(currentItem.parentId);
+          // Find parent item
+          const parentItem = allItems.find(i => i.id === currentItem.parentId);
+          if (!parentItem) break;
+          currentItem = parentItem;
+        }
+      }
+    });
+
+    return allItems.filter(item => matchingIds.has(item.id));
+  }, [allItems, searchTerm]);
+
+  // Expand all nodes when searching to show results
+  React.useEffect(() => {
+    if (searchTerm.trim()) {
+      const nodesToExpand = new Set<string>();
+      filteredItems.forEach(item => {
+        if (hierarchyMap.has(item.id)) {
+          nodesToExpand.add(item.id);
+        }
+      });
+      setExpandedNodes(prev => new Set([...prev, ...nodesToExpand]));
+    }
+  }, [searchTerm, filteredItems, hierarchyMap]);
 
   // Generate hierarchical numbering based on position in tree
   const generateNumbering = (item: DocumentItem, index: number, allItems: DocumentItem[]): string => {
@@ -398,6 +487,27 @@ export function DocumentsTab({
           <p className="text-sm text-gray-600">
             Table of contents for {organization.name} documents. Use the + buttons to create documents at specific positions in the hierarchy.
           </p>
+        </div>
+
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <Input
+            placeholder="Search documents..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+          {searchTerm && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+              onClick={() => setSearchTerm('')}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          )}
         </div>
 
       {/* Inline Document Creation Form */}
@@ -507,7 +617,7 @@ export function DocumentsTab({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
-            Document Table of Contents ({allItems.length})
+            Document Table of Contents ({filteredItems.length}{searchTerm ? ` of ${allItems.length}` : ''})
           </CardTitle>
           <CardDescription>
             Hierarchical view of all documents and pending proposals
@@ -524,9 +634,18 @@ export function DocumentsTab({
               </Button>
             </div>
           ) : loading ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="text-gray-600 mt-2">Loading document structure...</p>
+            <div className="space-y-2">
+              {/* Loading skeletons */}
+              {Array.from({ length: 5 }).map((_, index) => (
+                <div key={index} className="flex items-center gap-2 p-3 rounded">
+                  <Skeleton className="h-4 w-4" />
+                  <Skeleton className="h-4 w-12" />
+                  <div className="flex-1">
+                    <Skeleton className="h-4 w-48 mb-2" />
+                    <Skeleton className="h-3 w-32" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : allItems.length === 0 ? (
             <div className="text-center py-12">
@@ -584,19 +703,23 @@ export function DocumentsTab({
                 </div>
               )}
 
-              {allItems.map((item, index) => {
+              {filteredItems.map((item, index) => {
                 const showInsertBefore = inlineCreationPosition?.beforeItemId === item.id;
                 const showInsertAfter = inlineCreationPosition?.afterItemId === item.id;
-                const nextItem = allItems[index + 1];
+                const nextItem = filteredItems[index + 1];
                 const isLastItemAtLevel = !nextItem || nextItem.level <= item.level;
 
                 return (
                   <Fragment key={item.id}>
                     {/* Insert Before Form */}
                     {showInsertBefore && (
-                      <div 
-                        className="p-4 border-2 border-blue-200 bg-blue-50 rounded-lg animate-in slide-in-from-top-2 duration-300"
-                        style={{ marginLeft: `${(inlineCreationPosition.level - 1) * 32}px`, paddingLeft: inlineCreationPosition.level > 1 ? '16px' : '0' }}
+                      <div
+                        className={`p-4 border-2 border-blue-200 bg-blue-50 rounded-lg animate-in slide-in-from-top-2 duration-300 ${
+                          inlineCreationPosition.level === 1 ? '' :
+                          inlineCreationPosition.level === 2 ? 'md:ml-8 md:pl-4 ml-4 pl-2' :
+                          inlineCreationPosition.level === 3 ? 'md:ml-16 md:pl-4 ml-8 pl-2' :
+                          inlineCreationPosition.level >= 4 ? 'md:ml-24 md:pl-4 ml-12 pl-2' : ''
+                        }`}
                       >
                         <div className="flex items-center justify-between mb-3">
                           <h4 className="font-semibold text-blue-900">Insert New Document</h4>
@@ -657,7 +780,13 @@ export function DocumentsTab({
                           ? 'bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-50 cursor-pointer'
                           : 'hover:bg-gray-50'
                       }`}
-                      style={{ marginLeft: `${(item.level - 1) * 32}px`, paddingLeft: item.level > 1 ? '16px' : '0' }}
+                      data-level={item.level}
+                      className={`${
+                        item.level === 1 ? '' :
+                        item.level === 2 ? 'md:ml-8 md:pl-4 ml-4 pl-2' :
+                        item.level === 3 ? 'md:ml-16 md:pl-4 ml-8 pl-2' :
+                        item.level >= 4 ? 'md:ml-24 md:pl-4 ml-12 pl-2' : ''
+                      }`}
                       onClick={() => {
                         if (item.type === 'document') {
                           handleItemClick(item);
@@ -665,8 +794,8 @@ export function DocumentsTab({
                       }}
                     >
                   {/* Numbering */}
-                  <div className="flex-shrink-0 w-12 text-sm font-mono text-gray-600 pt-0.5">
-                    {generateNumbering(item, index, allItems)}
+                  <div className="flex-shrink-0 w-12 md:w-12 w-8 text-xs md:text-sm font-mono text-gray-600 pt-0.5">
+                    {generateNumbering(item, index, filteredItems)}
                   </div>
 
                   {/* Content */}
@@ -773,7 +902,12 @@ export function DocumentsTab({
 
                   {/* TOC-integrated create buttons */}
                   {permissions.canCreateDocuments && (
-                    <div className="mt-2 flex items-center gap-1" style={{ marginLeft: `${item.level * 32}px`, paddingLeft: item.level > 1 ? '16px' : '0' }}>
+                    <div className={`mt-2 flex items-center gap-1 ${
+                      item.level === 1 ? '' :
+                      item.level === 2 ? 'md:ml-8 md:pl-4 ml-4 pl-2' :
+                      item.level === 3 ? 'md:ml-16 md:pl-4 ml-8 pl-2' :
+                      item.level >= 4 ? 'md:ml-24 md:pl-4 ml-12 pl-2' : ''
+                    }`}>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -818,9 +952,13 @@ export function DocumentsTab({
 
                   {/* Insert After Form */}
                 {showInsertAfter && (
-                  <div 
-                    className="p-4 border-2 border-blue-200 bg-blue-50 rounded-lg animate-in slide-in-from-top-2 duration-300"
-                    style={{ marginLeft: `${(inlineCreationPosition.level - 1) * 24}px` }}
+                  <div
+                    className={`p-4 border-2 border-blue-200 bg-blue-50 rounded-lg animate-in slide-in-from-top-2 duration-300 ${
+                      inlineCreationPosition.level === 1 ? '' :
+                      inlineCreationPosition.level === 2 ? 'md:ml-8 md:pl-4 ml-4 pl-2' :
+                      inlineCreationPosition.level === 3 ? 'md:ml-16 md:pl-4 ml-8 pl-2' :
+                      inlineCreationPosition.level >= 4 ? 'md:ml-24 md:pl-4 ml-12 pl-2' : ''
+                    }`}
                   >
                     <div className="flex items-center justify-between mb-3">
                       <h4 className="font-semibold text-blue-900">Insert New Document</h4>

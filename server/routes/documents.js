@@ -651,7 +651,14 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
   }
 
   // For non-organizational documents without parent, create immediately
-  await createDocument();
+  (async () => {
+    try {
+      await createDocument();
+    } catch (error) {
+      console.error('Error in document creation:', error);
+      return res.status(500).json({ error: 'Failed to create document' });
+    }
+  })();
 
   async function createDocument() {
     // Parse and validate options for all document types (personal, shared, organizational)

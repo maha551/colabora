@@ -779,14 +779,13 @@ export function DocumentsTab({
                           : item.type === 'document'
                           ? 'bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-50 cursor-pointer'
                           : 'hover:bg-gray-50'
-                      }`}
-                      data-level={item.level}
-                      className={`${
+                      } ${
                         item.level === 1 ? '' :
                         item.level === 2 ? 'md:ml-8 md:pl-4 ml-4 pl-2' :
                         item.level === 3 ? 'md:ml-16 md:pl-4 ml-8 pl-2' :
                         item.level >= 4 ? 'md:ml-24 md:pl-4 ml-12 pl-2' : ''
                       }`}
+                      data-level={item.level}
                       onClick={() => {
                         if (item.type === 'document') {
                           handleItemClick(item);

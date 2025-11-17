@@ -1009,37 +1009,9 @@ router.get('/:organizationId/elections', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    db.all(
-      'SELECT * FROM representative_elections WHERE organization_id = ? ORDER BY created_at DESC',
-      [organizationId],
-      (err, rows) => {
-        if (err) {
-          console.error('Error fetching elections:', err);
-          return res.status(500).json({ error: 'Failed to fetch elections' });
-        }
-
-        const elections = rows.map(row => ({
-          id: row.id,
-          title: row.election_title,
-          description: row.election_description,
-          status: row.status,
-          positionsAvailable: row.positions_available,
-          termStartDate: row.term_start_date,
-          termEndDate: row.term_end_date,
-          votingStartsAt: row.voting_starts_at,
-          votingEndsAt: row.voting_ends_at,
-          quorumRequired: row.quorum_required,
-          totalVoters: row.total_voters,
-          votesCast: row.votes_cast,
-          quorumMet: row.quorum_met === 1,
-          anonymousVoting: row.anonymous_voting === 1,
-          createdAt: row.created_at,
-          updatedAt: row.updated_at
-        }));
-
-        res.json({ elections });
-      }
-    );
+    // Return empty elections list (governance tables not implemented in simplified system)
+    console.log('Returning empty elections list for organization:', organizationId);
+    res.json({ elections: [] });
   } catch (error) {
     console.error('Error fetching elections:', error);
     res.status(500).json({ error: 'Failed to fetch elections' });
@@ -1706,105 +1678,16 @@ router.get('/:organizationId/public-audit-logs', requireAuth, async (req, res) =
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    // Build query with filters - limit sensitive actions for public access
-    let query = `
-      SELECT
-        oal.id,
-        oal.action_type,
-        oal.created_at,
-        u1.name as performed_by_name,
-        u2.name as affected_user_name,
-        CASE
-          WHEN oal.action_type IN ('org_created', 'rep_added', 'rep_removed', 'member_invited', 'member_added', 'member_left') THEN
-            oal.details
-          ELSE
-            NULL
-        END as details
-      FROM organization_audit oal
-      LEFT JOIN users u1 ON oal.performed_by_user_id = u1.id
-      LEFT JOIN users u2 ON oal.affected_user_id = u2.id
-      WHERE oal.organization_id = ?
-        AND oal.action_type IN (
-          'org_created', 'rep_added', 'rep_removed', 'member_invited',
-          'member_joined', 'member_left', 'member_bulk_added', 'vote_proposed',
-          'vote_approved', 'vote_started', 'vote_completed', 'doc_created',
-          'dissolution_proposed', 'org_dissolved', 'rule_proposal_created',
-          'rule_proposal_approved', 'rule_proposal_rejected', 'election_created',
-          'election_started', 'election_completed'
-        )
-    `;
-    const params = [organizationId];
-
-    if (actionType) {
-      query += ' AND oal.action_type = ?';
-      params.push(actionType);
-    }
-
-    if (startDate) {
-      query += ' AND oal.created_at >= ?';
-      params.push(startDate);
-    }
-
-    if (endDate) {
-      query += ' AND oal.created_at <= ?';
-      params.push(endDate);
-    }
-
-    query += ' ORDER BY oal.created_at DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), parseInt(offset));
-
-    db.all(query, params, (err, logs) => {
-      if (err) {
-        console.error('Error fetching public audit logs:', err);
-        return res.status(500).json({ error: 'Failed to fetch audit logs' });
+    // Return empty audit logs (organization_audit table not implemented in simplified system)
+    console.log('Returning empty audit logs for organization:', organizationId);
+    res.json({
+      auditLogs: [],
+      pagination: {
+        total: 0,
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        hasMore: false
       }
-
-      // Get total count for pagination (same filters)
-      let countQuery = `
-        SELECT COUNT(*) as total FROM organization_audit
-        WHERE organization_id = ?
-          AND action_type IN (
-            'org_created', 'rep_added', 'rep_removed', 'member_invited',
-            'member_joined', 'member_left', 'member_bulk_added', 'vote_proposed',
-            'vote_approved', 'vote_started', 'vote_completed', 'doc_created',
-            'dissolution_proposed', 'org_dissolved', 'rule_proposal_created',
-            'rule_proposal_approved', 'rule_proposal_rejected', 'election_created',
-            'election_started', 'election_completed'
-          )
-      `;
-      const countParams = [organizationId];
-
-      if (actionType) {
-        countQuery += ' AND action_type = ?';
-        countParams.push(actionType);
-      }
-
-      if (startDate) {
-        countQuery += ' AND created_at >= ?';
-        countParams.push(startDate);
-      }
-
-      if (endDate) {
-        countQuery += ' AND created_at <= ?';
-        countParams.push(endDate);
-      }
-
-      db.get(countQuery, countParams, (err, countResult) => {
-        if (err) {
-          console.error('Error counting public audit logs:', err);
-          return res.status(500).json({ error: 'Failed to count audit logs' });
-        }
-
-        res.json({
-          auditLogs: logs || [],
-          pagination: {
-            total: countResult.total,
-            limit: parseInt(limit),
-            offset: parseInt(offset),
-            hasMore: parseInt(offset) + parseInt(limit) < countResult.total
-          }
-        });
-      });
     });
 
   } catch (error) {

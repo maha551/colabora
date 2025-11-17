@@ -131,17 +131,20 @@ export function GovernanceTab({
       {showGovernanceRulesDialog && (
         <GovernanceRulesDialog
           organization={organization}
-          governanceRules={governanceRules}
+          currentUser={currentUser}
+          open={showGovernanceRulesDialog}
+          onOpenChange={setShowGovernanceRulesDialog}
           onSuccess={handleGovernanceRulesSuccess}
-          onCancel={() => setShowGovernanceRulesDialog(false)}
         />
       )}
 
       {showElectionCreationDialog && (
         <ElectionCreationDialog
           organization={organization}
+          currentUser={currentUser}
+          open={showElectionCreationDialog}
+          onOpenChange={setShowElectionCreationDialog}
           onSuccess={handleElectionCreationSuccess}
-          onCancel={() => setShowElectionCreationDialog(false)}
         />
       )}
     </div>

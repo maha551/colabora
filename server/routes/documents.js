@@ -786,51 +786,28 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
     }
   }
 
-  // For organizational documents, check representative status
+  // For organizational documents, check basic membership
   if (ownershipType === 'organizational') {
     if (!organizationId) {
       return res.status(400).json({ error: 'Organization ID required for organizational documents' });
     }
+    // Simple membership check - any active member can create docs
     db.get(`
-      SELECT representatives FROM organizations
-      WHERE id = ? AND representatives LIKE '%' || ? || '%' AND is_active = 1
-    `, [organizationId, userId], async (err, org) => {
-      if (err || !org) {
-        return res.status(403).json({ error: 'Only organization representatives can create organizational documents' });
+      SELECT status FROM organization_members
+      WHERE organization_id = ? AND user_id = ? AND status = 'active'
+    `, [organizationId, userId], async (err, member) => {
+      if (err || !member) {
+        return res.status(403).json({ error: 'Must be an active organization member to create documents' });
       }
 
       try {
-        // If parentId is provided, validate it before creating document
-        if (parentId) {
-          const parentDoc = await new Promise((resolve, reject) => {
-            db.get('SELECT id, organization_id, ownership_type FROM documents WHERE id = ?', [parentId], (parentErr, row) => {
-              if (parentErr) reject(parentErr);
-              else resolve(row);
-            });
-          });
-
-          if (!parentDoc) {
-            return res.status(400).json({ error: 'Parent document not found' });
-          }
-
-          // Validate parent belongs to same organization
-          if (parentDoc.organization_id !== organizationId) {
-            return res.status(400).json({ error: 'Parent document must belong to the same organization' });
-          }
-
-          // Validate parent ownership type matches
-          if (parentDoc.ownership_type !== ownershipType) {
-            return res.status(400).json({ error: 'Parent document must have the same ownership type' });
-          }
-        }
-
         await createDocument(ownershipType, organizationId, options, userId, title, description, creatorIds, parentId);
       } catch (error) {
         console.error('Error in organizational document creation:', error);
         return res.status(500).json({ error: 'Failed to create organizational document' });
       }
     });
-    return; // Don't continue execution, wait for async callback
+    return;
   }
 
   // Validate parent document if provided (for non-organizational documents)
@@ -869,89 +846,15 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
     // Parse and validate options for all document types (personal, shared, organizational)
     let acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled;
 
-    // For organizational documents, first inherit organization governance rules
-    if (ownershipType === 'organizational') {
-      try {
-        // Fetch organization governance rules
-        const orgRules = await new Promise((resolve, reject) => {
-          db.get(`
-            SELECT
-              voting_threshold,
-              voting_anonymous,
-              voting_anonymity_locked,
-              vote_change_allowed,
-              representative_term_months
-            FROM organization_governance_rules
-            WHERE organization_id = ?
-          `, [organizationId], (err, row) => {
-            if (err) reject(err);
-            else resolve(row);
-          });
-        });
+    // Simple options handling for all document types
+    acceptanceThreshold = options?.acceptanceThreshold !== undefined
+      ? Math.min(100, Math.max(0, parseFloat(options.acceptanceThreshold)))
+      : 50;
 
-        if (orgRules) {
-          console.log('Applying organization governance rules:', orgRules);
-          // Apply organization rules as defaults, but allow explicit overrides
-          acceptanceThreshold = options?.acceptanceThreshold !== undefined
-            ? Math.min(100, Math.max(0, parseFloat(options.acceptanceThreshold)))
-            : (orgRules.voting_threshold * 100); // Convert decimal to percentage
-
-          votingAnonymous = options?.votingAnonymous !== undefined
-            ? (options.votingAnonymous ? 1 : 0)
-            : (orgRules.voting_anonymous ? 1 : 0);
-
-          votingAnonymityLocked = options?.votingAnonymityLocked !== undefined
-            ? (options.votingAnonymityLocked ? 1 : 0)
-            : (orgRules.voting_anonymity_locked ? 1 : 0);
-
-          voteChangeAllowed = options?.voteChangeAllowed !== undefined
-            ? (options.voteChangeAllowed ? 1 : 0)
-            : (orgRules.vote_change_allowed ? 1 : 0);
-
-          // Structure proposals enabled by default for organizational docs
-          structureProposalsEnabled = options?.structureProposalsEnabled !== undefined
-            ? (options.structureProposalsEnabled ? 1 : 0)
-            : 1; // Enable by default for organizational docs
-        } else {
-          console.log('No organization governance rules found, using defaults');
-          // Fall back to default values if no org rules exist
-          acceptanceThreshold = options?.acceptanceThreshold !== undefined
-            ? Math.min(100, Math.max(0, parseFloat(options.acceptanceThreshold)))
-            : 75.0;
-
-          votingAnonymous = options?.votingAnonymous === true ? 1 : 0;
-          votingAnonymityLocked = options?.votingAnonymityLocked === true ? 1 : 0;
-          voteChangeAllowed = options?.voteChangeAllowed !== false ? 1 : 0;
-          structureProposalsEnabled = options?.structureProposalsEnabled === true ? 1 : 0;
-        }
-      } catch (error) {
-        console.error('Error fetching organization governance rules:', error);
-        // Fall back to default values on error
-        acceptanceThreshold = options?.acceptanceThreshold !== undefined
-          ? Math.min(100, Math.max(0, parseFloat(options.acceptanceThreshold)))
-          : 75.0;
-
-        votingAnonymous = options?.votingAnonymous === true ? 1 : 0;
-        votingAnonymityLocked = options?.votingAnonymityLocked === true ? 1 : 0;
-        voteChangeAllowed = options?.voteChangeAllowed !== false ? 1 : 0;
-        structureProposalsEnabled = options?.structureProposalsEnabled === true ? 1 : 0;
-      }
-    } else {
-      // For personal and shared documents, use provided options or defaults
-      const validThresholds = [50, 75, 90, 100];
-      const requestedThreshold = options?.acceptanceThreshold !== undefined
-        ? parseFloat(options.acceptanceThreshold)
-        : 75.0;
-      acceptanceThreshold = validThresholds.includes(requestedThreshold)
-        ? requestedThreshold
-        : 75.0;
-
-      // Extract document options with defaults
-      votingAnonymous = options?.votingAnonymous === true ? 1 : 0;
-      votingAnonymityLocked = options?.votingAnonymityLocked === true ? 1 : 0;
-      voteChangeAllowed = options?.voteChangeAllowed !== false ? 1 : 0; // Default to true
-      structureProposalsEnabled = options?.structureProposalsEnabled === true ? 1 : 0;
-    }
+    votingAnonymous = options?.votingAnonymous === true ? 1 : 0;
+    votingAnonymityLocked = options?.votingAnonymityLocked === true ? 1 : 0;
+    voteChangeAllowed = options?.voteChangeAllowed !== false ? 1 : 0;
+    structureProposalsEnabled = options?.structureProposalsEnabled === true ? 1 : 0;
 
     const documentId = uuidv4();
     const trimmedTitle = title.trim();
@@ -979,35 +882,22 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
         acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
       ];
     } else if (ownershipType === 'organizational') {
-      // For organizational documents, set organization_id and start as proposal with deadline
-      // Get governance rules for proposal period
-      db.get('SELECT document_proposal_period_days FROM organization_governance_rules WHERE organization_id = ?',
-        [organizationId], (govErr, govRules) => {
-        if (govErr) {
-          console.error('Error fetching governance rules for proposal period:', govErr);
-        }
+      // For organizational documents, set organization_id and start as proposal
+      const proposalDeadline = new Date();
+      proposalDeadline.setDate(proposalDeadline.getDate() + 30); // 30 days default
 
-        const proposalPeriodDays = govRules?.document_proposal_period_days || 365;
-        const proposalDeadline = new Date();
-        proposalDeadline.setDate(proposalDeadline.getDate() + proposalPeriodDays);
-
-        sql = `
-          INSERT INTO documents (
-            id, title, description, owner_id, ownership_type, creator_ids, organization_id, parent_id, status, proposal_deadline,
-            acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed,
-            structure_proposals_enabled, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        `;
-        params = [
-          documentId, trimmedTitle, trimmedDescription, userId, ownershipType, null, organizationId, parentId || null,
-          'proposal', proposalDeadline.toISOString(),
-          acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
-        ];
-
-        // Continue with the rest of the function logic
-        continueExecution();
-      });
-      return; // Exit early, execution continues in callback
+      sql = `
+        INSERT INTO documents (
+          id, title, description, owner_id, ownership_type, creator_ids, organization_id, parent_id, status, proposal_deadline,
+          acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed,
+          structure_proposals_enabled, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `;
+      params = [
+        documentId, trimmedTitle, trimmedDescription, userId, ownershipType, null, organizationId, parentId || null,
+        'proposal', proposalDeadline.toISOString(),
+        acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
+      ];
     } else {
       // For personal documents (default)
       sql = `
@@ -1028,9 +918,10 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
     function continueExecution() {
     // Use transaction for atomic document creation
     try {
+      console.log('Starting transaction for document creation...');
       db.run('BEGIN TRANSACTION', (beginErr) => {
         if (beginErr) {
-          console.error('Error beginning transaction:', beginErr);
+          console.error('❌ Error beginning transaction:', beginErr);
           console.error('Transaction begin error details:', beginErr.message);
           console.error('Transaction begin error code:', beginErr.code);
           return res.status(500).json({
@@ -1040,12 +931,15 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
           });
         }
 
+        console.log('✅ Transaction started successfully');
+
+        console.log('Executing document INSERT...');
         db.run(sql, params, function(err) {
           if (err) {
-            console.error('Error creating document:', err);
+            console.error('❌ Error creating document:', err);
             console.error('SQL Error details:', err.message);
             console.error('SQL Error code:', err.code);
-            console.error('SQL:', sql);
+            console.error('SQL:', sql.substring(0, 200) + '...');
             console.error('Params:', params);
             db.run('ROLLBACK', (rollbackErr) => {
               if (rollbackErr) {
@@ -1064,6 +958,8 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
             });
             return;
           }
+
+          console.log('✅ Document inserted successfully, ID:', this.lastID);
 
         console.log('Document created in database, now creating initial paragraph...');
 

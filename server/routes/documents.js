@@ -791,29 +791,47 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
     if (!organizationId) {
       return res.status(400).json({ error: 'Organization ID required for organizational documents' });
     }
-    // Simple membership check - any active member can create docs
-    db.get(`
-      SELECT status FROM organization_members
-      WHERE organization_id = ? AND user_id = ? AND status = 'active'
-    `, [organizationId, userId], async (err, member) => {
-      if (err || !member) {
-        return res.status(403).json({ error: 'Must be an active organization member to create documents' });
+    // Check if organization exists first
+    db.get('SELECT id, name FROM organizations WHERE id = ? AND is_active = 1', [organizationId], (orgErr, org) => {
+      if (orgErr) {
+        console.error('Error checking organization existence:', orgErr);
+        return res.status(500).json({ error: 'Failed to verify organization' });
       }
 
-      try {
-        console.log('About to call createDocument for organizational document');
-        console.log('Params:', { ownershipType, organizationId, options, userId, title, description, creatorIds, parentId });
-        await createDocument(ownershipType, organizationId, options, userId, title, description, creatorIds, parentId);
-        console.log('createDocument completed successfully');
-      } catch (error) {
-        console.error('❌ Error in organizational document creation:', error);
-        console.error('Error stack:', error.stack);
-        return res.status(500).json({
-          error: 'Failed to create organizational document',
-          details: error.message,
-          code: error.code
-        });
+      if (!org) {
+        console.error('Organization not found or not active:', organizationId);
+        return res.status(400).json({ error: 'Organization not found or not active' });
       }
+
+      console.log('Organization verified:', org.name, '(' + org.id + ')');
+
+      // Simple membership check - any active member can create docs
+      db.get(`
+        SELECT status FROM organization_members
+        WHERE organization_id = ? AND user_id = ? AND status = 'active'
+      `, [organizationId, userId], async (err, member) => {
+        if (err || !member) {
+          console.error('User is not an active member of organization:', organizationId, 'user:', userId);
+          return res.status(403).json({ error: 'Must be an active organization member to create documents' });
+        }
+
+        console.log('User membership verified for organization:', organizationId);
+
+        try {
+          console.log('About to call createDocument for organizational document');
+          console.log('Params:', { ownershipType, organizationId, options, userId, title, description, creatorIds, parentId });
+          await createDocument(ownershipType, organizationId, options, userId, title, description, creatorIds, parentId);
+          console.log('createDocument completed successfully');
+        } catch (error) {
+          console.error('❌ Error in organizational document creation:', error);
+          console.error('Error stack:', error.stack);
+          return res.status(500).json({
+            error: 'Failed to create organizational document',
+            details: error.message,
+            code: error.code
+          });
+        }
+      });
     });
     return;
   }
@@ -904,6 +922,12 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
       proposalDeadline.setDate(proposalDeadline.getDate() + 30); // 30 days default
       console.log('📅 Proposal deadline:', proposalDeadline.toISOString());
 
+      // Ensure proposalDeadline is valid
+      if (isNaN(proposalDeadline.getTime())) {
+        console.error('Invalid proposal deadline generated');
+        return res.status(500).json({ error: 'Failed to generate proposal deadline' });
+      }
+
       sql = `
         INSERT INTO documents (
           id, title, description, owner_id, ownership_type, creator_ids, organization_id, parent_id, status, proposal_deadline,
@@ -911,12 +935,17 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
           structure_proposals_enabled, created_at, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       `;
+      // Ensure acceptanceThreshold is valid
+      const finalAcceptanceThreshold = (typeof acceptanceThreshold === 'number' && !isNaN(acceptanceThreshold))
+        ? acceptanceThreshold : 50;
+
       params = [
         documentId, trimmedTitle, trimmedDescription, userId, ownershipType, null, organizationId, parentId || null,
         'proposal', proposalDeadline.toISOString(),
-        acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
+        finalAcceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
       ];
       console.log('📋 Organizational SQL params:', params);
+      console.log('Final acceptance threshold:', finalAcceptanceThreshold);
     } else {
       // For personal documents (default)
       sql = `

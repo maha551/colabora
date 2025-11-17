@@ -50,8 +50,34 @@ class ServerManager {
     // Security headers
     this.app.use(helmet(this.config.SECURITY_HEADERS));
 
-    // Rate limiting
-    const limiter = rateLimit({
+    // Rate limiting - separate limits for auth vs other endpoints
+    const authLimiter = rateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 50, // Very lenient for auth endpoints during development
+      message: {
+        error: 'Too many authentication attempts, please try again later.'
+      },
+      standardHeaders: true,
+      legacyHeaders: false,
+      handler: (req, res) => {
+        securityLogger.rateLimitHit(
+          req.ip,
+          req.path,
+          req.get('User-Agent')
+        );
+        metricsCollector.recordSecurityEvent('rate_limit_hit', {
+          ip: req.ip,
+          endpoint: req.path,
+          userAgent: req.get('User-Agent'),
+          type: 'auth'
+        });
+        res.status(429).json({
+          error: 'Too many authentication attempts, please try again later.'
+        });
+      }
+    });
+
+    const apiLimiter = rateLimit({
       windowMs: this.config.RATE_LIMIT_WINDOW_MS,
       max: this.config.RATE_LIMIT_MAX_REQUESTS,
       message: {
@@ -68,14 +94,19 @@ class ServerManager {
         metricsCollector.recordSecurityEvent('rate_limit_hit', {
           ip: req.ip,
           endpoint: req.path,
-          userAgent: req.get('User-Agent')
+          userAgent: req.get('User-Agent'),
+          type: 'api'
         });
         res.status(429).json({
           error: 'Too many requests from this IP, please try again later.'
         });
       }
     });
-    this.app.use('/api', limiter);
+
+    // Apply auth limiter to auth endpoints
+    this.app.use('/api/auth', authLimiter);
+    // Apply general API limiter to all other API endpoints
+    this.app.use('/api', apiLimiter);
   }
 
   setupMiddleware() {
@@ -291,7 +322,7 @@ class ServerManager {
       console.log(`🚀 Server successfully started on 0.0.0.0:${port}`);
       console.log(`🌍 Environment: ${this.config.NODE_ENV}`);
       console.log(`🔒 Security: ${this.config.NODE_ENV === 'production' ? 'Production mode enabled' : 'Development mode - NOT SECURE FOR PRODUCTION'}`);
-      console.log(`📊 Rate limiting: ${this.config.RATE_LIMIT_MAX_REQUESTS} requests per ${this.config.RATE_LIMIT_WINDOW_MS / 1000}s`);
+      console.log(`📊 Rate limiting: ${this.config.RATE_LIMIT_MAX_REQUESTS} API requests per ${this.config.RATE_LIMIT_WINDOW_MS / 1000}s, 50 auth requests per 15min`);
       console.log(`📈 Monitoring: Active - collecting metrics every 60s`);
       console.log('✅ Server initialization complete - ready to accept connections');
 

@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { TrendingUp, Vote, CheckSquare, Users, BarChart3, Shield } from 'lucide-react';
 import { Organization, VotingAnalytics, RepresentativeElection } from '../../../types';
 import { OrganizationPermissions } from '../../../hooks/useOrganizationPermissions';
+import { LoadingSkeleton } from '../LoadingSkeleton';
 
 interface AnalyticsTabProps {
   organization: Organization;
@@ -33,6 +34,10 @@ export function AnalyticsTab({
   }
 
   const activeMembers = organization.members?.filter(m => m.status === 'active') || [];
+
+  if (loading) {
+    return <LoadingSkeleton type="analytics" />;
+  }
 
   return (
     <div className="space-y-6">
@@ -131,19 +136,13 @@ export function AnalyticsTab({
           <CardDescription>Member voting participation over time</CardDescription>
         </CardHeader>
         <CardContent>
-          {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="h-64 flex items-center justify-center border-2 border-dashed border-gray-300 rounded-lg">
+            <div className="text-center">
+              <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-2" />
+              <p className="text-gray-600">Participation chart will be implemented here</p>
+              <p className="text-sm text-gray-500">Showing voting activity trends</p>
             </div>
-          ) : (
-            <div className="h-64 flex items-center justify-center border-2 border-dashed border-gray-300 rounded-lg">
-              <div className="text-center">
-                <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                <p className="text-gray-600">Participation chart will be implemented here</p>
-                <p className="text-sm text-gray-500">Showing voting activity trends</p>
-              </div>
-            </div>
-          )}
+          </div>
         </CardContent>
       </Card>
 

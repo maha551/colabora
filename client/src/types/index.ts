@@ -486,76 +486,7 @@ export interface VotingAnalytics {
   updatedAt: string;
 }
 
-// Document Proposal Types for organizational document creation with voting
-export interface DocumentProposal {
-  id: string;
-  organizationId: string;
-  title: string;
-  description?: string;
-  proposedByUserId: string;
-  approved: boolean;
-  applied: boolean;
-  createdAt: string;
-  updatedAt: string;
-  user: {
-    id: string;
-    name: string;
-    email: string;
-  };
-  votes: DocumentProposalVote[];
-  comments: DocumentProposalComment[];
-  // Document options that will be applied when approved
-  documentOptions?: {
-    acceptanceThreshold: number;
-    votingAnonymous: boolean;
-    votingAnonymityLocked: boolean;
-    voteChangeAllowed: boolean;
-    structureProposalsEnabled: boolean;
-  };
-  contributors?: string[]; // User IDs of proposed contributors
-}
-
-export interface DocumentProposalVote {
-  id: string;
-  documentProposalId: string;
-  userId: string;
-  vote: 'PRO' | 'NEUTRAL' | 'CONTRA';
-  createdAt: string;
-  user?: {
-    id: string;
-    name: string;
-    email: string;
-  };
-}
-
-export interface DocumentProposalComment {
-  id: string;
-  documentProposalId: string;
-  userId: string;
-  text: string;
-  parentId?: string;
-  createdAt: string;
-  updatedAt: string;
-  user: {
-    id: string;
-    name: string;
-    email: string;
-  };
-  parent?: {
-    id: string;
-    user: {
-      id: string;
-      name: string;
-    };
-  };
-  replies: {
-    id: string;
-    user: {
-      id: string;
-      name: string;
-    };
-  }[];
-}
+// Document proposal types removed - system replaced with direct document creation
 
 // Alias types for backward compatibility with existing components
 export type Suggestion = Proposal;

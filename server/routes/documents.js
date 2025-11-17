@@ -230,6 +230,211 @@ router.get('/', requireAuth, (req, res) => {
   });
 });
 
+
+// Get all documents owned by a specific organization
+router.get('/organization/:organizationId', requireAuth, (req, res) => {
+  const db = req.app.locals.db;
+  const { organizationId } = req.params;
+  const userId = req.user.id;
+
+  // First check if user is a member of the organization
+  const membershipQuery = `
+    SELECT om.status, o.is_active
+    FROM organization_members om
+    JOIN organizations o ON om.organization_id = o.id
+    WHERE om.organization_id = ? AND om.user_id = ? AND om.status = 'active' AND o.is_active = 1
+  `;
+
+  db.get(membershipQuery, [organizationId, userId], (err, membership) => {
+    if (err) {
+      console.error('Error checking organization membership:', err);
+      return res.status(500).json({ error: 'Failed to verify organization access' });
+    }
+
+    if (!membership) {
+      return res.status(403).json({ error: 'Access denied: not a member of this organization' });
+    }
+
+    // Get all organizational documents
+    const documentsQuery = `
+      SELECT d.*,
+             u.name as owner_name,
+             u.email as owner_email,
+             o.name as organization_name
+      FROM documents d
+      JOIN users u ON d.owner_id = u.id
+      JOIN organizations o ON d.organization_id = o.id
+      WHERE d.ownership_type = 'organizational'
+        AND d.organization_id = ?
+        AND o.is_active = 1
+      ORDER BY d.parent_id NULLS FIRST, d.created_at ASC
+    `;
+
+    db.all(documentsQuery, [organizationId], (err, documents) => {
+      if (err) {
+        console.error('Error fetching organization documents:', err);
+        return res.status(500).json({
+          error: 'Failed to fetch organization documents',
+          details: err.message
+        });
+      }
+
+      console.log(`Found ${documents ? documents.length : 0} documents for organization ${organizationId}`);
+
+      // Process documents with collaborators (for organizational docs, all org members are auto-collaborators)
+      const documentsWithCollaborators = documents.map(doc => {
+        return new Promise((resolve) => {
+          if (doc.ownership_type === 'organizational') {
+            // For organizational documents, all active organization members are automatically collaborators
+            db.all(`
+              SELECT
+                u.id as user_id,
+                u.name as user_name,
+                u.email as user_email,
+                'auto' as collaborator_type
+              FROM organization_members om
+              JOIN users u ON om.user_id = u.id
+              WHERE om.organization_id = ? AND om.status = 'active'
+              ORDER BY u.name
+            `, [doc.organization_id], (err, collaborators) => {
+              if (err) {
+                console.error('Error fetching organization members for document:', doc.id, err);
+                return resolve({
+                  ...doc,
+                  parentId: doc.parent_id || undefined,
+                  status: doc.status || 'draft',
+                  proposalDeadline: doc.proposal_deadline || undefined,
+                  owner: {
+                    id: doc.owner_id,
+                    name: doc.owner_name,
+                    email: doc.owner_email
+                  },
+                  collaborators: [],
+                  organization: {
+                    id: doc.organization_id,
+                    name: doc.organization_name
+                  },
+                  options: {
+                    acceptanceThreshold: doc.acceptance_threshold,
+                    votingAnonymous: doc.voting_anonymous === 1,
+                    votingAnonymityLocked: doc.voting_anonymity_locked === 1,
+                    voteChangeAllowed: doc.vote_change_allowed === 1,
+                    structureProposalsEnabled: doc.structure_proposals_enabled === 1
+                  }
+                });
+              }
+
+              resolve({
+                ...doc,
+                parentId: doc.parent_id || undefined,
+                status: doc.status || 'draft',
+                proposalDeadline: doc.proposal_deadline || undefined,
+                owner: {
+                  id: doc.owner_id,
+                  name: doc.owner_name,
+                  email: doc.owner_email
+                },
+                collaborators: collaborators || [],
+                organization: {
+                  id: doc.organization_id,
+                  name: doc.organization_name
+                },
+                options: {
+                  acceptanceThreshold: doc.acceptance_threshold,
+                  votingAnonymous: doc.voting_anonymous === 1,
+                  votingAnonymityLocked: doc.voting_anonymity_locked === 1,
+                  voteChangeAllowed: doc.vote_change_allowed === 1,
+                  structureProposalsEnabled: doc.structure_proposals_enabled === 1
+                }
+              });
+            });
+          } else {
+            // For non-organizational documents, fetch stored collaborators
+            db.all(`
+              SELECT
+                dc.id as collaborator_id,
+                dc.document_id,
+                dc.user_id,
+                dc.created_at,
+                u.name as user_name,
+                u.email as user_email
+              FROM document_collaborators dc
+              JOIN users u ON dc.user_id = u.id
+              WHERE dc.document_id = ?
+            `, [doc.id], (err, collaborators) => {
+              if (err) {
+                console.error('Error fetching collaborators for document:', doc.id, err);
+                return resolve({
+                  ...doc,
+                  parentId: doc.parent_id || undefined,
+                  owner: {
+                    id: doc.owner_id,
+                    name: doc.owner_name,
+                    email: doc.owner_email
+                  },
+                  collaborators: [],
+                  organization: doc.organization_id ? {
+                    id: doc.organization_id,
+                    name: doc.organization_name
+                  } : null,
+                  options: {
+                    acceptanceThreshold: doc.acceptance_threshold,
+                    votingAnonymous: doc.voting_anonymous === 1,
+                    votingAnonymityLocked: doc.voting_anonymity_locked === 1,
+                    voteChangeAllowed: doc.vote_change_allowed === 1,
+                    structureProposalsEnabled: doc.structure_proposals_enabled === 1
+                  }
+                });
+              }
+
+              // Transform collaborators to match expected format
+              const transformedCollaborators = (collaborators || []).map(collab => ({
+                id: collab.user_id,
+                name: collab.user_name,
+                email: collab.user_email
+              }));
+
+              resolve({
+                ...doc,
+                parentId: doc.parent_id || undefined,
+                status: doc.status || 'draft',
+                proposalDeadline: doc.proposal_deadline || undefined,
+                owner: {
+                  id: doc.owner_id,
+                  name: doc.owner_name,
+                  email: doc.owner_email
+                },
+                collaborators: transformedCollaborators,
+                organization: doc.organization_id ? {
+                  id: doc.organization_id,
+                  name: doc.organization_name
+                } : null,
+                options: {
+                  acceptanceThreshold: doc.acceptance_threshold,
+                  votingAnonymous: doc.voting_anonymous === 1,
+                  votingAnonymityLocked: doc.voting_anonymity_locked === 1,
+                  voteChangeAllowed: doc.vote_change_allowed === 1,
+                  structureProposalsEnabled: doc.structure_proposals_enabled === 1
+                }
+              });
+            });
+          }
+        });
+      });
+
+      Promise.all(documentsWithCollaborators).then(processedDocuments => {
+        res.json({
+          documents: processedDocuments,
+          organizationId: organizationId
+        });
+      }).catch(err => {
+        console.error('Error processing documents:', err);
+        res.status(500).json({ error: 'Failed to process documents' });
+      });
+    });
+  });
+});
+
 // Get a specific document with full details
 router.get('/:id', requireAuth, (req, res) => {
   const db = req.app.locals.db;
@@ -619,7 +824,7 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
           }
         }
 
-        await createDocument();
+        await createDocument(ownershipType, organizationId, options, userId, title, description, creatorIds, parentId);
       } catch (error) {
         console.error('Error in organizational document creation:', error);
         return res.status(500).json({ error: 'Failed to create organizational document' });
@@ -641,7 +846,7 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
       }
 
       try {
-        await createDocument();
+        await createDocument(ownershipType, organizationId, options, userId, title, description, creatorIds, parentId);
       } catch (error) {
         console.error('Error in document creation:', error);
         return res.status(500).json({ error: 'Failed to create document' });
@@ -653,14 +858,14 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
   // For non-organizational documents without parent, create immediately
   (async () => {
     try {
-      await createDocument();
+      await createDocument(ownershipType, organizationId, options, userId, title, description, creatorIds, parentId);
     } catch (error) {
       console.error('Error in document creation:', error);
       return res.status(500).json({ error: 'Failed to create document' });
     }
   })();
-
-  async function createDocument() {
+});
+  async function createDocument(ownershipType, organizationId, options, userId, title, description, creatorIds, parentId) {
     // Parse and validate options for all document types (personal, shared, organizational)
     let acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled;
 
@@ -774,18 +979,35 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
         acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
       ];
     } else if (ownershipType === 'organizational') {
-      // For organizational documents, set organization_id
-      sql = `
-        INSERT INTO documents (
-          id, title, description, owner_id, ownership_type, creator_ids, organization_id, parent_id,
-          acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed,
-          structure_proposals_enabled, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      `;
-      params = [
-        documentId, trimmedTitle, trimmedDescription, userId, ownershipType, null, organizationId, parentId || null,
-        acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
-      ];
+      // For organizational documents, set organization_id and start as proposal with deadline
+      // Get governance rules for proposal period
+      db.get('SELECT document_proposal_period_days FROM organization_governance_rules WHERE organization_id = ?',
+        [organizationId], (govErr, govRules) => {
+        if (govErr) {
+          console.error('Error fetching governance rules for proposal period:', govErr);
+        }
+
+        const proposalPeriodDays = govRules?.document_proposal_period_days || 365;
+        const proposalDeadline = new Date();
+        proposalDeadline.setDate(proposalDeadline.getDate() + proposalPeriodDays);
+
+        sql = `
+          INSERT INTO documents (
+            id, title, description, owner_id, ownership_type, creator_ids, organization_id, parent_id, status, proposal_deadline,
+            acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed,
+            structure_proposals_enabled, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `;
+        params = [
+          documentId, trimmedTitle, trimmedDescription, userId, ownershipType, null, organizationId, parentId || null,
+          'proposal', proposalDeadline.toISOString(),
+          acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
+        ];
+
+        // Continue with the rest of the function logic
+        continueExecution();
+      });
+      return; // Exit early, execution continues in callback
     } else {
       // For personal documents (default)
       sql = `
@@ -801,6 +1023,9 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
       ];
     }
 
+    continueExecution();
+
+    function continueExecution() {
     // Use transaction for atomic document creation
     try {
       db.run('BEGIN TRANSACTION', (beginErr) => {
@@ -885,7 +1110,7 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
               description: trimmedDescription,
               ownerId: userId,
               parentId: parentId || undefined,
-              status: 'draft', // New documents start as draft
+              status: ownershipType === 'organizational' ? 'proposal' : 'draft', // Organizational docs start as proposals
               owner: {
                 id: userId,
                 name: user.name,
@@ -1182,8 +1407,7 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
         type: 'unexpected_error'
       });
     }
-  }
-});
+}
 
 // Update document title
 router.put('/:id', requireAuth, (req, res) => {
@@ -1422,209 +1646,6 @@ router.delete('/:id/collaborators/:userId', requireAuth, (req, res) => {
   });
 });
 
-// Get all documents owned by a specific organization
-router.get('/organization/:organizationId', requireAuth, (req, res) => {
-  const db = req.app.locals.db;
-  const { organizationId } = req.params;
-  const userId = req.user.id;
-
-  // First check if user is a member of the organization
-  const membershipQuery = `
-    SELECT om.status, o.is_active
-    FROM organization_members om
-    JOIN organizations o ON om.organization_id = o.id
-    WHERE om.organization_id = ? AND om.user_id = ? AND om.status = 'active' AND o.is_active = 1
-  `;
-
-  db.get(membershipQuery, [organizationId, userId], (err, membership) => {
-    if (err) {
-      console.error('Error checking organization membership:', err);
-      return res.status(500).json({ error: 'Failed to verify organization access' });
-    }
-
-    if (!membership) {
-      return res.status(403).json({ error: 'Access denied: not a member of this organization' });
-    }
-
-    // Get all organizational documents
-    const documentsQuery = `
-      SELECT d.*,
-             u.name as owner_name,
-             u.email as owner_email,
-             o.name as organization_name
-      FROM documents d
-      JOIN users u ON d.owner_id = u.id
-      JOIN organizations o ON d.organization_id = o.id
-      WHERE d.ownership_type = 'organizational'
-        AND d.organization_id = ?
-        AND o.is_active = 1
-      ORDER BY d.parent_id NULLS FIRST, d.created_at ASC
-    `;
-
-    db.all(documentsQuery, [organizationId], (err, documents) => {
-      if (err) {
-        console.error('Error fetching organization documents:', err);
-        return res.status(500).json({
-          error: 'Failed to fetch organization documents',
-          details: err.message
-        });
-      }
-
-      console.log(`Found ${documents ? documents.length : 0} documents for organization ${organizationId}`);
-
-      // Process documents with collaborators (for organizational docs, all org members are auto-collaborators)
-      const documentsWithCollaborators = documents.map(doc => {
-        return new Promise((resolve) => {
-          if (doc.ownership_type === 'organizational') {
-            // For organizational documents, all active organization members are automatically collaborators
-            db.all(`
-              SELECT
-                u.id as user_id,
-                u.name as user_name,
-                u.email as user_email,
-                'auto' as collaborator_type
-              FROM organization_members om
-              JOIN users u ON om.user_id = u.id
-              WHERE om.organization_id = ? AND om.status = 'active'
-              ORDER BY u.name
-            `, [doc.organization_id], (err, collaborators) => {
-              if (err) {
-                console.error('Error fetching organization members for document:', doc.id, err);
-                return resolve({
-                  ...doc,
-                  parentId: doc.parent_id || undefined,
-                  status: doc.status || 'draft',
-                  proposalDeadline: doc.proposal_deadline || undefined,
-                  owner: {
-                    id: doc.owner_id,
-                    name: doc.owner_name,
-                    email: doc.owner_email
-                  },
-                  collaborators: [],
-                  organization: {
-                    id: doc.organization_id,
-                    name: doc.organization_name
-                  },
-                  options: {
-                    acceptanceThreshold: doc.acceptance_threshold,
-                    votingAnonymous: doc.voting_anonymous === 1,
-                    votingAnonymityLocked: doc.voting_anonymity_locked === 1,
-                    voteChangeAllowed: doc.vote_change_allowed === 1,
-                    structureProposalsEnabled: doc.structure_proposals_enabled === 1
-                  }
-                });
-              }
-
-              resolve({
-                ...doc,
-                parentId: doc.parent_id || undefined,
-                status: doc.status || 'draft',
-                proposalDeadline: doc.proposal_deadline || undefined,
-                owner: {
-                  id: doc.owner_id,
-                  name: doc.owner_name,
-                  email: doc.owner_email
-                },
-                collaborators: collaborators || [],
-                organization: {
-                  id: doc.organization_id,
-                  name: doc.organization_name
-                },
-                options: {
-                  acceptanceThreshold: doc.acceptance_threshold,
-                  votingAnonymous: doc.voting_anonymous === 1,
-                  votingAnonymityLocked: doc.voting_anonymity_locked === 1,
-                  voteChangeAllowed: doc.vote_change_allowed === 1,
-                  structureProposalsEnabled: doc.structure_proposals_enabled === 1
-                }
-              });
-            });
-          } else {
-            // For non-organizational documents, fetch stored collaborators
-            db.all(`
-              SELECT
-                dc.id as collaborator_id,
-                dc.document_id,
-                dc.user_id,
-                dc.created_at,
-                u.name as user_name,
-                u.email as user_email
-              FROM document_collaborators dc
-              JOIN users u ON dc.user_id = u.id
-              WHERE dc.document_id = ?
-            `, [doc.id], (err, collaborators) => {
-              if (err) {
-                console.error('Error fetching collaborators for document:', doc.id, err);
-                return resolve({
-                  ...doc,
-                  parentId: doc.parent_id || undefined,
-                  owner: {
-                    id: doc.owner_id,
-                    name: doc.owner_name,
-                    email: doc.owner_email
-                  },
-                  collaborators: [],
-                  organization: doc.organization_id ? {
-                    id: doc.organization_id,
-                    name: doc.organization_name
-                  } : null,
-                  options: {
-                    acceptanceThreshold: doc.acceptance_threshold,
-                    votingAnonymous: doc.voting_anonymous === 1,
-                    votingAnonymityLocked: doc.voting_anonymity_locked === 1,
-                    voteChangeAllowed: doc.vote_change_allowed === 1,
-                    structureProposalsEnabled: doc.structure_proposals_enabled === 1
-                  }
-                });
-              }
-
-              // Transform collaborators to match expected format
-              const transformedCollaborators = (collaborators || []).map(collab => ({
-                id: collab.user_id,
-                name: collab.user_name,
-                email: collab.user_email
-              }));
-
-              resolve({
-                ...doc,
-                parentId: doc.parent_id || undefined,
-                status: doc.status || 'draft',
-                proposalDeadline: doc.proposal_deadline || undefined,
-                owner: {
-                  id: doc.owner_id,
-                  name: doc.owner_name,
-                  email: doc.owner_email
-                },
-                collaborators: transformedCollaborators,
-                organization: doc.organization_id ? {
-                  id: doc.organization_id,
-                  name: doc.organization_name
-                } : null,
-                options: {
-                  acceptanceThreshold: doc.acceptance_threshold,
-                  votingAnonymous: doc.voting_anonymous === 1,
-                  votingAnonymityLocked: doc.voting_anonymity_locked === 1,
-                  voteChangeAllowed: doc.vote_change_allowed === 1,
-                  structureProposalsEnabled: doc.structure_proposals_enabled === 1
-                }
-              });
-            });
-          }
-        });
-      });
-
-      Promise.all(documentsWithCollaborators).then(processedDocuments => {
-        res.json({
-          documents: processedDocuments,
-          organizationId: organizationId
-        });
-      }).catch(err => {
-        console.error('Error processing documents:', err);
-        res.status(500).json({ error: 'Failed to process documents' });
-      });
-    });
-  });
-});
 
 // Vote on entire document (document-level vote)
 router.post('/:id/vote', requireAuth, requireDocumentAccess, (req, res) => {
@@ -1836,6 +1857,7 @@ function checkDocumentAgreementStatus(db, documentId) {
       });
     });
   });
+    } // End of continueExecution function
 }
 
 module.exports = router;

@@ -1,12 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Document, OrganizationGovernanceRules, RepresentativeElection, VotingAnalytics, DocumentProposal } from '../types';
+import { Document, OrganizationGovernanceRules, RepresentativeElection, VotingAnalytics } from '../types';
 import { organizationsApi, governanceApi, documentsApi } from '../lib/api';
 import { toast } from 'sonner';
 
 export interface OrganizationData {
   // Documents data
   documents: Document[];
-  documentProposals: DocumentProposal[];
   policyVotes: any[];
 
   // Governance data
@@ -19,7 +18,6 @@ export interface OrganizationData {
   // Loading states
   loading: {
     documents: boolean;
-    documentProposals: boolean;
     governance: boolean;
     elections: boolean;
     analytics: boolean;
@@ -29,7 +27,6 @@ export interface OrganizationData {
   // Error states
   errors: {
     documents: string | null;
-    documentProposals: string | null;
     governance: string | null;
     elections: string | null;
     analytics: string | null;
@@ -40,9 +37,6 @@ export interface OrganizationData {
 export interface OrganizationActions {
   // Document actions
   refreshDocuments: () => Promise<void>;
-  createDocumentProposal: (title: string, description?: string, contributors?: string[], options?: any) => Promise<void>;
-  refreshDocumentProposals: () => Promise<void>;
-  voteOnDocumentProposal: (proposalId: string, vote: 'PRO' | 'NEUTRAL' | 'CONTRA') => Promise<void>;
   createDocument: (title: string, description?: string, parentId?: string) => Promise<void>;
 
   // Governance actions
@@ -70,7 +64,6 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
 } {
   // Data state
   const [documents, setDocuments] = useState<Document[]>([]);
-  const [documentProposals, setDocumentProposals] = useState<DocumentProposal[]>([]);
   const [policyVotes, setPolicyVotes] = useState<any[]>([]);
   const [governanceRules, setGovernanceRules] = useState<OrganizationGovernanceRules | null>(null);
   const [elections, setElections] = useState<RepresentativeElection[]>([]);
@@ -91,7 +84,6 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
   // Loading states
   const [loading, setLoading] = useState({
     documents: false,
-    documentProposals: false,
     governance: false,
     elections: false,
     analytics: false,
@@ -101,7 +93,6 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
   // Error states
   const [errors, setErrors] = useState({
     documents: null as string | null,
-    documentProposals: null as string | null,
     governance: null as string | null,
     elections: null as string | null,
     analytics: null as string | null,
@@ -156,27 +147,6 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
     }
   }, [organizationId, loading.documents, setLoadingState, setErrorState]);
 
-  const loadDocumentProposals = useCallback(async () => {
-    if (loading.documentProposals) return;
-
-    setLoadingState('documentProposals', true);
-    setErrorState('documentProposals', null);
-
-    try {
-      const response = await organizationsApi.getDocumentProposals(organizationId);
-      setDocumentProposals(response.documentProposals || []);
-    } catch (error: any) {
-      console.error('Failed to load document proposals:', error);
-      // Handle rate limiting specifically
-      if (error.name === 'RateLimitError') {
-        setErrorState('documentProposals', error.message);
-        return;
-      }
-      setErrorState('documentProposals', 'Failed to load document proposals');
-    } finally {
-      setLoadingState('documentProposals', false);
-    }
-  }, [organizationId, loading.documentProposals, setLoadingState, setErrorState]);
 
   const loadPolicyVotes = useCallback(async () => {
     if (loading.policyVotes) return;
@@ -264,7 +234,6 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
       case 'documents':
         if (documents.length === 0 && !loading.documents && !documentsLoadedRef.current && !documentsRateLimitedRef.current) {
           loadDocuments();
-          loadDocumentProposals();
           loadPolicyVotes();
         }
         break;
@@ -304,7 +273,6 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
     loading.elections, 
     loading.analytics,
     loadDocuments,
-    loadDocumentProposals,
     loadPolicyVotes,
     loadGovernanceRules,
     loadElections,
@@ -321,33 +289,6 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
   // Action functions
   const actions: OrganizationActions = {
     refreshDocuments: loadDocuments,
-    createDocumentProposal: async (title: string, description?: string, contributors?: string[], options?: any) => {
-      try {
-        await organizationsApi.createDocumentProposal(organizationId, {
-          title,
-          description,
-          contributors,
-          documentOptions: options
-        });
-        // Refresh document proposals after creation
-        await loadDocumentProposals();
-      } catch (error) {
-        console.error('Failed to create document proposal:', error);
-        throw error;
-      }
-    },
-    refreshDocumentProposals: loadDocumentProposals,
-    voteOnDocumentProposal: async (proposalId: string, vote: 'PRO' | 'NEUTRAL' | 'CONTRA') => {
-      try {
-        await organizationsApi.voteOnDocumentProposal(organizationId, proposalId, vote);
-        // Refresh both proposals and documents after voting (voting could result in approval)
-        await loadDocumentProposals();
-        await loadDocuments();
-      } catch (error) {
-        console.error('Failed to vote on document proposal:', error);
-        throw error;
-      }
-    },
     createDocument: async (title: string, description?: string, parentId?: string) => {
       try {
         await documentsApi.createDocument(
@@ -400,7 +341,6 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
 
   const data: OrganizationData = {
     documents,
-    documentProposals,
     policyVotes,
     governanceRules,
     elections,

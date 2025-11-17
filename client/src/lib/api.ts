@@ -271,6 +271,19 @@ export const documentsApi = {
       method: 'DELETE',
     })
   },
+
+  // Vote on a document (document-level voting)
+  async voteOnDocument(documentId: string, vote: 'PRO' | 'NEUTRAL' | 'CONTRA') {
+    return apiRequest(`/api/documents/${documentId}/vote`, {
+      method: 'POST',
+      body: JSON.stringify({ vote }),
+    })
+  },
+
+  // Get document votes
+  async getDocumentVotes(documentId: string) {
+    return apiRequest(`/api/documents/${documentId}/votes`)
+  },
 }
 
 // Paragraph API functions
@@ -537,36 +550,6 @@ export const organizationsApi = {
     return apiRequest(`/api/documents/organization/${organizationId}`)
   },
 
-  // Document proposals
-  async getDocumentProposals(organizationId: string) {
-    return apiRequest(`/api/organizations/${organizationId}/document-proposals`)
-  },
-
-  async createDocumentProposal(organizationId: string, proposal: {
-    title: string;
-    description?: string;
-    contributors?: string[];
-    documentOptions?: {
-      acceptanceThreshold: number;
-      votingAnonymous: boolean;
-      votingAnonymityLocked: boolean;
-      voteChangeAllowed: boolean;
-      structureProposalsEnabled: boolean;
-      parentId?: string;
-    };
-  }) {
-    return apiRequest(`/api/organizations/${organizationId}/document-proposals`, {
-      method: 'POST',
-      body: JSON.stringify(proposal),
-    })
-  },
-
-  async voteOnDocumentProposal(organizationId: string, proposalId: string, vote: 'PRO' | 'NEUTRAL' | 'CONTRA') {
-    return apiRequest(`/api/organizations/${organizationId}/document-proposals/${proposalId}/vote`, {
-      method: 'POST',
-      body: JSON.stringify({ vote }),
-    })
-  },
 
   // Admin API functions
   async getAdminDashboard() {

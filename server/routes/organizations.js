@@ -881,8 +881,30 @@ router.post('/:organizationId/votes/:voteId/vote', requireAuth, async (req, res)
   }
 });
 
-// Get organization document proposals
-router.get('/:organizationId/document-proposals', requireAuth, async (req, res) => {
+// Document proposals system removed - now using document status 'proposal' directly
+router.get('/:organizationId/document-proposals', requireAuth, (req, res) => {
+  res.json({
+    documentProposals: [],
+    message: 'Document proposals system has been replaced. New organizational documents now start with proposal status automatically.'
+  });
+});
+
+// Create document proposal (deprecated)
+router.post('/:organizationId/document-proposals', requireAuth, (req, res) => {
+  res.status(410).json({
+    error: 'Document proposals system has been removed. Use the document creation API instead.'
+  });
+});
+
+// Vote on document proposal (deprecated)
+router.post('/:organizationId/document-proposals/:proposalId/vote', requireAuth, (req, res) => {
+  res.status(410).json({
+    error: 'Document proposals system has been removed. Voting now happens on documents directly.'
+  });
+});
+
+/*
+// OLD DOCUMENT PROPOSAL CODE - COMMENTED OUT
   const db = req.app.locals.db;
   const { organizationId } = req.params;
   const userId = req.user.id;
@@ -968,8 +990,22 @@ router.get('/:organizationId/document-proposals', requireAuth, async (req, res) 
             email: row.user_email
           },
           votes: votesByProposal[row.id] || [],
-          documentOptions: row.document_options ? JSON.parse(row.document_options) : null,
-          contributors: row.contributors ? JSON.parse(row.contributors) : []
+          documentOptions: (() => {
+            try {
+              return row.document_options ? JSON.parse(row.document_options) : null;
+            } catch (parseError) {
+              console.error('Error parsing documentOptions JSON:', parseError, 'Raw data:', row.document_options);
+              return null;
+            }
+          })(),
+          contributors: (() => {
+            try {
+              return row.contributors ? JSON.parse(row.contributors) : [];
+            } catch (parseError) {
+              console.error('Error parsing contributors JSON:', parseError, 'Raw data:', row.contributors);
+              return [];
+            }
+          })()
         }));
 
         res.json({ documentProposals });
@@ -1365,5 +1401,6 @@ function convertProposalToDocument(db, proposalId, callback) {
     }
   });
 }
+*/
 
 module.exports = router;

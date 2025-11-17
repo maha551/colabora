@@ -7,7 +7,6 @@ export interface OrganizationPermissions {
 
   // Document permissions
   canCreateDocuments: boolean;
-  canCreateDocumentProposals: boolean;
   canViewAllDocuments: boolean;
 
   // Member management permissions
@@ -42,7 +41,6 @@ export function useOrganizationPermissions(user: User, organization: Organizatio
 
   // Document permissions
   const canCreateDocuments = isRepresentative || isAdmin; // Only reps can create documents directly
-  const canCreateDocumentProposals = isActiveMember || isRepresentative || isAdmin; // All members can create proposals
   const canViewAllDocuments = isRepresentative || isActiveMember || isAdmin;
 
   // Member management permissions
@@ -71,7 +69,6 @@ export function useOrganizationPermissions(user: User, organization: Organizatio
 
     // Document permissions
     canCreateDocuments,
-    canCreateDocumentProposals,
     canViewAllDocuments,
 
     // Member management permissions

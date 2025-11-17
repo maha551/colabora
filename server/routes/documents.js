@@ -801,10 +801,18 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
       }
 
       try {
+        console.log('About to call createDocument for organizational document');
+        console.log('Params:', { ownershipType, organizationId, options, userId, title, description, creatorIds, parentId });
         await createDocument(ownershipType, organizationId, options, userId, title, description, creatorIds, parentId);
+        console.log('createDocument completed successfully');
       } catch (error) {
-        console.error('Error in organizational document creation:', error);
-        return res.status(500).json({ error: 'Failed to create organizational document' });
+        console.error('❌ Error in organizational document creation:', error);
+        console.error('Error stack:', error.stack);
+        return res.status(500).json({
+          error: 'Failed to create organizational document',
+          details: error.message,
+          code: error.code
+        });
       }
     });
     return;
@@ -843,6 +851,9 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
   })();
 });
   async function createDocument(ownershipType, organizationId, options, userId, title, description, creatorIds, parentId) {
+    console.log('🚀 Starting createDocument function');
+    console.log('Input params:', { ownershipType, organizationId, userId, title, description, parentId });
+
     // Parse and validate options for all document types (personal, shared, organizational)
     let acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled;
 
@@ -856,14 +867,19 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
     voteChangeAllowed = options?.voteChangeAllowed !== false ? 1 : 0;
     structureProposalsEnabled = options?.structureProposalsEnabled === true ? 1 : 0;
 
+    console.log('Parsed options:', { acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled });
+
     const documentId = uuidv4();
     const trimmedTitle = title.trim();
     const trimmedDescription = description ? description.trim() : null;
 
-    console.log('Creating document with ID:', documentId);
-    console.log('Title:', trimmedTitle);
-    console.log('Ownership type:', ownershipType);
-    console.log('Parent ID:', parentId || 'none');
+    console.log('📄 Generated document ID:', documentId);
+    console.log('📝 Title:', trimmedTitle);
+    console.log('📝 Description:', trimmedDescription);
+    console.log('🏷️  Ownership type:', ownershipType);
+    console.log('🏢 Organization ID:', organizationId);
+    console.log('👨 User ID:', userId);
+    console.log('📂 Parent ID:', parentId || 'none');
 
     // Build the SQL query based on ownership type
     let sql, params;
@@ -882,9 +898,11 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
         acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
       ];
     } else if (ownershipType === 'organizational') {
+      console.log('🏢 Building organizational document SQL');
       // For organizational documents, set organization_id and start as proposal
       const proposalDeadline = new Date();
       proposalDeadline.setDate(proposalDeadline.getDate() + 30); // 30 days default
+      console.log('📅 Proposal deadline:', proposalDeadline.toISOString());
 
       sql = `
         INSERT INTO documents (
@@ -898,6 +916,7 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
         'proposal', proposalDeadline.toISOString(),
         acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
       ];
+      console.log('📋 Organizational SQL params:', params);
     } else {
       // For personal documents (default)
       sql = `
@@ -916,24 +935,24 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
     continueExecution();
 
     function continueExecution() {
+    console.log('🔄 Calling continueExecution()');
+    console.log('📝 Final SQL:', sql);
+    console.log('📊 Final params:', params);
+
     // Use transaction for atomic document creation
     try {
-      console.log('Starting transaction for document creation...');
+      console.log('🏦 Starting transaction for document creation...');
       db.run('BEGIN TRANSACTION', (beginErr) => {
         if (beginErr) {
           console.error('❌ Error beginning transaction:', beginErr);
           console.error('Transaction begin error details:', beginErr.message);
           console.error('Transaction begin error code:', beginErr.code);
-          return res.status(500).json({
-            error: 'Failed to create document',
-            details: beginErr.message,
-            code: beginErr.code
-          });
+          throw new Error(`Transaction begin failed: ${beginErr.message}`);
         }
 
         console.log('✅ Transaction started successfully');
 
-        console.log('Executing document INSERT...');
+        console.log('💾 Executing document INSERT...');
         db.run(sql, params, function(err) {
           if (err) {
             console.error('❌ Error creating document:', err);

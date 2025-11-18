@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
-import { Plus, X, FileText } from 'lucide-react';
-import { Organization } from '../../types';
-import { documentsApi } from '../../lib/api';
+import { Plus, X, FileText, Settings } from 'lucide-react';
+import { Organization, OrganizationGovernanceRules } from '../../types';
+import { documentsApi, governanceApi } from '../../lib/api';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -15,9 +15,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../ui/dialog';
+import { Slider } from '../ui/slider';
+import { Switch } from '../ui/switch';
+import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 
 interface DocumentCreationModalProps {
   organization: Organization;
+  governanceRules: OrganizationGovernanceRules | null;
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
@@ -26,6 +30,7 @@ interface DocumentCreationModalProps {
 
 export function DocumentCreationModal({
   organization,
+  governanceRules,
   isOpen,
   onClose,
   onSuccess,
@@ -34,6 +39,30 @@ export function DocumentCreationModal({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Document options with governance rule defaults
+  const [acceptanceThreshold, setAcceptanceThreshold] = useState(75);
+  const [votingAnonymous, setVotingAnonymous] = useState(false);
+  const [votingAnonymityLocked, setVotingAnonymityLocked] = useState(false);
+  const [voteChangeAllowed, setVoteChangeAllowed] = useState(true);
+  const [structureProposalsEnabled, setStructureProposalsEnabled] = useState(true);
+
+  // Load governance rules when modal opens
+  useEffect(() => {
+    if (isOpen && governanceRules) {
+      // Initialize with organization's governance rules
+      setAcceptanceThreshold(75); // Default, can be customized
+      setVotingAnonymous(governanceRules.anonymousVotingEnabled);
+      setVoteChangeAllowed(governanceRules.voteChangeAllowed);
+      setStructureProposalsEnabled(true); // Default to enabled
+    } else if (isOpen && !governanceRules) {
+      // Fallback defaults if no governance rules
+      setAcceptanceThreshold(75);
+      setVotingAnonymous(false);
+      setVoteChangeAllowed(true);
+      setStructureProposalsEnabled(true);
+    }
+  }, [isOpen, governanceRules]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,11 +79,11 @@ export function DocumentCreationModal({
         description.trim() || undefined,
         undefined, // contributors - org members are auto-included
         {
-          acceptanceThreshold: organization.votingThreshold * 100, // Convert to percentage
-          votingAnonymous: false,
-          votingAnonymityLocked: false,
-          voteChangeAllowed: true,
-          structureProposalsEnabled: true,
+          acceptanceThreshold,
+          votingAnonymous,
+          votingAnonymityLocked,
+          voteChangeAllowed,
+          structureProposalsEnabled,
           parentId: parentId
         },
         'organizational',
@@ -75,6 +104,11 @@ export function DocumentCreationModal({
   const handleClose = () => {
     setTitle('');
     setDescription('');
+    setAcceptanceThreshold(75);
+    setVotingAnonymous(false);
+    setVotingAnonymityLocked(false);
+    setVoteChangeAllowed(true);
+    setStructureProposalsEnabled(true);
     setIsSubmitting(false);
     onClose();
   };
@@ -120,6 +154,115 @@ export function DocumentCreationModal({
               />
             </div>
 
+            {/* Document Options */}
+            <Card className="border-gray-200">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Settings className="h-4 w-4" />
+                  Document Options
+                </CardTitle>
+                <CardDescription>
+                  Configure voting and collaboration settings for this document. These settings cannot be changed after creation.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Acceptance Threshold */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="acceptance-threshold" className="text-sm font-medium">
+                      Acceptance Threshold
+                    </Label>
+                    <span className="text-sm text-gray-600">{acceptanceThreshold}%</span>
+                  </div>
+                  <Slider
+                    id="acceptance-threshold"
+                    min={1}
+                    max={100}
+                    step={1}
+                    value={[acceptanceThreshold]}
+                    onValueChange={(value) => setAcceptanceThreshold(value[0])}
+                    className="w-full"
+                  />
+                  <p className="text-xs text-gray-500">
+                    Percentage of PRO votes required for proposals to be automatically accepted
+                  </p>
+                </div>
+
+                {/* Voting Anonymity */}
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium">Voting Anonymity</Label>
+                  <RadioGroup
+                    value={votingAnonymous ? 'anonymous' : 'public'}
+                    onValueChange={(value) => setVotingAnonymous(value === 'anonymous')}
+                    className="flex flex-col space-y-2"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="public" id="public-voting" />
+                      <Label htmlFor="public-voting" className="text-sm">
+                        Public Voting - Everyone can see who voted what
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="anonymous" id="anonymous-voting" />
+                      <Label htmlFor="anonymous-voting" className="text-sm">
+                        Anonymous Voting - Only vote counts are visible
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                  {governanceRules && (
+                    <p className="text-xs text-blue-600">
+                      Organization default: {governanceRules.anonymousVotingEnabled ? 'Anonymous' : 'Public'}
+                    </p>
+                  )}
+                </div>
+
+                {/* Vote Flexibility */}
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium">Vote Flexibility</Label>
+                  <RadioGroup
+                    value={voteChangeAllowed ? 'flexible' : 'locked'}
+                    onValueChange={(value) => setVoteChangeAllowed(value === 'flexible')}
+                    className="flex flex-col space-y-2"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="flexible" id="flexible-votes" />
+                      <Label htmlFor="flexible-votes" className="text-sm">
+                        Flexible - Users can change their votes anytime
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="locked" id="locked-votes" />
+                      <Label htmlFor="locked-votes" className="text-sm">
+                        Locked - Users cannot change votes after casting
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                  {governanceRules && (
+                    <p className="text-xs text-blue-600">
+                      Organization default: {governanceRules.voteChangeAllowed ? 'Flexible' : 'Locked'}
+                    </p>
+                  )}
+                </div>
+
+                {/* Structure Proposals */}
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <Label htmlFor="structure-proposals" className="text-sm font-medium">
+                      Allow Structure Proposals
+                    </Label>
+                    <p className="text-xs text-gray-500">
+                      Members can propose changes to document structure and organization
+                    </p>
+                  </div>
+                  <Switch
+                    id="structure-proposals"
+                    checked={structureProposalsEnabled}
+                    onCheckedChange={setStructureProposalsEnabled}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Organization Info */}
             <Card className="border-blue-200 bg-blue-50">
               <CardContent className="p-4">
@@ -132,9 +275,9 @@ export function DocumentCreationModal({
                 </p>
                 <div className="text-xs text-blue-600 space-y-1">
                   <p>• All active organization members will be included as collaborators</p>
-                  <p>• Voting settings will use the organization's governance configuration</p>
                   <p>• Document will be created in proposal status and require member voting for approval</p>
                   {parentId && <p>• Document will be created as a child of the selected parent document</p>}
+                  <p>• Settings above will be locked after document creation</p>
                 </div>
               </CardContent>
             </Card>

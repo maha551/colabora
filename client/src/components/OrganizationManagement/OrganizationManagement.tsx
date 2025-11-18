@@ -84,11 +84,13 @@ export function OrganizationManagement({
                 organization={organization}
                 currentUser={currentUser}
                 permissions={permissions}
+                governanceRules={data.governanceRules}
                 documents={data.documents}
                 policyVotes={data.policyVotes}
                 loading={data.loading.documents}
                 error={data.errors.documents}
                 onCreateDocument={actions.createDocument}
+                onCreateChildDocument={actions.createDocument}
                 onSelectDocument={onSelectDocument}
                 onRefreshDocuments={actions.refreshDocuments}
                 onRefreshPolicyVotes={actions.refreshPolicyVotes}

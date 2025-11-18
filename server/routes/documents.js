@@ -4,7 +4,682 @@ const { metricsCollector } = require('../middleware/monitoring');
 const { documentValidation } = require('../middleware/validation');
 const { requireAuth, requireDocumentAccess } = require('../middleware/auth');
 
+// Configuration constants
+const DOCUMENT_CONFIG = {
+  MAX_DEPTH: 10, // Maximum depth for document hierarchy
+  DEFAULT_PROPOSAL_PERIOD_DAYS: 30,
+  MIN_ACCEPTANCE_THRESHOLD: 1,
+  MAX_ACCEPTANCE_THRESHOLD: 100,
+  DEFAULT_ACCEPTANCE_THRESHOLD: 75
+};
+
+// Error codes and structured logging
+const ERROR_CODES = {
+  // Document creation errors
+  DOC_TITLE_REQUIRED: 'Document title is required and cannot be empty',
+  DOC_TITLE_TOO_LONG: 'Document title cannot exceed 200 characters',
+  DOC_DESCRIPTION_INVALID: 'Document description must be a string',
+  DOC_DESCRIPTION_TOO_LONG: 'Document description cannot exceed 1000 characters',
+  DOC_THRESHOLD_INVALID: 'Acceptance threshold must be between 1 and 100',
+  DOC_OPTION_INVALID_TYPE: 'Document option has invalid type',
+  DOC_OWNERSHIP_TYPE_INVALID: 'Invalid ownership type',
+  DOC_ORG_ID_REQUIRED: 'Organization ID required for organizational documents',
+  DOC_ORG_ID_NOT_ALLOWED: 'Organization ID not allowed for non-organizational documents',
+  DOC_SHARED_CREATORS_INVALID: 'Shared documents require at least 2 creators',
+  DOC_CREATOR_IDS_DUPLICATE: 'Creator IDs must be unique',
+
+  // Parent validation errors
+  DOC_PARENT_NOT_FOUND: 'Parent document not found',
+  DOC_PARENT_OWNERSHIP_MISMATCH: 'Parent document ownership type mismatch',
+  DOC_PARENT_NOT_ORGANIZATIONAL: 'Parent document must be organizational',
+  DOC_PARENT_ORGANIZATION_MISMATCH: 'Parent document belongs to different organization',
+  DOC_PARENT_ACCESS_DENIED: 'Access denied to parent document',
+  DOC_CIRCULAR_REFERENCE: 'Circular reference detected in document hierarchy',
+  DOC_MAX_DEPTH_EXCEEDED: 'Document hierarchy depth exceeds maximum allowed',
+
+  // Runtime errors
+  DOC_CREATION_FAILED: 'Document creation failed',
+  DOC_DB_ERROR: 'Database error during document creation',
+  DOC_PARAGRAPH_ERROR: 'Failed to create document title paragraph',
+  DOC_COLLABORATOR_ERROR: 'Failed to add document collaborators',
+  DOC_USER_ERROR: 'User account error during document creation',
+};
+
+// Structured logging helper
+function logDocumentEvent(level, event, data = {}) {
+  const logEntry = {
+    timestamp: new Date().toISOString(),
+    level,
+    event,
+    service: 'document-service',
+    ...data
+  };
+
+  console.log(JSON.stringify(logEntry));
+
+  // In production, you might want to send to a logging service
+  // logService.send(logEntry);
+}
+
+// Error logging helper
+function logDocumentError(errorCode, message, context = {}) {
+  logDocumentEvent('error', 'document_error', {
+    errorCode,
+    message,
+    ...context
+  });
+}
+
+// Success logging helper
+function logDocumentSuccess(event, context = {}) {
+  logDocumentEvent('info', event, context);
+}
+
 const router = express.Router();
+
+// Helper function to validate parent document comprehensively
+async function validateParentDocument(db, parentId, ownershipType, organizationId, userId) {
+  logDocumentEvent('info', 'parent_validation_started', {
+    parentId,
+    ownershipType,
+    organizationId,
+    userId
+  });
+
+  if (!parentId) {
+    return { valid: true };
+  }
+
+  // Check if parent document exists
+  const parentDoc = await new Promise((resolve, reject) => {
+    db.get(`
+      SELECT id, title, organization_id, ownership_type, parent_id, owner_id
+      FROM documents
+      WHERE id = ?
+    `, [parentId], (err, row) => {
+      if (err) {
+        logDocumentError('DOC_DB_ERROR', 'Database error fetching parent document', { parentId, error: err.message });
+        reject(err);
+      } else {
+        resolve(row);
+      }
+    });
+  });
+
+  if (!parentDoc) {
+    logDocumentError('DOC_PARENT_NOT_FOUND', 'Parent document not found', { parentId });
+    return {
+      valid: false,
+      error: 'DOC_PARENT_NOT_FOUND',
+      message: ERROR_CODES.DOC_PARENT_NOT_FOUND,
+      statusCode: 400
+    };
+  }
+
+  // Validate ownership type compatibility
+  if (parentDoc.ownership_type !== ownershipType) {
+    logDocumentError('DOC_PARENT_OWNERSHIP_MISMATCH', 'Parent ownership type mismatch', {
+      parentId,
+      parentOwnershipType: parentDoc.ownership_type,
+      childOwnershipType: ownershipType
+    });
+    return {
+      valid: false,
+      error: 'DOC_PARENT_OWNERSHIP_MISMATCH',
+      message: `Parent document must have the same ownership type (${ownershipType}), but parent has ${parentDoc.ownership_type}`,
+      statusCode: 400
+    };
+  }
+
+  // For organizational documents, ensure parent belongs to the same organization
+  if (ownershipType === 'organizational') {
+    if (!parentDoc.organization_id) {
+      logDocumentError('DOC_PARENT_NOT_ORGANIZATIONAL', 'Parent document not organizational', {
+        parentId,
+        parentOwnershipType: parentDoc.ownership_type
+      });
+      return {
+        valid: false,
+        error: 'DOC_PARENT_NOT_ORGANIZATIONAL',
+        message: ERROR_CODES.DOC_PARENT_NOT_ORGANIZATIONAL,
+        statusCode: 400
+      };
+    }
+
+    if (parentDoc.organization_id !== organizationId) {
+      logDocumentError('DOC_PARENT_ORGANIZATION_MISMATCH', 'Parent organization mismatch', {
+        parentId,
+        parentOrganizationId: parentDoc.organization_id,
+        childOrganizationId: organizationId
+      });
+      return {
+        valid: false,
+        error: 'DOC_PARENT_ORGANIZATION_MISMATCH',
+        message: ERROR_CODES.DOC_PARENT_ORGANIZATION_MISMATCH,
+        statusCode: 400
+      };
+    }
+
+    // Check if user has access to the parent organization document
+    const hasAccess = await new Promise((resolve, reject) => {
+      db.get(`
+        SELECT om.status
+        FROM organization_members om
+        WHERE om.organization_id = ? AND om.user_id = ? AND om.status = 'active'
+      `, [organizationId, userId], (err, member) => {
+        if (err) {
+          logDocumentError('DOC_DB_ERROR', 'Database error checking organization membership', {
+            organizationId,
+            userId,
+            error: err.message
+          });
+          reject(err);
+        } else {
+          resolve(!!member);
+        }
+      });
+    });
+
+    if (!hasAccess) {
+      logDocumentError('DOC_PARENT_ACCESS_DENIED', 'User lacks access to parent organization', {
+        parentId,
+        organizationId,
+        userId
+      });
+      return {
+        valid: false,
+        error: 'DOC_PARENT_ACCESS_DENIED',
+        message: ERROR_CODES.DOC_PARENT_ACCESS_DENIED,
+        statusCode: 403
+      };
+    }
+  } else {
+    // For personal/shared documents, check ownership/collaboration access
+    const hasAccess = await new Promise((resolve, reject) => {
+      db.get(`
+        SELECT d.id
+        FROM documents d
+        LEFT JOIN document_collaborators dc ON d.id = dc.document_id
+        WHERE d.id = ? AND (d.owner_id = ? OR dc.user_id = ?)
+      `, [parentId, userId, userId], (err, doc) => {
+        if (err) {
+          logDocumentError('DOC_DB_ERROR', 'Database error checking parent access', {
+            parentId,
+            userId,
+            error: err.message
+          });
+          reject(err);
+        } else {
+          resolve(!!doc);
+        }
+      });
+    });
+
+    if (!hasAccess) {
+      logDocumentError('DOC_PARENT_ACCESS_DENIED', 'User lacks access to parent document', {
+        parentId,
+        userId
+      });
+      return {
+        valid: false,
+        error: 'DOC_PARENT_ACCESS_DENIED',
+        message: ERROR_CODES.DOC_PARENT_ACCESS_DENIED,
+        statusCode: 403
+      };
+    }
+  }
+
+  // Check for circular references and depth limits
+  const hierarchyCheck = await checkDocumentHierarchy(db, parentId, DOCUMENT_CONFIG.MAX_DEPTH);
+  if (!hierarchyCheck.valid) {
+    logDocumentError(hierarchyCheck.error, hierarchyCheck.message, {
+      parentId,
+      maxDepth: DOCUMENT_CONFIG.MAX_DEPTH
+    });
+    return hierarchyCheck;
+  }
+
+  logDocumentSuccess('parent_validation_success', { parentId, ownershipType });
+  return { valid: true, parentDoc };
+}
+
+// Helper function to check document hierarchy for circular references and depth limits
+async function checkDocumentHierarchy(db, documentId, maxDepth, visited = new Set()) {
+  if (visited.has(documentId)) {
+    return {
+      valid: false,
+      error: 'DOC_CIRCULAR_REFERENCE',
+      message: 'Circular reference detected in document hierarchy',
+      statusCode: 400
+    };
+  }
+
+  if (visited.size >= maxDepth) {
+    return {
+      valid: false,
+      error: 'DOC_MAX_DEPTH_EXCEEDED',
+      message: `Document hierarchy depth exceeds maximum allowed (${maxDepth})`,
+      statusCode: 400
+    };
+  }
+
+  visited.add(documentId);
+
+  const parentDoc = await new Promise((resolve, reject) => {
+    db.get('SELECT parent_id FROM documents WHERE id = ?', [documentId], (err, row) => {
+      if (err) reject(err);
+      else resolve(row);
+    });
+  });
+
+  if (parentDoc && parentDoc.parent_id) {
+    return checkDocumentHierarchy(db, parentDoc.parent_id, maxDepth, visited);
+  }
+
+  return { valid: true };
+}
+
+// Helper function for safe transaction management
+async function withTransaction(db, operation) {
+  let transactionStarted = false;
+
+  try {
+    console.log('🏦 Starting transaction...');
+    await new Promise((resolve, reject) => {
+      db.run('BEGIN TRANSACTION', (err) => {
+        if (err) {
+          console.error('❌ Failed to begin transaction:', err);
+          reject(err);
+        } else {
+          transactionStarted = true;
+          console.log('✅ Transaction started successfully');
+          resolve();
+        }
+      });
+    });
+
+    const result = await operation();
+
+    console.log('💾 Committing transaction...');
+    await new Promise((resolve, reject) => {
+      db.run('COMMIT', (err) => {
+        if (err) {
+          console.error('❌ Failed to commit transaction:', err);
+          reject(err);
+        } else {
+          console.log('✅ Transaction committed successfully');
+          resolve();
+        }
+      });
+    });
+
+    return result;
+
+  } catch (error) {
+    console.error('❌ Transaction operation failed:', error);
+
+    if (transactionStarted) {
+      console.log('🔄 Rolling back transaction...');
+      try {
+        await new Promise((resolve) => {
+          db.run('ROLLBACK', (err) => {
+            if (err) {
+              console.error('❌ Rollback failed:', err);
+            } else {
+              console.log('✅ Transaction rolled back successfully');
+            }
+            resolve(); // Always resolve to avoid blocking
+          });
+        });
+      } catch (rollbackError) {
+        console.error('❌ Critical: Rollback operation failed:', rollbackError);
+      }
+    }
+
+    throw error;
+  }
+}
+
+// Helper function to build document creation SQL and parameters
+function buildDocumentInsertSQL(ownershipType, organizationId, options, documentId, trimmedTitle, trimmedDescription, userId, parentId) {
+  console.log('🔨 Building document INSERT SQL for type:', ownershipType);
+
+  // Parse options with defaults
+  const acceptanceThreshold = options?.acceptanceThreshold !== undefined
+    ? Math.min(DOCUMENT_CONFIG.MAX_ACCEPTANCE_THRESHOLD, Math.max(DOCUMENT_CONFIG.MIN_ACCEPTANCE_THRESHOLD, parseFloat(options.acceptanceThreshold)))
+    : DOCUMENT_CONFIG.DEFAULT_ACCEPTANCE_THRESHOLD;
+
+  const votingAnonymous = options?.votingAnonymous === true ? 1 : 0;
+  const votingAnonymityLocked = options?.votingAnonymityLocked === true ? 1 : 0;
+  const voteChangeAllowed = options?.voteChangeAllowed !== false ? 1 : 0;
+  const structureProposalsEnabled = options?.structureProposalsEnabled === true ? 1 : 0;
+
+  let sql, params;
+
+  if (ownershipType === 'shared') {
+    // For shared documents, store creator IDs as JSON
+    sql = `
+      INSERT INTO documents (
+        id, title, description, owner_id, ownership_type, creator_ids, organization_id, parent_id,
+        acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed,
+        structure_proposals_enabled, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `;
+    params = [
+      documentId, trimmedTitle, trimmedDescription, userId, ownershipType, JSON.stringify(options?.creatorIds || []), null, parentId || null,
+      acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
+    ];
+  } else if (ownershipType === 'organizational') {
+    console.log('🏢 Building organizational document SQL');
+    // For organizational documents, set organization_id and start as proposal
+    const proposalDeadline = new Date();
+    proposalDeadline.setDate(proposalDeadline.getDate() + DOCUMENT_CONFIG.DEFAULT_PROPOSAL_PERIOD_DAYS);
+    console.log('📅 Proposal deadline:', proposalDeadline.toISOString());
+
+    // Ensure proposalDeadline is valid
+    if (isNaN(proposalDeadline.getTime())) {
+      throw new Error('Failed to generate valid proposal deadline');
+    }
+
+    sql = `
+      INSERT INTO documents (
+        id, title, description, owner_id, ownership_type, creator_ids, organization_id, parent_id, status, proposal_deadline,
+        acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed,
+        structure_proposals_enabled, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `;
+    // Ensure acceptanceThreshold is valid
+    const finalAcceptanceThreshold = (typeof acceptanceThreshold === 'number' && !isNaN(acceptanceThreshold))
+      ? acceptanceThreshold : DOCUMENT_CONFIG.DEFAULT_ACCEPTANCE_THRESHOLD;
+
+    params = [
+      documentId, trimmedTitle, trimmedDescription, userId, ownershipType, null, organizationId, parentId || null,
+      'proposal', proposalDeadline.toISOString(),
+      finalAcceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
+    ];
+    console.log('📋 Organizational SQL params built successfully');
+  } else {
+    // For personal documents (default)
+    sql = `
+      INSERT INTO documents (
+        id, title, description, owner_id, ownership_type, creator_ids, organization_id, parent_id,
+        acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed,
+        structure_proposals_enabled, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `;
+    params = [
+      documentId, trimmedTitle, trimmedDescription, userId, ownershipType, null, null, parentId || null,
+      acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
+    ];
+  }
+
+  return { sql, params, acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled };
+}
+
+// Helper function to create initial title paragraph
+async function createInitialParagraph(db, documentId, title, description) {
+  console.log('📝 Creating initial title paragraph for document:', documentId);
+
+  const paragraphId = uuidv4();
+  const paragraphTitle = title;
+  const paragraphText = description || title;
+
+  return new Promise((resolve, reject) => {
+    db.run(`
+      INSERT INTO paragraphs (
+        id, document_id, title, text, order_index, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `, [paragraphId, documentId, paragraphTitle, paragraphText, -1], function(err) {
+      if (err) {
+        console.error('❌ Error creating title paragraph:', err);
+        reject(new Error(`Failed to create title paragraph: ${err.message}`));
+      } else {
+        console.log('✅ Title paragraph created successfully, ID:', paragraphId);
+        resolve(paragraphId);
+      }
+    });
+  });
+}
+
+// Helper function to add collaborators sequentially
+async function addCollaborators(db, documentId, ownershipType, organizationId, userId, creatorIds) {
+  console.log('👥 Adding collaborators for document:', documentId);
+
+  if (ownershipType === 'shared' && creatorIds) {
+    // Add creators as collaborators (excluding document owner)
+    const collaboratorsToAdd = creatorIds.filter(creatorId => creatorId !== userId);
+
+    for (const creatorId of collaboratorsToAdd) {
+      await new Promise((resolve, reject) => {
+        const collabId = uuidv4();
+        db.run(`
+          INSERT INTO document_collaborators (id, document_id, user_id)
+          VALUES (?, ?, ?)
+        `, [collabId, documentId, creatorId], function(err) {
+          if (err) {
+            console.error('❌ Error adding collaborator:', creatorId, err);
+            reject(new Error(`Failed to add collaborator ${creatorId}: ${err.message}`));
+          } else {
+            console.log('✅ Added collaborator:', creatorId);
+            resolve();
+          }
+        });
+      });
+    }
+  } else if (ownershipType === 'organizational') {
+    // Add all active organization members as collaborators (excluding document owner)
+    const members = await new Promise((resolve, reject) => {
+      db.all(`
+        SELECT user_id FROM organization_members
+        WHERE organization_id = ? AND status = 'active' AND user_id != ?
+      `, [organizationId, userId], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    for (const member of members) {
+      await new Promise((resolve, reject) => {
+        const collabId = uuidv4();
+        db.run(`
+          INSERT INTO document_collaborators (id, document_id, user_id)
+          VALUES (?, ?, ?)
+        `, [collabId, documentId, member.user_id], function(err) {
+          if (err) {
+            console.error('❌ Error adding organizational collaborator:', member.user_id, err);
+            reject(new Error(`Failed to add organizational collaborator ${member.user_id}: ${err.message}`));
+          } else {
+            console.log('✅ Added organizational collaborator:', member.user_id);
+            resolve();
+          }
+        });
+      });
+    }
+
+    console.log(`✅ Added ${members.length} organizational collaborators`);
+  }
+
+  console.log('✅ Collaborator addition completed');
+}
+
+// Helper function to build document response
+async function buildDocumentResponse(db, documentId, trimmedTitle, trimmedDescription, userId, ownershipType, organizationId, parentId, options) {
+  console.log('📋 Building document response for:', documentId);
+
+  // Get user details for owner information
+  const user = await new Promise((resolve, reject) => {
+    db.get('SELECT name, email FROM users WHERE id = ?', [userId], (err, row) => {
+      if (err) reject(err);
+      else if (!row) reject(new Error('User not found'));
+      else resolve(row);
+    });
+  });
+
+  const result = {
+    id: documentId,
+    title: trimmedTitle,
+    description: trimmedDescription,
+    ownerId: userId,
+    parentId: parentId || undefined,
+    status: ownershipType === 'organizational' ? 'proposal' : 'draft',
+    owner: {
+      id: userId,
+      name: user.name,
+      email: user.email
+    },
+    ownershipType,
+    organizationId: ownershipType === 'organizational' ? organizationId : null,
+    options,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  console.log('✅ Document response built successfully');
+  return result;
+}
+
+// Helper function to validate document creation inputs
+function validateDocumentInputs(title, description, options, ownershipType, organizationId, creatorIds) {
+  logDocumentEvent('info', 'input_validation_started', {
+    hasTitle: !!title,
+    hasDescription: !!description,
+    hasOptions: !!options,
+    ownershipType,
+    hasOrganizationId: !!organizationId,
+    hasCreatorIds: !!creatorIds
+  });
+
+  const errors = [];
+
+  // Title validation
+  if (!title || typeof title !== 'string' || title.trim().length === 0) {
+    errors.push({
+      field: 'title',
+      error: 'DOC_TITLE_REQUIRED',
+      message: ERROR_CODES.DOC_TITLE_REQUIRED
+    });
+  } else if (title.trim().length > 200) {
+    errors.push({
+      field: 'title',
+      error: 'DOC_TITLE_TOO_LONG',
+      message: ERROR_CODES.DOC_TITLE_TOO_LONG
+    });
+  }
+
+  // Description validation (optional)
+  if (description && typeof description !== 'string') {
+    errors.push({
+      field: 'description',
+      error: 'DOC_DESCRIPTION_INVALID',
+      message: ERROR_CODES.DOC_DESCRIPTION_INVALID
+    });
+  } else if (description && description.length > 1000) {
+    errors.push({
+      field: 'description',
+      error: 'DOC_DESCRIPTION_TOO_LONG',
+      message: ERROR_CODES.DOC_DESCRIPTION_TOO_LONG
+    });
+  }
+
+  // Options validation
+  if (options) {
+    // Acceptance threshold validation
+    if (options.acceptanceThreshold !== undefined) {
+      const threshold = Number(options.acceptanceThreshold);
+      if (isNaN(threshold) || threshold < DOCUMENT_CONFIG.MIN_ACCEPTANCE_THRESHOLD || threshold > DOCUMENT_CONFIG.MAX_ACCEPTANCE_THRESHOLD) {
+        errors.push({
+          field: 'options.acceptanceThreshold',
+          error: 'DOC_THRESHOLD_INVALID',
+          message: ERROR_CODES.DOC_THRESHOLD_INVALID
+        });
+      }
+    }
+
+    // Boolean options validation
+    const booleanOptions = ['votingAnonymous', 'votingAnonymityLocked', 'voteChangeAllowed', 'structureProposalsEnabled'];
+    booleanOptions.forEach(option => {
+      if (options[option] !== undefined && typeof options[option] !== 'boolean') {
+        errors.push({
+          field: `options.${option}`,
+          error: 'DOC_OPTION_INVALID_TYPE',
+          message: `${option} must be a boolean value`
+        });
+      }
+    });
+  }
+
+  // Ownership type validation
+  const validOwnershipTypes = ['personal', 'shared', 'organizational'];
+  if (!validOwnershipTypes.includes(ownershipType)) {
+    errors.push({
+      field: 'ownershipType',
+      error: 'DOC_OWNERSHIP_TYPE_INVALID',
+      message: ERROR_CODES.DOC_OWNERSHIP_TYPE_INVALID
+    });
+  }
+
+  // Organization ID validation for organizational documents
+  if (ownershipType === 'organizational') {
+    if (!organizationId) {
+      errors.push({
+        field: 'organizationId',
+        error: 'DOC_ORG_ID_REQUIRED',
+        message: ERROR_CODES.DOC_ORG_ID_REQUIRED
+      });
+    }
+  } else if (organizationId) {
+    errors.push({
+      field: 'organizationId',
+      error: 'DOC_ORG_ID_NOT_ALLOWED',
+      message: ERROR_CODES.DOC_ORG_ID_NOT_ALLOWED
+    });
+  }
+
+  // Creator IDs validation for shared documents
+  if (ownershipType === 'shared') {
+    if (!Array.isArray(creatorIds) || creatorIds.length < 2) {
+      errors.push({
+        field: 'creatorIds',
+        error: 'DOC_SHARED_CREATORS_INVALID',
+        message: ERROR_CODES.DOC_SHARED_CREATORS_INVALID
+      });
+    } else {
+      // Check for duplicate creator IDs
+      const uniqueCreators = [...new Set(creatorIds)];
+      if (uniqueCreators.length !== creatorIds.length) {
+        errors.push({
+          field: 'creatorIds',
+          error: 'DOC_CREATOR_IDS_DUPLICATE',
+          message: ERROR_CODES.DOC_CREATOR_IDS_DUPLICATE
+        });
+      }
+    }
+  } else if (creatorIds) {
+    errors.push({
+      field: 'creatorIds',
+      error: 'DOC_CREATOR_IDS_NOT_ALLOWED',
+      message: ERROR_CODES.DOC_CREATOR_IDS_NOT_ALLOWED
+    });
+  }
+
+  const validationResult = {
+    valid: errors.length === 0,
+    errors
+  };
+
+  logDocumentEvent('info', 'input_validation_completed', {
+    errorsCount: errors.length,
+    valid: validationResult.valid
+  });
+
+  if (errors.length > 0) {
+    logDocumentError('DOC_VALIDATION_FAILED', `Input validation failed with ${errors.length} errors`, {
+      errors: errors.map(e => ({ field: e.field, error: e.error }))
+    });
+  }
+
+  return validationResult;
+}
 
 // Get all documents for current user (as owner or collaborator)
 router.get('/', requireAuth, (req, res) => {
@@ -759,51 +1434,63 @@ router.get('/:id', requireAuth, (req, res) => {
 
 // Create a new document
 router.post('/', requireAuth, documentValidation.create, async (req, res) => {
-  console.log(`[${new Date().toISOString()}] POST /api/documents - Creating document`);
-  console.log('Request body:', req.body);
-  console.log('User:', req.user ? req.user.name : 'No user');
-
   const db = req.app.locals.db;
   const { title, description, options, ownershipType = 'personal', organizationId, creatorIds, parentId } = req.body;
   const userId = req.user.id;
 
-  if (!title || title.trim() === '') {
-    console.log('Document creation failed: Title is required');
-    return res.status(400).json({ error: 'Title is required' });
+  logDocumentEvent('info', 'document_creation_started', {
+    userId,
+    ownershipType,
+    organizationId,
+    hasParent: !!parentId,
+    hasOptions: !!options
+  });
+
+  // Validate input parameters
+  const inputValidation = validateDocumentInputs(title, description, options, ownershipType, organizationId, creatorIds);
+  if (!inputValidation.valid) {
+    logDocumentError('DOC_VALIDATION_FAILED', 'Document creation input validation failed', {
+      userId,
+      errors: inputValidation.errors
+    });
+    return res.status(400).json({
+      error: 'Invalid input parameters',
+      details: inputValidation.errors
+    });
   }
 
-  // Validate ownership type and permissions
-  if (ownershipType === 'shared') {
-    if (!creatorIds || !Array.isArray(creatorIds) || creatorIds.length < 1) {
-      return res.status(400).json({ error: 'Shared documents require at least 1 creator' });
-    }
-    // Automatically add current user to creatorIds if not already included
-    if (!creatorIds.includes(userId)) {
-      creatorIds.push(userId);
-    }
-    if (creatorIds.length < 2) {
-      return res.status(400).json({ error: 'Shared documents require at least 2 creators' });
-    }
+  // Add current user to creatorIds for shared documents (if not already included)
+  if (ownershipType === 'shared' && creatorIds && !creatorIds.includes(userId)) {
+    creatorIds.push(userId);
   }
 
   // For organizational documents, check basic membership
   if (ownershipType === 'organizational') {
     if (!organizationId) {
-      return res.status(400).json({ error: 'Organization ID required for organizational documents' });
+      logDocumentError('DOC_ORG_ID_REQUIRED', 'Organization ID missing for organizational document', { userId });
+      return res.status(400).json({ error: ERROR_CODES.DOC_ORG_ID_REQUIRED });
     }
+
     // Check if organization exists first
     db.get('SELECT id, name FROM organizations WHERE id = ? AND is_active = 1', [organizationId], (orgErr, org) => {
       if (orgErr) {
-        console.error('Error checking organization existence:', orgErr);
+        logDocumentError('DOC_DB_ERROR', 'Database error checking organization existence', {
+          userId,
+          organizationId,
+          error: orgErr.message
+        });
         return res.status(500).json({ error: 'Failed to verify organization' });
       }
 
       if (!org) {
-        console.error('Organization not found or not active:', organizationId);
+        logDocumentError('DOC_ORG_NOT_FOUND', 'Organization not found or not active', {
+          userId,
+          organizationId
+        });
         return res.status(400).json({ error: 'Organization not found or not active' });
       }
 
-      console.log('Organization verified:', org.name, '(' + org.id + ')');
+      logDocumentSuccess('organization_verified', { userId, organizationId, organizationName: org.name });
 
       // Simple membership check - any active member can create docs
       db.get(`
@@ -811,24 +1498,33 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
         WHERE organization_id = ? AND user_id = ? AND status = 'active'
       `, [organizationId, userId], async (err, member) => {
         if (err || !member) {
-          console.error('User is not an active member of organization:', organizationId, 'user:', userId);
+          logDocumentError('DOC_ORG_ACCESS_DENIED', 'User is not an active member of organization', {
+            userId,
+            organizationId
+          });
           return res.status(403).json({ error: 'Must be an active organization member to create documents' });
         }
 
-        console.log('User membership verified for organization:', organizationId);
+        logDocumentSuccess('organization_membership_verified', { userId, organizationId });
 
         try {
-          console.log('About to call createDocument for organizational document');
-          console.log('Params:', { ownershipType, organizationId, options, userId, title, description, creatorIds, parentId });
           await createDocument(ownershipType, organizationId, options, userId, title, description, creatorIds, parentId);
-          console.log('createDocument completed successfully');
+          logDocumentSuccess('organizational_document_created', {
+            userId,
+            organizationId,
+            title: title.substring(0, 50)
+          });
         } catch (error) {
-          console.error('❌ Error in organizational document creation:', error);
-          console.error('Error stack:', error.stack);
+          logDocumentError('DOC_CREATION_FAILED', 'Error in organizational document creation', {
+            userId,
+            organizationId,
+            error: error.message,
+            stack: error.stack
+          });
           return res.status(500).json({
             error: 'Failed to create organizational document',
             details: error.message,
-            code: error.code
+            code: error.code || 'DOC_CREATION_FAILED'
           });
         }
       });
@@ -836,35 +1532,56 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
     return;
   }
 
-  // Validate parent document if provided (for non-organizational documents)
-  if (parentId) {
-    db.get('SELECT id, organization_id, ownership_type FROM documents WHERE id = ?', [parentId], async (err, parentDoc) => {
-      if (err || !parentDoc) {
-        return res.status(400).json({ error: 'Parent document not found' });
-      }
-
-      // Validate parent ownership type matches
-      if (parentDoc.ownership_type !== ownershipType) {
-        return res.status(400).json({ error: 'Parent document must have the same ownership type' });
-      }
-
-      try {
-        await createDocument(ownershipType, organizationId, options, userId, title, description, creatorIds, parentId);
-      } catch (error) {
-        console.error('Error in document creation:', error);
-        return res.status(500).json({ error: 'Failed to create document' });
-      }
+  // Validate parent document if provided
+  try {
+    const parentValidation = await validateParentDocument(db, parentId, ownershipType, organizationId, userId);
+    if (!parentValidation.valid) {
+      logDocumentError(parentValidation.error, parentValidation.message, {
+        userId,
+        parentId,
+        ownershipType,
+        organizationId
+      });
+      return res.status(parentValidation.statusCode).json({
+        error: parentValidation.message,
+        code: parentValidation.error
+      });
+    }
+  } catch (validationError) {
+    logDocumentError('DOC_PARENT_VALIDATION_ERROR', 'Error during parent validation', {
+      userId,
+      parentId,
+      error: validationError.message
     });
-    return; // Don't continue execution, wait for async callback
+    return res.status(500).json({
+      error: 'Failed to validate parent document',
+      details: validationError.message
+    });
   }
 
   // For non-organizational documents without parent, create immediately
   (async () => {
     try {
       await createDocument(ownershipType, organizationId, options, userId, title, description, creatorIds, parentId);
+      logDocumentSuccess('document_created', {
+        userId,
+        ownershipType,
+        organizationId,
+        title: title.substring(0, 50)
+      });
     } catch (error) {
-      console.error('Error in document creation:', error);
-      return res.status(500).json({ error: 'Failed to create document' });
+      logDocumentError('DOC_CREATION_FAILED', 'Error in document creation', {
+        userId,
+        ownershipType,
+        organizationId,
+        error: error.message,
+        stack: error.stack
+      });
+      return res.status(500).json({
+        error: 'Failed to create document',
+        details: error.message,
+        code: error.code || 'DOC_CREATION_FAILED'
+      });
     }
   })();
 });
@@ -872,32 +1589,13 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
     console.log('🚀 Starting createDocument function');
     console.log('Input params:', { ownershipType, organizationId, userId, title, description, parentId });
 
-    // Parse and validate options for all document types (personal, shared, organizational)
-    let acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled;
-
-    // Simple options handling for all document types
-    acceptanceThreshold = options?.acceptanceThreshold !== undefined
-      ? Math.min(100, Math.max(0, parseFloat(options.acceptanceThreshold)))
-      : 50;
-
-    votingAnonymous = options?.votingAnonymous === true ? 1 : 0;
-    votingAnonymityLocked = options?.votingAnonymityLocked === true ? 1 : 0;
-    voteChangeAllowed = options?.voteChangeAllowed !== false ? 1 : 0;
-    structureProposalsEnabled = options?.structureProposalsEnabled === true ? 1 : 0;
-
-    console.log('Parsed options:', { acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled });
-
     const documentId = uuidv4();
     const trimmedTitle = title.trim();
     const trimmedDescription = description ? description.trim() : null;
 
     console.log('📄 Generated document ID:', documentId);
     console.log('📝 Title:', trimmedTitle);
-    console.log('📝 Description:', trimmedDescription);
     console.log('🏷️  Ownership type:', ownershipType);
-    console.log('🏢 Organization ID:', organizationId);
-    console.log('👨 User ID:', userId);
-    console.log('📂 Parent ID:', parentId || 'none');
 
     // Build the SQL query based on ownership type
     let sql, params;
@@ -919,7 +1617,7 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
       console.log('🏢 Building organizational document SQL');
       // For organizational documents, set organization_id and start as proposal
       const proposalDeadline = new Date();
-      proposalDeadline.setDate(proposalDeadline.getDate() + 30); // 30 days default
+      proposalDeadline.setDate(proposalDeadline.getDate() + DOCUMENT_CONFIG.DEFAULT_PROPOSAL_PERIOD_DAYS);
       console.log('📅 Proposal deadline:', proposalDeadline.toISOString());
 
       // Ensure proposalDeadline is valid
@@ -937,7 +1635,7 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
       `;
       // Ensure acceptanceThreshold is valid
       const finalAcceptanceThreshold = (typeof acceptanceThreshold === 'number' && !isNaN(acceptanceThreshold))
-        ? acceptanceThreshold : 50;
+        ? acceptanceThreshold : DOCUMENT_CONFIG.DEFAULT_ACCEPTANCE_THRESHOLD;
 
       params = [
         documentId, trimmedTitle, trimmedDescription, userId, ownershipType, null, organizationId, parentId || null,

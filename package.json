@@ -25,6 +25,7 @@
     "test:smoke": "node scripts/smoke-test.js",
     "setup-admin": "node scripts/setup-admin.js",
     "security-check": "node scripts/security-test.js",
+    "reset-deployed-db": "node reset-deployed-db.js",
     "deployment-check": "node scripts/deployment-check.js",
     "health-check": "node scripts/health-check.js",
     "lint": "eslint server/**/*.js --fix || echo 'ESLint not configured'",

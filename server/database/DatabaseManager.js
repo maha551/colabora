@@ -78,16 +78,77 @@ class DatabaseManager {
   async initializeSchema() {
     console.log('Initializing database schema...');
 
-    const tables = this.getTableDefinitions();
+    try {
+      const tables = this.getTableDefinitions();
 
-    for (const table of tables) {
-      await this.executeTableCreation(table);
+      for (const table of tables) {
+        await this.executeTableCreation(table);
+      }
+
+      // Ensure role column exists
+      await this.ensureRoleColumn();
+
+      console.log('✅ Database schema initialized');
+    } catch (error) {
+      console.error('❌ Schema initialization failed:', error);
+
+      // If we're in production and schema init fails, try to recreate database
+      if (this.config.NODE_ENV === 'production') {
+        console.log('🔄 Production mode: Attempting database recreation due to schema incompatibility...');
+        await this.recreateDatabase();
+      } else {
+        throw error;
+      }
     }
+  }
 
-    // Ensure role column exists
-    await this.ensureRoleColumn();
+  /**
+   * Recreate the database (for production schema incompatibility issues)
+   * @returns {Promise<void>}
+   */
+  async recreateDatabase() {
+    console.log('🗑️  Recreating database due to schema incompatibility...');
 
-    console.log('✅ Database schema initialized');
+    try {
+      // Close current connection
+      if (this.db) {
+        await new Promise((resolve) => {
+          this.db.close((err) => {
+            if (err) console.warn('Warning: Error closing database:', err);
+            resolve();
+          });
+        });
+      }
+
+      // Remove database file if it exists
+      const fs = require('fs');
+      const dbPath = this.config.DATABASE_URL;
+
+      if (fs.existsSync(dbPath)) {
+        fs.unlinkSync(dbPath);
+        console.log('✅ Removed old database file');
+      }
+
+      // Remove WAL and SHM files if they exist
+      const walFile = `${dbPath}-wal`;
+      const shmFile = `${dbPath}-shm`;
+
+      if (fs.existsSync(walFile)) fs.unlinkSync(walFile);
+      if (fs.existsSync(shmFile)) fs.unlinkSync(shmFile);
+
+      console.log('🔄 Reinitializing database connection...');
+
+      // Reinitialize connection and schema
+      this.db = await this.connection.initialize();
+      await this.initializeSchema();
+      await this.initializeDemoData();
+
+      console.log('✅ Database recreated successfully');
+
+    } catch (error) {
+      console.error('❌ Database recreation failed:', error);
+      throw new Error(`Database recreation failed: ${error.message}`);
+    }
   }
 
   /**

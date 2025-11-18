@@ -1,61 +1,62 @@
-# flyctl launch added from .gitignore
 # Dependencies
-**\node_modules
-**\npm-debug.log*
-**\yarn-debug.log*
-**\yarn-error.log*
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Database files
-**\*.db
-**\*.sqlite
-**\*.sqlite3
-**\colabora.db
-**\server\colabora.db
+*.db
+*.sqlite
+*.sqlite3
+colabora.db
+server/colabora.db
 
 # Build outputs
-**\client\build
-**\client\dist
+client/build
+client/dist
 
 # Environment variables
-**\.env
-**\.env.local
-**\.env.development.local
-**\.env.test.local
-**\.env.production.local
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
 # Logs
-**\*.log
-**\server.log
-**\server-error.log
+*.log
+server.log
+server-error.log
 
 # IDE files
-**\.vscode
-**\.idea
-**\*.swp
-**\*.swo
+.vscode
+.idea
+*.swp
+*.swo
 
 # OS generated files
-**\.DS_Store
-**\.DS_Store?
-**\._*
-**\.Spotlight-V100
-**\.Trashes
-**\ehthumbs.db
-**\Thumbs.db
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
 # Temporary files
-**\*.tmp
-**\*.temp
+*.tmp
+*.temp
 
 # Package manager lock files (optional - uncomment if you want to ignore)
 # package-lock.json
 # yarn.lock
 
 # Fly CLI installation files
-**\flyctl.exe
-**\install-fly.ps1
-**\test-health.ps1
+flyctl.exe
+install-fly.ps1
+test-health.ps1
 
 # Database backups
-**\*.db.backup
-**\fly.toml
+*.db.backup
+
+# Keep fly.toml for deployment
+# fly.toml

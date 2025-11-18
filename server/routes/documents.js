@@ -2438,6 +2438,5 @@ function checkDocumentAgreementStatus(db, documentId) {
     });
   });
     } // End of continueExecution function
-}
 
 module.exports = router;

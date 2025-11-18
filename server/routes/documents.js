@@ -1210,10 +1210,11 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
             }
           } else if (ownershipType === 'organizational') {
             // For organizational documents, add all active organization members as collaborators
+            // (excluding the document owner who is already associated with the document)
             db.all(`
               SELECT user_id FROM organization_members
-              WHERE organization_id = ? AND status = 'active'
-            `, [organizationId], (membersErr, members) => {
+              WHERE organization_id = ? AND status = 'active' AND user_id != ?
+            `, [organizationId, userId], (membersErr, members) => {
               if (membersErr) {
                 console.error('Error fetching organization members:', membersErr);
                 db.run('ROLLBACK', (rollbackErr) => {
@@ -1231,7 +1232,7 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
               }
 
               if (members.length === 0) {
-                // No members to add as collaborators, just commit
+                // No members to add as collaborators (owner already excluded), just commit
                 db.run('COMMIT', (commitErr) => {
                   if (commitErr) {
                     console.error('Error committing transaction:', commitErr);
@@ -1248,13 +1249,13 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
                     });
                     return;
                   }
-                  console.log(`Created organizational document ${documentId} - no members to add as collaborators`);
+                  console.log(`Created organizational document ${documentId} - no additional members to add as collaborators`);
                   sendResponse();
                 });
                 return;
               }
 
-              // Add all organization members as collaborators
+              // Add all organization members (except owner) as collaborators
               let collaboratorIndex = 0;
               const totalCollaborators = members.length;
 

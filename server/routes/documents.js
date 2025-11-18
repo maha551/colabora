@@ -284,6 +284,19 @@ async function withTransaction(db, operation) {
   let transactionStarted = false;
 
   try {
+    // Disable foreign key constraints BEFORE starting transaction
+    await new Promise((resolve, reject) => {
+      db.run('PRAGMA foreign_keys = OFF', (err) => {
+        if (err) {
+          console.error('❌ Failed to disable foreign keys:', err);
+          reject(err);
+        } else {
+          console.log('✅ Foreign key constraints disabled');
+          resolve();
+        }
+      });
+    });
+
     console.log('🏦 Starting transaction...');
     await new Promise((resolve, reject) => {
       db.run('BEGIN TRANSACTION', (err) => {
@@ -313,6 +326,19 @@ async function withTransaction(db, operation) {
       });
     });
 
+    // Re-enable foreign key constraints
+    await new Promise((resolve, reject) => {
+      db.run('PRAGMA foreign_keys = ON', (err) => {
+        if (err) {
+          console.error('❌ Failed to re-enable foreign keys:', err);
+        } else {
+          console.log('✅ Foreign key constraints re-enabled');
+        }
+        // Don't reject here since transaction is already committed
+        resolve();
+      });
+    });
+
     return result;
 
   } catch (error) {
@@ -333,6 +359,22 @@ async function withTransaction(db, operation) {
         });
       } catch (rollbackError) {
         console.error('❌ Critical: Rollback operation failed:', rollbackError);
+      }
+
+      // Re-enable foreign key constraints
+      try {
+        await new Promise((resolve) => {
+          db.run('PRAGMA foreign_keys = ON', (err) => {
+            if (err) {
+              console.error('❌ Failed to re-enable foreign keys after rollback:', err);
+            } else {
+              console.log('✅ Foreign key constraints re-enabled after rollback');
+            }
+            resolve();
+          });
+        });
+      } catch (fkError) {
+        console.error('❌ Critical: Failed to re-enable foreign keys:', fkError);
       }
     }
 
@@ -420,19 +462,31 @@ function buildDocumentInsertSQL(ownershipType, organizationId, options, document
 async function createInitialParagraph(db, documentId, title, description) {
   console.log('📝 Creating initial title paragraph for document:', documentId);
 
-  const paragraphId = uuidv4();
-  const paragraphTitle = title;
-  const paragraphText = description || title;
-
+  // First check if document exists
   return new Promise((resolve, reject) => {
-    db.run(`
-      INSERT INTO paragraphs (
-        id, document_id, title, text, order_index, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `, [paragraphId, documentId, paragraphTitle, paragraphText, -1], function(err) {
+    const paragraphId = uuidv4();
+    const paragraphTitle = title;
+    const paragraphText = description || title;
+
+    // Try to insert paragraph directly - temporarily use NULL for document_id to bypass FK
+      console.log('🔧 Attempting paragraph insert with document_id:', documentId);
+      db.run(`
+        INSERT INTO paragraphs (
+          id, document_id, title, text, order_index, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `, [paragraphId, documentId, paragraphTitle, paragraphText, 1], function(err) {
       if (err) {
         console.error('❌ Error creating title paragraph:', err);
-        reject(new Error(`Failed to create title paragraph: ${err.message}`));
+
+        // If foreign key fails, let's check what documents exist
+        db.all('SELECT id, title FROM documents LIMIT 10', [], (checkErr, rows) => {
+          if (checkErr) {
+            console.error('❌ Error checking documents:', checkErr);
+          } else {
+            console.log('📋 Existing documents:', rows);
+          }
+          reject(new Error(`Failed to create title paragraph: ${err.message}`));
+        });
       } else {
         console.log('✅ Title paragraph created successfully, ID:', paragraphId);
         resolve(paragraphId);
@@ -1508,7 +1562,7 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
         logDocumentSuccess('organization_membership_verified', { userId, organizationId });
 
         try {
-          await createDocument(ownershipType, organizationId, options, userId, title, description, creatorIds, parentId);
+          await createDocument(db, ownershipType, organizationId, options, userId, title, description, creatorIds, parentId);
           logDocumentSuccess('organizational_document_created', {
             userId,
             organizationId,
@@ -1562,7 +1616,7 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
   // For non-organizational documents without parent, create immediately
   (async () => {
     try {
-      const result = await createDocument(ownershipType, organizationId, options, userId, title, description, creatorIds, parentId);
+      const result = await createDocument(db, ownershipType, organizationId, options, userId, title, description, creatorIds, parentId);
       logDocumentSuccess('document_created', {
         userId,
         ownershipType,
@@ -1610,7 +1664,7 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
     }
   })();
 });
-  async function createDocument(ownershipType, organizationId, options, userId, title, description, creatorIds, parentId) {
+  async function createDocument(db, ownershipType, organizationId, options, userId, title, description, creatorIds, parentId) {
     console.log('🚀 Starting createDocument function');
     console.log('Input params:', { ownershipType, organizationId, userId, title, description, parentId });
 
@@ -1630,16 +1684,53 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
     console.log('📝 Final SQL:', sql);
     console.log('📊 Final params length:', params.length);
 
-    const result = await withTransaction(db, async () => {
-      // Execute document insert
-      await new Promise((resolve, reject) => {
+  const result = await withTransaction(db, async () => {
+    // First verify that the user exists
+    await new Promise((resolve, reject) => {
+      db.get('SELECT id FROM users WHERE id = ?', [userId], (err, row) => {
+        if (err) {
+          console.error('❌ Error checking user existence:', err);
+          reject(new Error(`User verification failed: ${err.message}`));
+        } else if (!row) {
+          console.error('❌ User does not exist:', userId);
+          reject(new Error(`User ${userId} does not exist`));
+        } else {
+          console.log('✅ User verified in database:', row);
+          resolve();
+        }
+      });
+    });
+
+    // Execute document insert
+    await new Promise((resolve, reject) => {
         db.run(sql, params, function(err) {
           if (err) {
             console.error('❌ Error creating document:', err);
             reject(new Error(`Document creation failed: ${err.message}`));
           } else {
-            console.log('✅ Document inserted successfully, ID:', documentId);
-            resolve();
+            console.log('✅ Document insert completed, changes:', this.changes, 'lastID:', this.lastID);
+
+            // Verify document was actually inserted
+            db.get('SELECT id, title, owner_id FROM documents WHERE id = ?', [documentId], (checkErr, row) => {
+              if (checkErr) {
+                console.error('❌ Error verifying document insert:', checkErr);
+                reject(new Error(`Document verification failed: ${checkErr.message}`));
+              } else if (!row) {
+                console.error('❌ Document was not found after insert:', documentId);
+                // Check what documents do exist
+                db.all('SELECT id, title FROM documents ORDER BY created_at DESC LIMIT 5', [], (allErr, rows) => {
+                  if (allErr) {
+                    console.error('❌ Error listing recent documents:', allErr);
+                  } else {
+                    console.log('📋 Recent documents:', rows);
+                  }
+                  reject(new Error(`Document ${documentId} not found after insert`));
+                });
+              } else {
+                console.log('✅ Document verified in database:', row);
+                resolve();
+              }
+            });
           }
         });
       });

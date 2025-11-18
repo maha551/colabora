@@ -25,6 +25,7 @@ async function startApplication(options = {}) {
     // Override config if options provided
     const runtimeConfig = { ...config };
     if (options.port) {
+      console.log(`🔧 Overriding port from ${runtimeConfig.PORT} to ${options.port}`);
       runtimeConfig.PORT = options.port;
       process.env.PORT = options.port.toString();
       // Also update the cached config object
@@ -32,7 +33,7 @@ async function startApplication(options = {}) {
     }
 
     console.log(`📍 Environment: ${runtimeConfig.NODE_ENV}`);
-    console.log(`🚪 Port: ${runtimeConfig.PORT}`);
+    console.log(`🚪 Port: ${runtimeConfig.PORT} (options.port: ${options.port || 'undefined'})`);
     console.log(`💾 Database: ${runtimeConfig.DATABASE_URL}`);
 
     // Add global error handlers for production stability
@@ -87,7 +88,7 @@ async function startApplication(options = {}) {
     if (options.returnServer) {
       // For testing: start server and return the instance
       return new Promise((resolve, reject) => {
-        serverInstance = serverManager.start(runtimeConfig.PORT, () => {
+        const startCallback = () => {
           console.log('🎉 Server started successfully!');
           console.log(`🌐 Server running on port ${runtimeConfig.PORT}`);
 
@@ -107,8 +108,17 @@ async function startApplication(options = {}) {
             _dbManager: dbManager,
             _serverManager: serverManager
           };
+          console.log('🔧 Resolving promise with mock server...');
           resolve(mockServer);
-        });
+        };
+
+        console.log('🚀 Calling serverManager.start with callback...');
+        serverManager.start(runtimeConfig.PORT, startCallback);
+
+        // Handle startup errors
+        setTimeout(() => {
+          reject(new Error('Server startup timeout'));
+        }, 10000); // 10 second timeout
       });
     } else {
       // Normal startup

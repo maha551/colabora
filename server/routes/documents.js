@@ -1597,79 +1597,16 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
     console.log('📝 Title:', trimmedTitle);
     console.log('🏷️  Ownership type:', ownershipType);
 
-    // Build the SQL query based on ownership type
-    let sql, params;
+    // Build the SQL query and parameters using the helper function
+    const { sql, params, acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled } =
+      buildDocumentInsertSQL(ownershipType, organizationId, options, documentId, trimmedTitle, trimmedDescription, userId, parentId);
 
-    if (ownershipType === 'shared') {
-      // For shared documents, store creator IDs as JSON
-      sql = `
-        INSERT INTO documents (
-          id, title, description, owner_id, ownership_type, creator_ids, organization_id, parent_id,
-          acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed,
-          structure_proposals_enabled, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      `;
-      params = [
-        documentId, trimmedTitle, trimmedDescription, userId, ownershipType, JSON.stringify(creatorIds), null, parentId || null,
-        acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
-      ];
-    } else if (ownershipType === 'organizational') {
-      console.log('🏢 Building organizational document SQL');
-      // For organizational documents, set organization_id and start as proposal
-      const proposalDeadline = new Date();
-      proposalDeadline.setDate(proposalDeadline.getDate() + DOCUMENT_CONFIG.DEFAULT_PROPOSAL_PERIOD_DAYS);
-      console.log('📅 Proposal deadline:', proposalDeadline.toISOString());
-
-      // Ensure proposalDeadline is valid
-      if (isNaN(proposalDeadline.getTime())) {
-        console.error('Invalid proposal deadline generated');
-        return res.status(500).json({ error: 'Failed to generate proposal deadline' });
-      }
-
-      sql = `
-        INSERT INTO documents (
-          id, title, description, owner_id, ownership_type, creator_ids, organization_id, parent_id, status, proposal_deadline,
-          acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed,
-          structure_proposals_enabled, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      `;
-      // Ensure acceptanceThreshold is valid
-      const finalAcceptanceThreshold = (typeof acceptanceThreshold === 'number' && !isNaN(acceptanceThreshold))
-        ? acceptanceThreshold : DOCUMENT_CONFIG.DEFAULT_ACCEPTANCE_THRESHOLD;
-
-      params = [
-        documentId, trimmedTitle, trimmedDescription, userId, ownershipType, null, organizationId, parentId || null,
-        'proposal', proposalDeadline.toISOString(),
-        finalAcceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
-      ];
-      console.log('📋 Organizational SQL params:', params);
-      console.log('Final acceptance threshold:', finalAcceptanceThreshold);
-    } else {
-      // For personal documents (default)
-      sql = `
-        INSERT INTO documents (
-          id, title, description, owner_id, ownership_type, creator_ids, organization_id, parent_id,
-          acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed,
-          structure_proposals_enabled, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      `;
-      params = [
-        documentId, trimmedTitle, trimmedDescription, userId, ownershipType, null, null, parentId || null,
-        acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
-      ];
-    }
-
-    continueExecution();
-
-    function continueExecution() {
-    console.log('🔄 Calling continueExecution()');
+    console.log('💾 Executing document INSERT...');
     console.log('📝 Final SQL:', sql);
-    console.log('📊 Final params:', params);
+    console.log('📊 Final params length:', params.length);
 
-    // Use transaction for atomic document creation
     try {
-      console.log('🏦 Starting transaction for document creation...');
-      db.run('BEGIN TRANSACTION', (beginErr) => {
+      const result = await withTransaction(db, async () => {
         if (beginErr) {
           console.error('❌ Error beginning transaction:', beginErr);
           console.error('Transaction begin error details:', beginErr.message);

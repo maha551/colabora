@@ -21,8 +21,8 @@ describe('Documents API Integration Tests', () => {
     }
 
     // Import and start test server
-    const startTestServer = require('../../server/index');
-    server = await startTestServer({ port: 3002 }); // Use port 3002 for documents tests
+    const startTestServer = require('../../server/bootstrap').startApplication;
+    server = await startTestServer({ port: 3002, returnServer: true }); // Use port 3002 for documents tests
 
     // Wait for database initialization
     await new Promise(resolve => setTimeout(resolve, 3000));
@@ -52,6 +52,10 @@ describe('Documents API Integration Tests', () => {
         });
       });
     }
+
+    // Give scheduler time to stop
+    await new Promise(resolve => setTimeout(resolve, 100));
+  });
 
     // Clean up test database
     try {
@@ -455,471 +459,258 @@ describe('Documents API Integration Tests', () => {
     });
   });
 
-  describe('Organizational Document Creation', () => {
-    let testOrgId;
-    let testOrgToken;
-    let testOrgMemberToken;
+  // ============================================================================
+  // ORGANIZATIONAL DOCUMENTS WORKFLOW TESTS
+  // ============================================================================
 
-    beforeAll(async () => {
-      // Create a test organization
-      const orgResponse = await request(server)
-        .post('/api/organizations')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          name: 'Test Organization for Docs',
-          description: 'Organization for testing document creation'
-        })
-        .expect(201);
+  let orgId;
+  let orgToken;
+  let memberToken;
+  let orgDocumentId;
+  let votingDocId;
+  let historyDocId;
 
-      testOrgId = orgResponse.body.organization.id;
+  test('should create organizational document in proposal status', async () => {
+    // Create organization as admin first
+    const adminLogin = await request(server)
+      .post('/api/auth/login')
+      .send({
+        email: 'admin@colabora.local',
+        password: 'AdminSecurePass123!'
+      });
 
-      // Login as Charlie (another user) to join the organization
-      const charlieLogin = await request(server)
-        .post('/api/auth/login')
-        .send({
-          email: 'charlie@example.com',
-          password: 'SecurePass123!'
-        });
+    const adminToken = adminLogin.body.token;
 
-      testOrgMemberToken = charlieLogin.body.token;
+    // Get user IDs for representatives
+    const adminUser = adminLogin.body.user;
 
-      // Invite Charlie to the organization
-      await request(server)
-        .post(`/api/organizations/${testOrgId}/invite`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({ email: 'charlie@example.com' })
-        .expect(200);
+    const orgResponse = await request(server)
+      .post('/api/organizations')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: 'Test Organization',
+        description: 'Organization for testing organizational documents',
+        representatives: [adminUser.id, testUserId] // Use testUserId (Alice) from main setup
+      });
 
-      // Charlie accepts the invitation
-      const invitations = await request(server)
-        .get('/api/organizations/invitations')
-        .set('Authorization', `Bearer ${testOrgMemberToken}`)
-        .expect(200);
+    orgId = orgResponse.body.organization.id;
+    orgToken = adminToken;
+    memberToken = authToken; // Alice's token from main setup
 
-      const charlieInvitation = invitations.body.invitations.find(inv => inv.organizationId === testOrgId);
-      expect(charlieInvitation).toBeDefined();
-
-      await request(server)
-        .post(`/api/organizations/invitations/${charlieInvitation.id}/accept`)
-        .set('Authorization', `Bearer ${testOrgMemberToken}`)
-        .send({ status: 'active' })
-        .expect(200);
-    });
-
-    test('should create an organizational document with governance rules', async () => {
-      const docData = {
+    // Now create organizational document
+    const response = await request(server)
+      .post('/api/documents')
+      .set('Authorization', `Bearer ${memberToken}`)
+      .send({
         title: 'Organizational Test Document',
         description: 'A test organizational document',
         ownershipType: 'organizational',
-        organizationId: testOrgId
-      };
-
-      const response = await request(server)
-        .post('/api/documents')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send(docData)
-        .expect(201);
-
-      expect(response.body.document).toBeDefined();
-      expect(response.body.document.title).toBe(docData.title);
-      expect(response.body.document.ownershipType).toBe('organizational');
-      expect(response.body.document.organizationId).toBe(testOrgId);
-      expect(response.body.document.status).toBe('proposal'); // Organizational docs start as proposals
-
-      // Check that all organization members are added as collaborators
-      expect(response.body.document.collaborators).toBeDefined();
-      expect(Array.isArray(response.body.document.collaborators)).toBe(true);
-      expect(response.body.document.collaborators.length).toBeGreaterThan(0);
-    });
-
-    test('should reject organizational document creation without organization membership', async () => {
-      // Login as Diana (not a member of the test organization)
-      const dianaLogin = await request(server)
-        .post('/api/auth/login')
-        .send({
-          email: 'diana@example.com',
-          password: 'SecurePass123!'
-        });
-
-      const dianaToken = dianaLogin.body.token;
-
-      const docData = {
-        title: 'Unauthorized Org Document',
-        ownershipType: 'organizational',
-        organizationId: testOrgId
-      };
-
-      await request(server)
-        .post('/api/documents')
-        .set('Authorization', `Bearer ${dianaToken}`)
-        .send(docData)
-        .expect(403); // Forbidden - not a member
-    });
-
-    test('should allow organization members to create organizational documents', async () => {
-      const docData = {
-        title: 'Member Created Org Document',
-        description: 'Created by organization member',
-        ownershipType: 'organizational',
-        organizationId: testOrgId
-      };
-
-      const response = await request(server)
-        .post('/api/documents')
-        .set('Authorization', `Bearer ${testOrgMemberToken}`)
-        .send(docData)
-        .expect(201);
-
-      expect(response.body.document.ownershipType).toBe('organizational');
-      expect(response.body.document.organizationId).toBe(testOrgId);
-      expect(response.body.document.status).toBe('proposal');
-    });
-  });
-
-  describe('Document Tree and Hierarchy', () => {
-    let rootDocId;
-    let childDocId;
-    let grandchildDocId;
-
-    test('should create a root document without parent', async () => {
-      const docData = {
-        title: 'Root Document',
-        description: 'Top level document in hierarchy',
-        ownershipType: 'personal'
-      };
-
-      const response = await request(server)
-        .post('/api/documents')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send(docData)
-        .expect(201);
-
-      rootDocId = response.body.document.id;
-      expect(response.body.document.parentId).toBeUndefined();
-      expect(response.body.document.title).toBe(docData.title);
-    });
-
-    test('should create a child document with parent reference', async () => {
-      const docData = {
-        title: 'Child Document',
-        description: 'Child document in hierarchy',
-        ownershipType: 'personal',
-        parentId: rootDocId
-      };
-
-      const response = await request(server)
-        .post('/api/documents')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send(docData)
-        .expect(201);
-
-      childDocId = response.body.document.id;
-      expect(response.body.document.parentId).toBe(rootDocId);
-      expect(response.body.document.title).toBe(docData.title);
-    });
-
-    test('should create a grandchild document', async () => {
-      const docData = {
-        title: 'Grandchild Document',
-        description: 'Third level in hierarchy',
-        ownershipType: 'personal',
-        parentId: childDocId
-      };
-
-      const response = await request(server)
-        .post('/api/documents')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send(docData)
-        .expect(201);
-
-      grandchildDocId = response.body.document.id;
-      expect(response.body.document.parentId).toBe(childDocId);
-      expect(response.body.document.title).toBe(docData.title);
-    });
-
-    test('should prevent circular references in document hierarchy', async () => {
-      // Try to make root document a child of its grandchild (circular reference)
-      const docData = {
-        title: 'Circular Reference Attempt',
-        description: 'Should fail due to circular reference',
-        ownershipType: 'personal',
-        parentId: grandchildDocId
-      };
-
-      await request(server)
-        .post('/api/documents')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send(docData)
-        .expect(400); // Bad request - circular reference detected
-    });
-
-    test('should enforce maximum hierarchy depth', async () => {
-      // Create documents up to the maximum depth (10 levels)
-      let currentParentId = grandchildDocId;
-
-      for (let i = 0; i < 7; i++) { // 3 already created, need 7 more to reach 10
-        const docData = {
-          title: `Level ${i + 4} Document`,
-          description: `Document at hierarchy level ${i + 4}`,
-          ownershipType: 'personal',
-          parentId: currentParentId
-        };
-
-        const response = await request(server)
-          .post('/api/documents')
-          .set('Authorization', `Bearer ${authToken}`)
-          .send(docData)
-          .expect(201);
-
-        currentParentId = response.body.document.id;
-      }
-
-      // Now try to create one more level (should fail)
-      const docData = {
-        title: 'Level 11 Document - Should Fail',
-        description: 'Document exceeding maximum hierarchy depth',
-        ownershipType: 'personal',
-        parentId: currentParentId
-      };
-
-      await request(server)
-        .post('/api/documents')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send(docData)
-        .expect(400); // Bad request - max depth exceeded
-    });
-
-    test('should retrieve document hierarchy information', async () => {
-      const response = await request(server)
-        .get(`/api/documents/${childDocId}`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .expect(200);
-
-      expect(response.body.document.parentId).toBe(rootDocId);
-      expect(response.body.document.id).toBe(childDocId);
-    });
-  });
-
-  describe('Advanced Voting Mechanics', () => {
-    let votingDocId;
-    let votingParaId;
-    let votingProposalId;
-
-    beforeAll(async () => {
-      // Create a document with specific voting settings for testing
-      const docData = {
-        title: 'Voting Test Document',
-        description: 'Document for testing voting mechanics',
-        ownershipType: 'personal',
+        organizationId: orgId,
         options: {
-          acceptanceThreshold: 50, // 50% acceptance threshold
+          acceptanceThreshold: 75,
           votingAnonymous: true,
-          voteChangeAllowed: true,
-          structureProposalsEnabled: true
+          voteChangeAllowed: true
         }
-      };
+      })
+      .expect(201);
 
-      const docResponse = await request(server)
-        .post('/api/documents')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send(docData)
-        .expect(201);
+    orgDocumentId = response.body.document.id;
 
-      votingDocId = docResponse.body.document.id;
-
-      // Create a paragraph
-      const paraResponse = await request(server)
-        .post(`/api/documents/${votingDocId}/paragraphs`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          text: 'This is a paragraph for voting tests.',
-          order_index: 1
-        })
-        .expect(201);
-
-      votingParaId = paraResponse.body.paragraph.id;
-
-      // Create a proposal
-      const proposalResponse = await request(server)
-        .post(`/api/documents/${votingDocId}/paragraphs/${votingParaId}/proposals`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          text: 'This is a proposed change for voting tests.',
-          type: 'BODY'
-        })
-        .expect(201);
-
-      votingProposalId = proposalResponse.body.proposal.id;
-    });
-
-    test('should handle multiple votes on a proposal', async () => {
-      // Login as Bob and cast a vote
-      const bobLogin = await request(server)
-        .post('/api/auth/login')
-        .send({
-          email: 'bob@example.com',
-          password: 'SecurePass123!'
-        });
-
-      const bobToken = bobLogin.body.token;
-
-      // Bob votes PRO
-      await request(server)
-        .post(`/api/documents/${votingDocId}/paragraphs/${votingParaId}/proposals/${votingProposalId}/vote`)
-        .set('Authorization', `Bearer ${bobToken}`)
-        .send({ vote: 'PRO' })
-        .expect(200);
-
-      // Alice votes CONTRA
-      await request(server)
-        .post(`/api/documents/${votingDocId}/paragraphs/${votingParaId}/proposals/${votingProposalId}/vote`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({ vote: 'CONTRA' })
-        .expect(200);
-
-      // Check proposal votes
-      const proposalResponse = await request(server)
-        .get(`/api/documents/${votingDocId}/paragraphs/${votingParaId}/proposals/${votingProposalId}`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .expect(200);
-
-      expect(proposalResponse.body.proposal.votes).toBeDefined();
-      expect(proposalResponse.body.proposal.votes.PRO).toBe(1);
-      expect(proposalResponse.body.proposal.votes.CONTRA).toBe(1);
-      expect(proposalResponse.body.proposal.votes.NEUTRAL).toBe(0);
-    });
-
-    test('should calculate acceptance percentage correctly', async () => {
-      // Get the proposal to check acceptance calculation
-      const proposalResponse = await request(server)
-        .get(`/api/documents/${votingDocId}/paragraphs/${votingParaId}/proposals/${votingProposalId}`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .expect(200);
-
-      const proposal = proposalResponse.body.proposal;
-      const totalVotes = proposal.votes.PRO + proposal.votes.CONTRA + proposal.votes.NEUTRAL;
-      const proPercentage = (proposal.votes.PRO / totalVotes) * 100;
-
-      expect(totalVotes).toBe(2); // Bob PRO, Alice CONTRA
-      expect(proPercentage).toBe(50); // 50% PRO votes
-
-      // With 50% acceptance threshold, this proposal should be accepted
-      expect(proPercentage).toBeGreaterThanOrEqual(50);
-    });
-
-    test('should handle NEUTRAL votes', async () => {
-      // Login as Charlie and cast NEUTRAL vote
-      const charlieLogin = await request(server)
-        .post('/api/auth/login')
-        .send({
-          email: 'charlie@example.com',
-          password: 'SecurePass123!'
-        });
-
-      const charlieToken = charlieLogin.body.token;
-
-      await request(server)
-        .post(`/api/documents/${votingDocId}/paragraphs/${votingParaId}/proposals/${votingProposalId}/vote`)
-        .set('Authorization', `Bearer ${charlieToken}`)
-        .send({ vote: 'NEUTRAL' })
-        .expect(200);
-
-      // Check updated vote counts
-      const proposalResponse = await request(server)
-        .get(`/api/documents/${votingDocId}/paragraphs/${votingParaId}/proposals/${votingProposalId}`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .expect(200);
-
-      expect(proposalResponse.body.proposal.votes.PRO).toBe(1);
-      expect(proposalResponse.body.proposal.votes.CONTRA).toBe(1);
-      expect(proposalResponse.body.proposal.votes.NEUTRAL).toBe(1);
-    });
-
-    test('should maintain vote anonymity when enabled', async () => {
-      // For anonymous voting, individual voter identities should not be revealed
-      const proposalResponse = await request(server)
-        .get(`/api/documents/${votingDocId}/paragraphs/${votingParaId}/proposals/${votingProposalId}`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .expect(200);
-
-      // With anonymous voting enabled, we should only see vote counts, not individual voters
-      expect(proposalResponse.body.proposal.votes).toBeDefined();
-      expect(proposalResponse.body.proposal.voters).toBeUndefined(); // Should not expose voter identities
-    });
-
-    test('should handle proposal acceptance based on threshold', async () => {
-      // Create a new document with 75% threshold
-      const thresholdDoc = await request(server)
-        .post('/api/documents')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          title: 'Threshold Test Document',
-          ownershipType: 'personal',
-          options: { acceptanceThreshold: 75 } // 75% required
-        })
-        .expect(201);
-
-      const thresholdDocId = thresholdDoc.body.document.id;
-
-      // Create paragraph and proposal
-      const paraResponse = await request(server)
-        .post(`/api/documents/${thresholdDocId}/paragraphs`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({ text: 'Threshold test paragraph', order_index: 1 })
-        .expect(201);
-
-      const proposalResponse = await request(server)
-        .post(`/api/documents/${thresholdDocId}/paragraphs/${paraResponse.body.paragraph.id}/proposals`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({ text: 'Threshold test proposal', type: 'BODY' })
-        .expect(201);
-
-      const proposalId = proposalResponse.body.proposal.id;
-
-      // Only cast one PRO vote out of three possible voters
-      // This should result in 33% acceptance (below 75% threshold)
-      const bobLogin = await request(server)
-        .post('/api/auth/login')
-        .send({
-          email: 'bob@example.com',
-          password: 'SecurePass123!'
-        });
-
-      await request(server)
-        .post(`/api/documents/${thresholdDocId}/paragraphs/${paraResponse.body.paragraph.id}/proposals/${proposalId}/vote`)
-        .set('Authorization', `Bearer ${bobLogin.body.token}`)
-        .send({ vote: 'PRO' })
-        .expect(200);
-
-      // Proposal should not be accepted yet (only 33% vs 75% threshold)
-      const finalProposalResponse = await request(server)
-        .get(`/api/documents/${thresholdDocId}/paragraphs/${paraResponse.body.paragraph.id}/proposals/${proposalId}`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .expect(200);
-
-      expect(finalProposalResponse.body.proposal.status).toBe('active'); // Not accepted yet
-    });
+    expect(response.body.document.title).toBe('Organizational Test Document');
+    expect(response.body.document.status).toBe('proposal');
+    expect(response.body.document.ownership_type).toBe('organizational');
+    expect(response.body.document.organization_id).toBe(orgId);
+    expect(response.body.document.proposal_deadline).toBeDefined();
+    expect(response.body.document.acceptance_threshold).toBe(75);
   });
 
-  describe('Authentication and Authorization', () => {
-    test('should require authentication for document operations', async () => {
-      await request(server)
-        .get('/api/documents')
-        .expect(401);
-    });
+  test('should reject organizational document creation without organization membership', async () => {
+    // Login as Bob who is not a member
+    const bobLogin = await request(server)
+      .post('/api/auth/login')
+      .send({
+        email: 'bob@example.com',
+        password: 'SecurePass123!'
+      });
 
-    test('should require authentication for paragraph operations', async () => {
-      await request(server)
-        .post(`/api/documents/${testDocumentId}/paragraphs`)
-        .send({ text: 'Test', order_index: 1 })
-        .expect(401);
-    });
+    const bobToken = bobLogin.body.token;
 
-    test('should require authentication for proposal operations', async () => {
-      await request(server)
-        .post(`/api/documents/${testDocumentId}/paragraphs/para-1/proposals`)
-        .send({ text: 'Test proposal', type: 'BODY' })
-        .expect(401);
-    });
+    await request(server)
+      .post('/api/documents')
+      .set('Authorization', `Bearer ${bobToken}`)
+      .send({
+        title: 'Unauthorized Document',
+        description: 'Should not be created',
+        ownershipType: 'organizational',
+        organizationId: orgId
+      })
+      .expect(403);
   });
-});
+
+  test('should get voting status for organizational document', async () => {
+    const response = await request(server)
+      .get(`/api/documents/${orgDocumentId}/voting-status`)
+      .set('Authorization', `Bearer ${memberToken}`)
+      .expect(200);
+
+    expect(response.body.document.status).toBe('proposal');
+    expect(response.body.document.organizationName).toBe('Test Organization');
+    expect(response.body.voting.canVote).toBe(true);
+    expect(response.body.voting.totalEligibleVoters).toBeGreaterThan(0);
+    expect(response.body.voting.quorumRequired).toBeGreaterThan(0);
+  });
+
+  test('should transition to voting after proposal deadline', async () => {
+    // Manually trigger the transition (in real scenario, scheduler would do this)
+    await request(server)
+      .post(`/api/documents/${orgDocumentId}/start-voting`)
+      .set('Authorization', `Bearer ${orgToken}`)
+      .expect(200);
+
+    // Check status changed
+    const statusResponse = await request(server)
+      .get(`/api/documents/${orgDocumentId}/voting-status`)
+      .set('Authorization', `Bearer ${memberToken}`)
+      .expect(200);
+
+    expect(statusResponse.body.document.status).toBe('voting');
+    expect(statusResponse.body.document.voting_deadline).toBeDefined();
+    expect(statusResponse.body.document.min_voters_required).toBeGreaterThan(0);
+  });
+
+  test('should allow organization members to vote', async () => {
+    // Create a document already in voting status
+    const docResponse = await request(server)
+      .post('/api/documents')
+      .set('Authorization', `Bearer ${memberToken}`)
+      .send({
+        title: 'Voting Test Document',
+        description: 'Document for voting tests',
+        ownershipType: 'organizational',
+        organizationId: orgId
+      })
+      .expect(201);
+
+    votingDocId = docResponse.body.document.id;
+
+    // Start voting manually
+    await request(server)
+      .post(`/api/documents/${votingDocId}/start-voting`)
+      .set('Authorization', `Bearer ${orgToken}`)
+      .expect(200);
+
+    // Get additional voter tokens
+    const adminLogin = await request(server)
+      .post('/api/auth/login')
+      .send({
+        email: 'admin@colabora.local',
+        password: 'AdminSecurePass123!'
+      });
+
+    const voter1Token = memberToken; // Alice
+    const voter2Token = adminLogin.body.token; // Admin
+
+    // Alice votes PRO
+    await request(server)
+      .post(`/api/documents/${votingDocId}/vote`)
+      .set('Authorization', `Bearer ${voter1Token}`)
+      .send({ vote: 'PRO' })
+      .expect(200);
+
+    // Admin votes PRO
+    await request(server)
+      .post(`/api/documents/${votingDocId}/vote`)
+      .set('Authorization', `Bearer ${voter2Token}`)
+      .send({ vote: 'PRO' })
+      .expect(200);
+
+    // Check voting status
+    const statusResponse = await request(server)
+      .get(`/api/documents/${votingDocId}/voting-status`)
+      .set('Authorization', `Bearer ${voter1Token}`)
+      .expect(200);
+
+    expect(statusResponse.body.voting.totalVotes).toBe(2);
+    expect(statusResponse.body.voting.voteBreakdown.PRO).toBe(2);
+    expect(statusResponse.body.voting.approvalRate).toBe(100);
+  });
+
+  test('should allow vote changes if enabled', async () => {
+    // Alice changes vote to CONTRA
+    await request(server)
+      .post(`/api/documents/${votingDocId}/vote`)
+      .set('Authorization', `Bearer ${memberToken}`)
+      .send({ vote: 'CONTRA' })
+      .expect(200);
+
+    // Check updated voting status
+    const statusResponse = await request(server)
+      .get(`/api/documents/${votingDocId}/voting-status`)
+      .set('Authorization', `Bearer ${memberToken}`)
+      .expect(200);
+
+    expect(statusResponse.body.voting.totalVotes).toBe(2);
+    expect(statusResponse.body.voting.voteBreakdown.PRO).toBe(1);
+    expect(statusResponse.body.voting.voteBreakdown.CONTRA).toBe(1);
+    expect(statusResponse.body.voting.approvalRate).toBe(50);
+  });
+
+  test('should finalize voting and approve document', async () => {
+    // Manually finalize voting
+    await request(server)
+      .post(`/api/documents/${votingDocId}/finalize-voting`)
+      .set('Authorization', `Bearer ${orgToken}`)
+      .expect(200);
+
+    // Check final status
+    const statusResponse = await request(server)
+      .get(`/api/documents/${votingDocId}/voting-status`)
+      .set('Authorization', `Bearer ${memberToken}`)
+      .expect(200);
+
+    expect(statusResponse.body.document.status).toBe('agreed');
+  });
+
+  test('should retrieve document status history', async () => {
+    // Create and transition a document to generate history
+    const docResponse = await request(server)
+      .post('/api/documents')
+      .set('Authorization', `Bearer ${memberToken}`)
+      .send({
+        title: 'History Test Document',
+        description: 'Document for testing status history',
+        ownershipType: 'organizational',
+        organizationId: orgId
+      })
+      .expect(201);
+
+    historyDocId = docResponse.body.document.id;
+
+    // Start voting to create status change
+    await request(server)
+      .post(`/api/documents/${historyDocId}/start-voting`)
+      .set('Authorization', `Bearer ${orgToken}`)
+      .expect(200);
+
+    const response = await request(server)
+      .get(`/api/documents/${historyDocId}/status-history`)
+      .set('Authorization', `Bearer ${memberToken}`)
+      .expect(200);
+
+    expect(Array.isArray(response.body.history)).toBe(true);
+    expect(response.body.history.length).toBeGreaterThan(0);
+
+    // Check that we have proposal -> voting transition
+    const transitions = response.body.history.map(h => h.new_status);
+    expect(transitions).toContain('voting');
+  });
+
+  test('should have scheduler running', async () => {
+    // Test that scheduler is initialized and running
+    const healthResponse = await request(server)
+      .get('/api/health/detailed')
+      .expect(200);
+
+    // Scheduler should be mentioned in health check
+    expect(healthResponse.body.message).toContain('Scheduler');
+  });

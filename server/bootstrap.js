@@ -79,6 +79,21 @@ async function startApplication(options = {}) {
     app.locals.db = dbManager ? db : null;
     app.locals.dbAvailable = !!dbManager;
 
+    // Initialize background scheduler if database is available
+    let scheduler = null;
+    if (dbManager && db) {
+      console.log('📅 Initializing background scheduler...');
+      try {
+        const DocumentScheduler = require('./modules/scheduler');
+        scheduler = new DocumentScheduler(db);
+        scheduler.start();
+        console.log('✅ Background scheduler initialized');
+      } catch (schedulerError) {
+        console.error('❌ Failed to initialize scheduler:', schedulerError);
+        // Don't fail startup for scheduler issues
+      }
+    }
+
     // Register routes
     registerRoutes(app);
 
@@ -98,6 +113,9 @@ async function startApplication(options = {}) {
             close: (callback) => {
               // Gracefully shutdown
               serverManager.close().then(() => {
+                if (scheduler) {
+                  scheduler.stop();
+                }
                 if (dbManager) {
                   dbManager.close().catch(console.error);
                 }
@@ -106,7 +124,8 @@ async function startApplication(options = {}) {
             },
             // Store references for cleanup
             _dbManager: dbManager,
-            _serverManager: serverManager
+            _serverManager: serverManager,
+            _scheduler: scheduler
           };
           console.log('🔧 Resolving promise with mock server...');
           resolve(mockServer);

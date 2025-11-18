@@ -625,8 +625,7 @@ async function updateAgreedViewForParagraph(db, proposalId, documentId) {
           LEFT JOIN votes v ON pr.id = v.proposal_id
           WHERE pr.paragraph_id = ? AND pr.approved = 1
           GROUP BY pr.id
-          HAVING COUNT(v.id) > 0  -- Only proposals that have been voted on
-          ORDER BY (COUNT(CASE WHEN v.vote = 'PRO' THEN 1 END) * 1.0 / COUNT(v.id)) DESC, pr.created_at DESC
+          ORDER BY (COUNT(CASE WHEN v.vote = 'PRO' THEN 1 END) * 1.0 / NULLIF(COUNT(v.id), 0)) DESC, pr.created_at DESC
         `, [paragraphId], (err, rows) => {
           if (err) reject(err);
           else resolve(rows || []);
@@ -638,13 +637,35 @@ async function updateAgreedViewForParagraph(db, proposalId, documentId) {
         return;
       }
 
-      // Calculate approval percentages and find the best proposal
-      const proposalsWithPercentages = approvedProposals.map(p => ({
-        ...p,
-        approvalPercentage: p.total_votes > 0 ? (p.pro_votes / p.total_votes) * 100 : 0
+      // Calculate approval percentages using eligible voter count (not just votes cast)
+      // This ensures consistency with the approval logic in checkAndUpdateProposalApproval
+      const proposalsWithPercentages = await Promise.all(approvedProposals.map(async (p) => {
+        const eligibleVoters = await VoterManager.getEligibleVoterCount(db, documentId);
+        const approvalPercentage = eligibleVoters > 0 ? (p.pro_votes / eligibleVoters) * 100 : 0;
+        return {
+          ...p,
+          approvalPercentage,
+          eligibleVoters
+        };
       }));
 
-      const bestProposal = proposalsWithPercentages[0];
+      // Filter to only proposals that still meet the current threshold
+      const doc = await new Promise((resolve, reject) => {
+        db.get(`SELECT acceptance_threshold FROM documents WHERE id = ?`, [documentId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+
+      const acceptanceThreshold = doc?.acceptance_threshold || 75.0;
+      const validProposals = proposalsWithPercentages.filter(p => p.approvalPercentage >= acceptanceThreshold);
+
+      if (validProposals.length === 0) {
+        console.log(`No proposals meet current acceptance threshold (${acceptanceThreshold}%) for paragraph ${paragraphId}`);
+        return;
+      }
+
+      const bestProposal = validProposals[0];
 
       // Get current paragraph content
       const currentParagraph = await new Promise((resolve, reject) => {

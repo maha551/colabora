@@ -10,6 +10,8 @@ import { OrganizationPermissions } from '../../../hooks/useOrganizationPermissio
 import { documentsApi } from '../../../lib/api';
 import { toast } from 'sonner';
 import { DocumentCreationModal } from '../DocumentCreationModal';
+import OrganizationalDocumentVoting from '../../OrganizationalDocumentVoting';
+import DocumentStatusDisplay from '../../DocumentStatusDisplay';
 
 interface DocumentsTabProps {
   organization: Organization;
@@ -172,15 +174,15 @@ export function DocumentsTab({
 
           <div className="flex items-center justify-between">
             <div className="flex-1" style={{ marginLeft: hasChildren ? '28px' : '0' }}>
-              <h4 className="font-medium">{document.title}</h4>
+              <div className="flex items-center gap-3 mb-2">
+                <h4 className="font-medium">{document.title}</h4>
+                <DocumentStatusDisplay document={document} compact={true} />
+              </div>
               {document.description && (
                 <p className="text-sm text-gray-600 mt-1">{document.description}</p>
               )}
               <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
                 <span>By {document.owner?.name}</span>
-                <Badge variant={document.status === 'proposal' ? 'secondary' : 'outline'}>
-                  {document.status}
-                </Badge>
                 {hasChildren && (
                   <span className="text-gray-400">
                     {children.length} sub-document{children.length !== 1 ? 's' : ''}
@@ -207,8 +209,8 @@ export function DocumentsTab({
                 </Button>
               )}
 
-              {/* Voting actions */}
-              {document.status === 'proposal' && (
+              {/* Voting actions - simplified for organizational documents */}
+              {document.ownership_type === 'organizational' && document.status === 'voting' && (
                 <div className="flex gap-1">
                   <Button
                     size="sm"

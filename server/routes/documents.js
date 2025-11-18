@@ -423,12 +423,22 @@ function buildDocumentInsertSQL(ownershipType, organizationId, options, document
       throw new Error('Failed to generate valid proposal deadline');
     }
 
+    // Calculate min_voters_required based on organization size (default 30% of members)
+    let minVotersRequired = 0;
+    try {
+      // We'll need to calculate this after organization member count is known
+      // For now, set to 0 and let the scheduler handle it
+      minVotersRequired = 0; // Will be updated by scheduler when transitioning to voting
+    } catch (error) {
+      console.warn('⚠️ Could not calculate min_voters_required, using 0:', error.message);
+    }
+
     sql = `
       INSERT INTO documents (
         id, title, description, owner_id, ownership_type, creator_ids, organization_id, parent_id, status, proposal_deadline,
         acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed,
-        structure_proposals_enabled, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        structure_proposals_enabled, min_voters_required, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     `;
     // Ensure acceptanceThreshold is valid
     const finalAcceptanceThreshold = (typeof acceptanceThreshold === 'number' && !isNaN(acceptanceThreshold))
@@ -437,7 +447,8 @@ function buildDocumentInsertSQL(ownershipType, organizationId, options, document
     params = [
       documentId, trimmedTitle, trimmedDescription, userId, ownershipType, null, organizationId, parentId || null,
       'proposal', proposalDeadline.toISOString(),
-      finalAcceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
+      finalAcceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled,
+      minVotersRequired
     ];
     console.log('📋 Organizational SQL params built successfully');
   } else {
@@ -2220,5 +2231,232 @@ function checkDocumentAgreementStatus(db, documentId) {
     });
   });
     } // End of continueExecution function
+
+/**
+ * GET /api/documents/:id/voting-status
+ * Get voting status and information for an organizational document
+ */
+router.get('/:id/voting-status', requireAuth, requireDocumentAccess, async (req, res) => {
+  const db = req.app.locals.db;
+  const documentId = req.params.id;
+  const userId = req.user.id;
+
+  try {
+    // Get document info
+    const document = await new Promise((resolve, reject) => {
+      db.get(`
+        SELECT d.*, o.name as organization_name
+        FROM documents d
+        LEFT JOIN organizations o ON d.organization_id = o.id
+        WHERE d.id = ?
+      `, [documentId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (!document) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    if (document.ownership_type !== 'organizational') {
+      return res.status(400).json({ error: 'Document is not organizational' });
+    }
+
+    // Check if user can vote
+    const VoterManager = require('../modules/voting');
+    const canVote = await VoterManager.canUserVote(db, documentId, userId);
+
+    // Get user's existing vote
+    const userVote = await new Promise((resolve, reject) => {
+      db.get(`
+        SELECT vote FROM document_votes WHERE document_id = ? AND user_id = ?
+      `, [documentId, userId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row?.vote || null);
+      });
+    });
+
+    // Get vote breakdown
+    const votes = await new Promise((resolve, reject) => {
+      db.all(`
+        SELECT vote, COUNT(*) as count
+        FROM document_votes
+        WHERE document_id = ?
+        GROUP BY vote
+      `, [documentId], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    const voteBreakdown = { PRO: 0, NEUTRAL: 0, CONTRA: 0 };
+    votes.forEach(v => {
+      voteBreakdown[v.vote] = v.count;
+    });
+
+    const totalVotes = Object.values(voteBreakdown).reduce((sum, count) => sum + count, 0);
+    const approvalRate = totalVotes > 0 ? (voteBreakdown.PRO / totalVotes) * 100 : 0;
+
+    // Get eligible voters count
+    const eligibleVoters = await VoterManager.getEligibleVoters(db, documentId);
+
+    res.json({
+      document: {
+        id: document.id,
+        title: document.title,
+        status: document.status,
+        organizationName: document.organization_name,
+        proposalDeadline: document.proposal_deadline,
+        votingDeadline: document.voting_deadline,
+        votingStartedAt: document.voting_started_at,
+        acceptanceThreshold: document.acceptance_threshold,
+        minVotersRequired: document.min_voters_required,
+        votingAnonymous: !!document.voting_anonymous,
+        voteChangeAllowed: !!document.vote_change_allowed
+      },
+      voting: {
+        canVote,
+        userVote,
+        totalVotes,
+        voteBreakdown,
+        approvalRate: Math.round(approvalRate * 10) / 10,
+        totalEligibleVoters: eligibleVoters.length,
+        quorumMet: totalVotes >= (document.min_voters_required || 0),
+        quorumRequired: document.min_voters_required || 0
+      }
+    });
+
+  } catch (error) {
+    console.error('Error getting voting status:', error);
+    res.status(500).json({ error: 'Failed to get voting status' });
+  }
+});
+
+/**
+ * GET /api/documents/:id/status-history
+ * Get status change history for a document
+ */
+router.get('/:id/status-history', requireAuth, requireDocumentAccess, async (req, res) => {
+  const db = req.app.locals.db;
+  const documentId = req.params.id;
+
+  try {
+    const DocumentStatusManager = require('../modules/document-status');
+    const history = await DocumentStatusManager.getStatusHistory(db, documentId);
+
+    res.json({ history });
+
+  } catch (error) {
+    console.error('Error getting status history:', error);
+    res.status(500).json({ error: 'Failed to get status history' });
+  }
+});
+
+/**
+ * POST /api/documents/:id/start-voting
+ * Admin endpoint to manually start voting period (for testing/emergency)
+ */
+router.post('/:id/start-voting', requireAuth, requireDocumentAccess, async (req, res) => {
+  const db = req.app.locals.db;
+  const documentId = req.params.id;
+  const userId = req.user.id;
+
+  try {
+    // Check if user has admin privileges or is document owner
+    const document = await new Promise((resolve, reject) => {
+      db.get('SELECT owner_id, status FROM documents WHERE id = ?', [documentId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (!document) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    if (document.owner_id !== userId) {
+      // TODO: Check for admin role when user roles are implemented
+      return res.status(403).json({ error: 'Only document owner can start voting' });
+    }
+
+    if (document.status !== 'proposal') {
+      return res.status(400).json({ error: 'Document must be in proposal status to start voting' });
+    }
+
+    const DocumentStatusManager = require('../modules/document-status');
+    const result = await DocumentStatusManager.transitionToVoting(db, documentId, userId);
+
+    res.json({
+      message: 'Voting period started successfully',
+      votingDeadline: result.votingDeadline
+    });
+
+  } catch (error) {
+    console.error('Error starting voting:', error);
+    res.status(500).json({ error: 'Failed to start voting period' });
+  }
+});
+
+/**
+ * POST /api/documents/:id/finalize-voting
+ * Admin endpoint to manually finalize voting (for testing/emergency)
+ */
+router.post('/:id/finalize-voting', requireAuth, requireDocumentAccess, async (req, res) => {
+  const db = req.app.locals.db;
+  const documentId = req.params.id;
+  const userId = req.user.id;
+
+  try {
+    // Check if user has admin privileges or is document owner
+    const document = await new Promise((resolve, reject) => {
+      db.get('SELECT owner_id, status FROM documents WHERE id = ?', [documentId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (!document) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    if (document.owner_id !== userId) {
+      // TODO: Check for admin role when user roles are implemented
+      return res.status(403).json({ error: 'Only document owner can finalize voting' });
+    }
+
+    if (document.status !== 'voting') {
+      return res.status(400).json({ error: 'Document must be in voting status to finalize' });
+    }
+
+    const DocumentStatusManager = require('../modules/document-status');
+    const canFinalize = await DocumentStatusManager.canFinalizeVoting(db, documentId);
+
+    if (!canFinalize.canFinalize) {
+      return res.status(400).json({ error: canFinalize.reason });
+    }
+
+    // Get full document info for finalization
+    const doc = await new Promise((resolve, reject) => {
+      db.get(`
+        SELECT id, title, owner_id, organization_id, acceptance_threshold, min_voters_required
+        FROM documents WHERE id = ?
+      `, [documentId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    const DocumentScheduler = require('../modules/scheduler');
+    const scheduler = new DocumentScheduler(db);
+    await scheduler.finalizeVoting(doc);
+
+    res.json({ message: 'Voting finalized successfully' });
+
+  } catch (error) {
+    console.error('Error finalizing voting:', error);
+    res.status(500).json({ error: 'Failed to finalize voting' });
+  }
+});
 
 module.exports = router;

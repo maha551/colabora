@@ -284,6 +284,30 @@ export const documentsApi = {
   async getDocumentVotes(documentId: string) {
     return apiRequest(`/api/documents/${documentId}/votes`)
   },
+
+  // Get voting status for organizational documents
+  async getVotingStatus(documentId: string) {
+    return apiRequest(`/api/documents/${documentId}/voting-status`)
+  },
+
+  // Get document status history
+  async getStatusHistory(documentId: string) {
+    return apiRequest(`/api/documents/${documentId}/status-history`)
+  },
+
+  // Start voting period (admin/owner only)
+  async startVoting(documentId: string) {
+    return apiRequest(`/api/documents/${documentId}/start-voting`, {
+      method: 'POST'
+    })
+  },
+
+  // Finalize voting period (admin/owner only)
+  async finalizeVoting(documentId: string) {
+    return apiRequest(`/api/documents/${documentId}/finalize-voting`, {
+      method: 'POST'
+    })
+  },
 }
 
 // Paragraph API functions

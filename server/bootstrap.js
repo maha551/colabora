@@ -27,6 +27,8 @@ async function startApplication(options = {}) {
     if (options.port) {
       runtimeConfig.PORT = options.port;
       process.env.PORT = options.port.toString();
+      // Also update the cached config object
+      config.PORT = options.port;
     }
 
     console.log(`📍 Environment: ${runtimeConfig.NODE_ENV}`);

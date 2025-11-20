@@ -323,10 +323,43 @@ class DatabaseManager {
           old_text TEXT,
           new_text TEXT NOT NULL,
           approval_percentage REAL NOT NULL,
+          heading_level TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (paragraph_id) REFERENCES paragraphs(id),
           FOREIGN KEY (proposal_id) REFERENCES proposals(id),
           FOREIGN KEY (user_id) REFERENCES users(id)
+        )`
+      },
+      {
+        name: 'structure_proposals',
+        sql: `CREATE TABLE IF NOT EXISTS structure_proposals (
+          id TEXT PRIMARY KEY,
+          document_id TEXT NOT NULL,
+          user_id TEXT NOT NULL,
+          title TEXT NOT NULL,
+          description TEXT,
+          status TEXT CHECK(status IN ('draft', 'proposed', 'approved', 'rejected')) DEFAULT 'draft',
+          changes TEXT NOT NULL, -- JSON array of structure changes
+          voting_deadline DATETIME,
+          acceptance_threshold REAL DEFAULT 75.0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (document_id) REFERENCES documents(id),
+          FOREIGN KEY (user_id) REFERENCES users(id)
+        )`
+      },
+      {
+        name: 'structure_proposal_votes',
+        sql: `CREATE TABLE IF NOT EXISTS structure_proposal_votes (
+          id TEXT PRIMARY KEY,
+          structure_proposal_id TEXT NOT NULL,
+          user_id TEXT NOT NULL,
+          vote TEXT CHECK(vote IN ('PRO', 'CONTRA', 'NEUTRAL')) NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (structure_proposal_id) REFERENCES structure_proposals(id),
+          FOREIGN KEY (user_id) REFERENCES users(id),
+          UNIQUE(structure_proposal_id, user_id)
         )`
       },
       {

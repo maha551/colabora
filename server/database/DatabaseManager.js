@@ -417,16 +417,16 @@ class DatabaseManager {
    * @returns {Promise<void>}
    */
   async initializeDemoData() {
-    console.log('Creating demo users...');
+    console.log('Creating demo users and content...');
 
     const demoUsersData = [
-      { ...demoUsers[0], password: 'SecurePass123!', role: 'user' },
-      { ...demoUsers[1], password: 'SecurePass123!', role: 'user' },
-      { ...demoUsers[2], password: 'SecurePass123!', role: 'user' },
-      { ...demoUsers[3], password: 'SecurePass123!', role: 'user' },
-      { ...demoUsers[4], password: 'AdminSecurePass123!', role: 'admin' } // Admin user
+      { id: 'user-1', name: 'Alice Johnson', email: 'alice@example.com', password: 'SecurePass123!', role: 'user' },
+      { id: 'user-2', name: 'Bob Smith', email: 'bob@example.com', password: 'SecurePass123!', role: 'user' },
+      { id: 'user-3', name: 'Charlie Brown', email: 'charlie@example.com', password: 'SecurePass123!', role: 'user' },
+      { id: 'user-4', name: 'Diana Prince', email: 'diana@example.com', password: 'SecurePass123!', role: 'user' }
     ];
 
+    // Create users
     for (const userData of demoUsersData) {
       try {
         // Check if user already exists
@@ -459,6 +459,106 @@ class DatabaseManager {
     }
 
     console.log('✅ Demo users created');
+
+    // Create demo document with content and approved proposals
+    await this.createDemoDocument();
+
+    console.log('✅ Demo data creation complete');
+  }
+
+  async createDemoDocument() {
+    console.log('Creating demo document with approved content...');
+
+    const { v4: uuidv4 } = require('uuid');
+
+    // Demo document
+    const docId = 'demo-doc-1';
+    const docData = {
+      id: docId,
+      title: 'Collaborative Constitution Draft',
+      description: 'A collaborative draft of organizational principles',
+      owner_id: 'user-1',
+      acceptance_threshold: 75.0,
+      ownership_type: 'personal'
+    };
+
+    // Insert document
+    await this.runQuery('INSERT OR IGNORE INTO documents (id, title, description, owner_id, acceptance_threshold, ownership_type) VALUES (?, ?, ?, ?, ?, ?)',
+      [docData.id, docData.title, docData.description, docData.owner_id, docData.acceptance_threshold, docData.ownership_type]);
+
+    // Add collaborators
+    const collaborators = ['user-2', 'user-3', 'user-4'];
+    for (const userId of collaborators) {
+      await this.runQuery('INSERT OR IGNORE INTO document_collaborators (document_id, user_id) VALUES (?, ?)', [docId, userId]);
+    }
+
+    // Create paragraphs
+    const paragraphs = [
+      {
+        id: 'para-1',
+        title: 'Preamble',
+        text: 'We the people, in order to form a more perfect union, establish justice, insure domestic tranquility, provide for the common defence, promote the general welfare, and secure the blessings of liberty to ourselves and our posterity, do ordain and establish this Constitution for the collaborative organization.',
+        order_index: 0
+      },
+      {
+        id: 'para-2',
+        title: 'Article I - Legislative Branch',
+        text: 'All legislative powers herein granted shall be vested in a Congress of the organization, which shall consist of a Senate and House of Representatives.',
+        order_index: 1
+      }
+    ];
+
+    for (const para of paragraphs) {
+      await this.runQuery('INSERT OR IGNORE INTO paragraphs (id, document_id, title, text, order_index) VALUES (?, ?, ?, ?, ?)',
+        [para.id, docId, para.title, para.text, para.order_index]);
+    }
+
+    // Create approved proposals and votes
+    const proposals = [
+      {
+        id: uuidv4(),
+        paragraph_id: 'para-1',
+        user_id: 'user-1',
+        text: paragraphs[0].text + ' [AGREED: This preamble has been collaboratively approved through our voting system.]',
+        approval_percentage: 100.0
+      },
+      {
+        id: uuidv4(),
+        paragraph_id: 'para-2',
+        user_id: 'user-2',
+        text: paragraphs[1].text + ' [AGREED: This article has been collaboratively approved through our voting system.]',
+        approval_percentage: 75.0
+      }
+    ];
+
+    for (const proposal of proposals) {
+      await this.runQuery('INSERT OR IGNORE INTO proposals (id, paragraph_id, user_id, text, type, approved) VALUES (?, ?, ?, ?, ?, 1)',
+        [proposal.id, proposal.paragraph_id, proposal.user_id, proposal.text, 'BODY']);
+
+      // Add votes
+      const voters = proposal.approval_percentage === 100.0 ? ['user-1', 'user-2', 'user-3', 'user-4'] : ['user-1', 'user-2', 'user-3'];
+      for (const voterId of voters) {
+        const voteId = uuidv4();
+        await this.runQuery('INSERT OR IGNORE INTO votes (id, proposal_id, user_id, vote) VALUES (?, ?, ?, ?)',
+          [voteId, proposal.id, voterId, 'PRO']);
+      }
+
+      // Create history entry
+      const historyId = uuidv4();
+      await this.runQuery('INSERT OR IGNORE INTO history (id, paragraph_id, user_id, old_text, new_text, approval_percentage, proposal_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [historyId, proposal.paragraph_id, proposal.user_id, paragraphs.find(p => p.id === proposal.paragraph_id).text, proposal.text, proposal.approval_percentage, proposal.id]);
+    }
+
+    console.log('✅ Demo document with approved proposals created');
+  }
+
+  runQuery(sql, params = []) {
+    return new Promise((resolve, reject) => {
+      this.db.run(sql, params, function(err) {
+        if (err) reject(err);
+        else resolve(this);
+      });
+    });
   }
 
   /**

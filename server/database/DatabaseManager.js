@@ -461,15 +461,6 @@ class DatabaseManager {
     console.log('✅ Demo users created');
   }
 
-  runQuery(sql, params = []) {
-    return new Promise((resolve, reject) => {
-      this.db.run(sql, params, function(err) {
-        if (err) reject(err);
-        else resolve(this);
-      });
-    });
-  }
-
   /**
    * Get database instance
    * @returns {Object} Database instance

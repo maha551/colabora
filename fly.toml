@@ -7,6 +7,7 @@ primary_region = 'iad'
 [env]
   ALLOWED_ORIGINS = 'https://colabora-fresh-final.fly.dev'
   FRONTEND_URL = 'https://colabora-fresh-final.fly.dev'
+  JWT_SECRET = 'colabora-jwt-secret-key-2024-production'
   JWT_EXPIRES_IN = '8h'
   LOG_LEVEL = 'info'
   NODE_ENV = 'production'

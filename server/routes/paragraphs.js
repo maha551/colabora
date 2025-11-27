@@ -2,6 +2,8 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { requireAuth, requireDocumentAccess } = require('../middleware/auth');
 const { paragraphValidation } = require('../middleware/validation');
+const { logger } = require('../middleware/logger');
+const webSocketManager = require('../modules/websocket');
 
 const router = express.Router({ mergeParams: true });
 
@@ -20,10 +22,10 @@ const checkNoActiveStructureProposals = (req, res, next) => {
     if (err) {
       // If table doesn't exist, allow the operation (table will be created on first use)
       if (err.message && (err.message.includes('no such table') || err.message.includes('structure_proposals'))) {
-        console.log('Structure proposals table does not exist yet, allowing paragraph modification');
+        logger.debug('Structure proposals table does not exist yet, allowing paragraph modification', { documentId });
         return next();
       }
-      console.error('Error checking for active structure proposals:', err);
+      logger.error('Error checking for active structure proposals', { error: err.message, documentId });
       return res.status(500).json({ error: 'Failed to check active structure proposals' });
     }
 
@@ -53,7 +55,7 @@ router.get('/context/:paragraphId', requireAuth, requireDocumentAccess, (req, re
     [paragraphId, documentId],
     (err, targetPara) => {
       if (err) {
-        console.error('Error finding target paragraph:', err);
+        logger.error('Error finding target paragraph', { error: err.message, paragraphId: req.params.paragraphId, documentId });
         return res.status(500).json({ error: 'Failed to find target paragraph' });
       }
 
@@ -114,7 +116,7 @@ router.get('/context/:paragraphId', requireAuth, requireDocumentAccess, (req, re
         [documentId, minOrder, maxOrder],
         (err, rows) => {
           if (err) {
-            console.error('Error fetching contextual paragraphs:', err);
+            logger.error('Error fetching contextual paragraphs', { error: err.message, documentId });
             return res.status(500).json({ error: 'Failed to fetch contextual paragraphs' });
           }
 
@@ -126,7 +128,7 @@ router.get('/context/:paragraphId', requireAuth, requireDocumentAccess, (req, re
                 proposals = JSON.parse(row.proposals_json).filter(p => p.id !== null);
               }
             } catch (e) {
-              console.error('Error parsing proposals JSON:', e);
+              logger.error('Error parsing proposals JSON', { error: e.message, paragraphId: para.id, documentId });
             }
 
             return {
@@ -236,7 +238,7 @@ router.get('/', requireAuth, requireDocumentAccess, (req, res) => {
     [documentId],
     (err, rows) => {
       if (err) {
-        console.error('Error fetching paragraphs:', err);
+        logger.error('Error fetching paragraphs', { error: err.message, documentId });
         return res.status(500).json({ error: 'Failed to fetch paragraphs' });
       }
 
@@ -292,7 +294,7 @@ function normalizeParagraphOrder(db, documentId) {
       [documentId],
       (err, rows) => {
         if (err) {
-          console.error('Error fetching paragraphs for normalization check:', err);
+          logger.error('Error fetching paragraphs for normalization check', { error: err.message, documentId });
           return reject(err);
         }
 
@@ -318,11 +320,11 @@ function normalizeParagraphOrder(db, documentId) {
         }
 
         if (!needsNormalization) {
-          console.log('Paragraph order normalization not needed for document:', documentId);
+          logger.debug('Paragraph order normalization not needed for document', { documentId });
           return resolve();
         }
 
-        console.log('Normalizing paragraph order for document:', documentId);
+        logger.debug('Normalizing paragraph order for document', { documentId });
 
         // Only normalize if there are conflicts
         let index = 0;
@@ -342,7 +344,7 @@ function normalizeParagraphOrder(db, documentId) {
             [newOrder, row.id],
             (updateErr) => {
               if (updateErr) {
-                console.error('Error normalizing paragraph order:', updateErr);
+                logger.error('Error normalizing paragraph order', { error: updateErr.message, paragraphId: para.id, documentId });
                 reject(updateErr);
                 return;
               }
@@ -365,8 +367,7 @@ router.post('/', requireAuth, requireDocumentAccess, checkNoActiveStructurePropo
   const documentId = req.params.documentId;
   const { title, text, order, order_index, asSuggestion, headingLevel } = req.body;
 
-  console.log(`Creating paragraph in document ${documentId} for user ${req.user.id}`);
-  console.log('Request body:', { title, text, order, asSuggestion, headingLevel });
+  logger.debug('Creating paragraph', { documentId, userId: req.user.id, title, text, order, asSuggestion, headingLevel });
 
   const bodyText = (text || '').trim();
   const headingText = title && typeof title === 'string' ? title.trim() : null;
@@ -399,7 +400,7 @@ router.post('/', requireAuth, requireDocumentAccess, checkNoActiveStructurePropo
     [paragraphId, documentId, paragraphTitle, paragraphHeadingLevel, paragraphBody, orderIndex],
     function (err) {
       if (err) {
-        console.error('Error creating paragraph:', err);
+        logger.error('Error creating paragraph', { error: err.message, documentId, userId: req.user.id });
         return res.status(500).json({ error: 'Failed to create paragraph' });
       }
 
@@ -414,6 +415,19 @@ router.post('/', requireAuth, requireDocumentAccess, checkNoActiveStructurePropo
               return res.status(500).json({ error: 'Paragraph created but failed to retrieve' });
             }
 
+            // Broadcast paragraph creation via WebSocket
+            webSocketManager.broadcastDocumentUpdate(documentId, 'paragraph-created', {
+              paragraphId,
+              paragraph: {
+                id: paragraph.id,
+                text: paragraph.text || '',
+                title: paragraph.title || null,
+                headingLevel: paragraph.heading_level,
+                orderIndex: paragraph.order_index,
+                documentId: paragraph.document_id
+              }
+            });
+
             res.status(201).json({ paragraph });
           }
         );
@@ -427,7 +441,7 @@ router.post('/', requireAuth, requireDocumentAccess, checkNoActiveStructurePropo
           [documentId],
           (updateErr) => {
             if (updateErr) {
-              console.error('Error updating document timestamp during paragraph creation:', updateErr);
+              logger.error('Error updating document timestamp during paragraph creation', { error: updateErr.message, documentId, paragraphId });
               // Don't fail the request, but log the error
             }
           }
@@ -435,7 +449,7 @@ router.post('/', requireAuth, requireDocumentAccess, checkNoActiveStructurePropo
 
         normalizeParagraphOrder(db, documentId)
           .catch((normalizeErr) => {
-            console.error('Failed to normalize paragraph order:', normalizeErr);
+            logger.error('Failed to normalize paragraph order', { error: normalizeErr.message, documentId });
           })
           .finally(() => finalizeResponse());
       };
@@ -454,7 +468,7 @@ router.post('/', requireAuth, requireDocumentAccess, checkNoActiveStructurePropo
               [proposalId, paragraphId, req.user.id, bodyText, 'BODY', null],
               (proposalErr) => {
                 if (proposalErr) {
-                  console.error('Error creating body proposal:', proposalErr);
+                  logger.error('Error creating body proposal', { error: proposalErr.message, paragraphId, documentId });
                   reject(proposalErr);
                 } else {
                   resolve();
@@ -477,7 +491,7 @@ router.post('/', requireAuth, requireDocumentAccess, checkNoActiveStructurePropo
                 [headingProposalId, paragraphId, req.user.id, headingText, 'TITLE', normalizedHeadingLevel || 'h2'],
                 (proposalErr) => {
                   if (proposalErr) {
-                    console.error('Error creating heading proposal:', proposalErr);
+                    logger.error('Error creating heading proposal', { error: proposalErr.message, paragraphId, documentId });
                     reject(proposalErr);
                   } else {
                     resolve();
@@ -495,7 +509,7 @@ router.post('/', requireAuth, requireDocumentAccess, checkNoActiveStructurePropo
       if (createAsSuggestion) {
         db.run('BEGIN TRANSACTION', (beginErr) => {
           if (beginErr) {
-            console.error('Failed to begin transaction for paragraph suggestion:', beginErr);
+            logger.error('Failed to begin transaction for paragraph suggestion', { error: beginErr.message, documentId });
             db.run(
               `
               DELETE FROM paragraphs WHERE id = ?
@@ -510,7 +524,7 @@ router.post('/', requireAuth, requireDocumentAccess, checkNoActiveStructurePropo
             .then(() => {
               db.run('COMMIT', (commitErr) => {
                 if (commitErr) {
-                  console.error('Failed to commit paragraph suggestion transaction:', commitErr);
+                  logger.error('Failed to commit paragraph suggestion transaction', { error: commitErr.message, documentId });
                   db.run('ROLLBACK', () => {
                     db.run(
                       `
@@ -527,7 +541,7 @@ router.post('/', requireAuth, requireDocumentAccess, checkNoActiveStructurePropo
               });
             })
             .catch((proposalErr) => {
-              console.error('Failed to create paragraph suggestion:', proposalErr);
+              logger.error('Failed to create paragraph suggestion', { error: proposalErr.message, documentId });
               db.run('ROLLBACK', () => {
                 db.run(
                   `
@@ -562,7 +576,7 @@ router.put('/:paragraphId', requireAuth, requireDocumentAccess, checkNoActiveStr
     SELECT text FROM paragraphs WHERE id = ? AND document_id = ?
   `, [paragraphId, documentId], (err, currentParagraph) => {
     if (err) {
-      console.error('Error fetching current paragraph:', err);
+      logger.error('Error fetching current paragraph', { error: err.message, paragraphId: req.params.paragraphId, documentId });
       return res.status(500).json({ error: 'Failed to update paragraph' });
     }
 
@@ -573,7 +587,7 @@ router.put('/:paragraphId', requireAuth, requireDocumentAccess, checkNoActiveStr
     // Use transaction for atomic paragraph update
     db.run('BEGIN TRANSACTION', (beginErr) => {
       if (beginErr) {
-        console.error('Error beginning transaction:', beginErr);
+        logger.error('Error beginning transaction', { error: beginErr.message, paragraphId: req.params.paragraphId, documentId });
         return res.status(500).json({ error: 'Failed to update paragraph' });
       }
 
@@ -607,7 +621,7 @@ router.put('/:paragraphId', requireAuth, requireDocumentAccess, checkNoActiveStr
 
       db.run(updateQuery, params, function(err) {
         if (err) {
-          console.error('Error updating paragraph:', err);
+          logger.error('Error updating paragraph', { error: err.message, paragraphId: req.params.paragraphId, documentId });
           db.run('ROLLBACK', () => {
             return res.status(500).json({ error: 'Failed to update paragraph' });
           });
@@ -624,12 +638,25 @@ router.put('/:paragraphId', requireAuth, requireDocumentAccess, checkNoActiveStr
           if (operationsCompleted >= totalOperations && !hasError) {
             db.run('COMMIT', (commitErr) => {
               if (commitErr) {
-                console.error('Error committing transaction:', commitErr);
+                logger.error('Error committing transaction', { error: commitErr.message, paragraphId: req.params.paragraphId, documentId });
                 db.run('ROLLBACK', () => {
                   return res.status(500).json({ error: 'Failed to update paragraph: commit failed' });
                 });
                 return;
               }
+              // Broadcast paragraph update via WebSocket
+              db.get(`SELECT id, text, title, heading_level, order_index FROM paragraphs WHERE id = ?`, [paragraphId], (paraErr, updatedPara) => {
+                if (!paraErr && updatedPara) {
+                  webSocketManager.broadcastDocumentUpdate(documentId, 'paragraph-updated', {
+                    paragraphId,
+                    text: updatedPara.text || '',
+                    title: updatedPara.title || null,
+                    headingLevel: updatedPara.heading_level,
+                    orderIndex: updatedPara.order_index
+                  });
+                }
+              });
+
               res.json({ message: 'Paragraph updated successfully' });
             });
           }
@@ -643,7 +670,7 @@ router.put('/:paragraphId', requireAuth, requireDocumentAccess, checkNoActiveStr
             VALUES (?, ?, ?, ?, ?, ?, ?)
           `, [historyId, paragraphId, req.user.id, currentParagraph.text, text.trim(), 0, null], (historyErr) => {
             if (historyErr) {
-              console.error('Error creating history entry:', historyErr);
+              logger.error('Error creating history entry', { error: historyErr.message, paragraphId: req.params.paragraphId, documentId });
               hasError = true;
               db.run('ROLLBACK', () => {
                 return res.status(500).json({ error: 'Failed to update paragraph: history creation failed' });
@@ -659,7 +686,7 @@ router.put('/:paragraphId', requireAuth, requireDocumentAccess, checkNoActiveStr
           UPDATE documents SET updated_at = CURRENT_TIMESTAMP WHERE id = ?
         `, [documentId], (timestampErr) => {
           if (timestampErr) {
-            console.error('Error updating document timestamp:', timestampErr);
+            logger.error('Error updating document timestamp', { error: timestampErr.message, documentId });
             hasError = true;
             db.run('ROLLBACK', () => {
               return res.status(500).json({ error: 'Failed to update paragraph: document timestamp update failed' });
@@ -683,7 +710,7 @@ router.delete('/:paragraphId', requireAuth, requireDocumentAccess, (req, res) =>
     DELETE FROM paragraphs WHERE id = ? AND document_id = ?
   `, [paragraphId, documentId], function(err) {
     if (err) {
-      console.error('Error deleting paragraph:', err);
+      logger.error('Error deleting paragraph', { error: err.message, paragraphId: req.params.paragraphId, documentId });
       return res.status(500).json({ error: 'Failed to delete paragraph' });
     }
 
@@ -699,7 +726,7 @@ router.delete('/:paragraphId', requireAuth, requireDocumentAccess, (req, res) =>
       () => {
         normalizeParagraphOrder(db, documentId)
           .catch((normalizeErr) => {
-            console.error('Failed to normalize paragraph order after deletion:', normalizeErr);
+            logger.error('Failed to normalize paragraph order after deletion', { error: normalizeErr.message, documentId });
           })
           .finally(() => {
             res.json({ message: 'Paragraph deleted successfully' });

@@ -11,13 +11,13 @@ import { Alert, AlertDescription } from '../ui/alert';
 import { Separator } from '../ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { AlertTriangle, Settings, Users, Vote, Shield, Clock, FileText, Eye, EyeOff, Lock } from 'lucide-react';
-import { OrganizationGovernanceRules, Organization } from '../../types';
+import { OrganizationGovernanceRules, Organization, User } from '../../types';
 import { governanceApi } from '../../lib/api';
 import { toast } from 'sonner';
 
 interface GovernanceRulesDialogProps {
   organization: Organization;
-  currentUser: any;
+  currentUser: User | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;

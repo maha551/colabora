@@ -1,9 +1,10 @@
 import React from 'react';
 import { AppHeader } from './AppHeader';
+import { User } from '../../types';
 
 interface AppLayoutProps {
   children: React.ReactNode;
-  currentUser: any;
+  currentUser: User | null;
   onLogout: () => void;
   onShowActivity: () => void;
   onShowProfile: () => void;

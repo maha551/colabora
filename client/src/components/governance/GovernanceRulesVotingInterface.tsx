@@ -5,7 +5,7 @@ import { Badge } from '../ui/badge';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Separator } from '../ui/separator';
 import { Vote, Settings, Clock, Users, Shield, FileText, Eye, EyeOff, Lock, AlertTriangle, Plus, CheckCircle } from 'lucide-react';
-import { Organization, OrganizationGovernanceRules } from '../../types';
+import { Organization, OrganizationGovernanceRules, User } from '../../types';
 import { governanceApi } from '../../lib/api';
 import { RuleProposalDialog } from './RuleProposalDialog';
 import { RuleProposalVotingInterface } from './RuleProposalVotingInterface';
@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 
 interface GovernanceRulesVotingInterfaceProps {
   organization: Organization;
-  currentUser: any;
+  currentUser: User | null;
   onClose?: () => void;
 }
 
@@ -29,7 +29,7 @@ interface RuleProposal {
     optionDescription?: string;
     proposedValue: any;
   }>;
-  status: 'pending' | 'voting' | 'completed' | 'rejected';
+  status: 'draft' | 'active' | 'approved' | 'rejected' | 'cancelled';
   createdBy: {
     id: string;
     name: string;
@@ -181,7 +181,7 @@ export function GovernanceRulesVotingInterface({
     return ruleLabels[field] || { label: field, icon: Settings, category: 'Other', description: '' };
   };
 
-  const getCurrentValueDisplay = (field: string, value: any) => {
+  const getCurrentValueDisplay = (field: string, value: string | number | boolean) => {
     if (value === null || value === undefined) return 'Not set';
 
     const numberFields = ['representativeTermMonths', 'representativeTermLimits', 'electionNoticeDays', 'defaultVotingDeadlineHours'];
@@ -191,10 +191,13 @@ export function GovernanceRulesVotingInterface({
     if (numberFields.includes(field)) {
       return `${value} ${field.includes('Hours') ? 'hours' : field.includes('Days') ? 'days' : 'months'}`;
     }
-    if (percentageFields.includes(field)) return `${Math.round(value * 100)}%`;
+    if (percentageFields.includes(field)) {
+      const numValue = typeof value === 'number' ? value : typeof value === 'string' ? parseFloat(value) : 0;
+      return `${Math.round(numValue * 100)}%`;
+    }
     if (booleanFields.includes(field)) return value ? 'Enabled' : 'Disabled';
     if (field === 'electionVotingMethod') {
-      return value.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+      return value.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
     }
 
     return String(value);

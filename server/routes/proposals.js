@@ -2,6 +2,8 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { metricsCollector } = require('../middleware/monitoring');
 const { requireAuth, requireDocumentAccess } = require('../middleware/auth');
+const webSocketManager = require('../modules/websocket');
+const { logger } = require('../middleware/logger');
 
 const router = express.Router({ mergeParams: true });
 
@@ -29,7 +31,7 @@ router.post('/', requireAuth, requireDocumentAccess, (req, res) => {
 
   db.get(activeStructureQuery, [documentId], (err, activeStructure) => {
     if (err) {
-      console.error('Error checking active structure proposals:', err);
+      logger.error('Error checking active structure proposals', { error: err.message, documentId });
       return res.status(500).json({ error: 'Failed to check active structure proposals' });
     }
 
@@ -40,19 +42,19 @@ router.post('/', requireAuth, requireDocumentAccess, (req, res) => {
     }
 
     // Verify paragraph exists and belongs to document
-    console.log('Checking paragraph:', paragraphId, 'in document:', documentId);
+    logger.debug('Checking paragraph', { paragraphId, documentId });
 
     db.get(`
       SELECT * FROM paragraphs WHERE id = ? AND document_id = ?
     `, [paragraphId, documentId], (err, paragraph) => {
     if (err) {
-      console.error('Error checking paragraph:', err);
+      logger.error('Error checking paragraph', { error: err.message, paragraphId, documentId });
       return res.status(500).json({ error: 'Failed to create proposal' });
     }
 
-    console.log('Paragraph check result:', paragraph);
+    logger.debug('Paragraph check result', { paragraphId, documentId, found: !!paragraph });
     if (!paragraph) {
-      console.log('Paragraph not found for id:', paragraphId, 'document:', documentId);
+      logger.warn('Paragraph not found', { paragraphId, documentId });
       return res.status(404).json({ error: 'Paragraph not found' });
     }
 
@@ -63,7 +65,7 @@ router.post('/', requireAuth, requireDocumentAccess, (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?)
     `, [proposalId, paragraphId, userId, text.trim(), type, normalizedHeadingLevel], function(err) {
       if (err) {
-        console.error('Error creating proposal:', err);
+        logger.error('Error creating proposal', { error: err.message, paragraphId, documentId, userId });
         return res.status(500).json({ error: 'Failed to create proposal' });
       }
 
@@ -105,6 +107,9 @@ router.post('/', requireAuth, requireDocumentAccess, (req, res) => {
           documentId
         });
 
+        // Broadcast real-time update via WebSocket
+        webSocketManager.broadcastProposalUpdate(documentId, paragraphId, result);
+
         res.status(201).json({ proposal: result });
       });
     });
@@ -129,7 +134,7 @@ router.get('/', requireAuth, requireDocumentAccess, (req, res) => {
 
   db.all(query, [paragraphId], (err, proposals) => {
     if (err) {
-      console.error('Error fetching proposals:', err);
+      logger.error('Error fetching proposals', { error: err.message, paragraphId, documentId });
       return res.status(500).json({ error: 'Failed to fetch proposals' });
     }
 

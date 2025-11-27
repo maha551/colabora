@@ -6,6 +6,7 @@
 const config = require('./config');
 const DatabaseManager = require('./database/DatabaseManager');
 const ServerManager = require('./modules/server');
+const { logger } = require('./middleware/logger');
 
 /**
  * Initialize and start the application
@@ -20,60 +21,87 @@ async function startApplication(options = {}) {
   let serverInstance;
 
   try {
-    console.log('🌍 Starting Colabora Server...');
+    logger.info('Starting Colabora Server', { 
+      environment: config.NODE_ENV,
+      port: config.PORT 
+    });
 
     // Override config if options provided
     const runtimeConfig = { ...config };
     if (options.port) {
-      console.log(`🔧 Overriding port from ${runtimeConfig.PORT} to ${options.port}`);
+      logger.info('Overriding port', { 
+        oldPort: runtimeConfig.PORT, 
+        newPort: options.port 
+      });
       runtimeConfig.PORT = options.port;
       process.env.PORT = options.port.toString();
       // Also update the cached config object
       config.PORT = options.port;
     }
 
-    console.log(`📍 Environment: ${runtimeConfig.NODE_ENV}`);
-    console.log(`🚪 Port: ${runtimeConfig.PORT} (options.port: ${options.port || 'undefined'})`);
-    console.log(`💾 Database: ${runtimeConfig.DATABASE_URL}`);
+    logger.info('Server configuration', {
+      environment: runtimeConfig.NODE_ENV,
+      port: runtimeConfig.PORT,
+      database: runtimeConfig.DATABASE_URL
+    });
 
     // Add global error handlers for production stability
     if (runtimeConfig.NODE_ENV === 'production') {
       process.on('unhandledRejection', (reason, promise) => {
-        console.error('🚨 Unhandled Rejection at:', promise, 'reason:', reason);
+        logger.error('Unhandled Rejection', { 
+          reason: reason?.message || String(reason),
+          stack: reason?.stack 
+        });
         // Don't exit in production, just log
       });
 
       process.on('uncaughtException', (error) => {
-        console.error('🚨 Uncaught Exception:', error);
+        logger.error('Uncaught Exception', { 
+          error: error.message,
+          stack: error.stack 
+        });
         // Don't exit in production, just log
         // The health check will restart the container if needed
       });
     }
 
     // Initialize database manager and connection
-    console.log('🔌 Initializing database...');
+    logger.info('Initializing database');
     let db = null; // Declare db outside try block
     try {
       dbManager = new DatabaseManager(runtimeConfig);
       db = await dbManager.initialize();
-      console.log('✅ Database initialized successfully');
+      logger.info('Database initialized successfully');
     } catch (dbError) {
-      console.error('🚨 Database initialization failed:', dbError);
-      // In production, don't fail completely - try to continue without database
-      if (runtimeConfig.NODE_ENV === 'production') {
-        console.warn('⚠️  Continuing without database - app may not function properly');
-        dbManager = null;
-        db = null;
-      } else {
+      logger.error('Database initialization failed', { 
+        error: dbError.message,
+        stack: dbError.stack 
+      });
+      // Fail fast - database is critical for app functionality
+      // Don't register routes if database fails - app won't work anyway
+      logger.error('Database initialization failed - shutting down');
+      if (options.returnServer) {
         throw dbError;
+      } else {
+        process.exit(1);
+      }
+    }
+
+    // Ensure database is available before proceeding
+    if (!db || !dbManager) {
+      logger.error('Database not available - cannot start application');
+      if (options.returnServer) {
+        throw new Error('Database not available');
+      } else {
+        process.exit(1);
       }
     }
 
     // Initialize server manager
-    console.log('🚀 Initializing server...');
+    logger.info('Initializing server');
     serverManager = new ServerManager(runtimeConfig);
     const app = serverManager.initialize();
-    console.log('✅ Server initialized successfully');
+    logger.info('Server initialized successfully');
 
     // Make database available to routes (might be null in production if DB failed)
     app.locals.db = dbManager ? db : null;
@@ -82,14 +110,16 @@ async function startApplication(options = {}) {
     // Initialize background scheduler if database is available
     let scheduler = null;
     if (dbManager && db) {
-      console.log('📅 Initializing background scheduler...');
+      logger.info('Initializing background scheduler');
       try {
         const DocumentScheduler = require('./modules/scheduler');
         scheduler = new DocumentScheduler(db);
         scheduler.start();
-        console.log('✅ Background scheduler initialized');
+        logger.info('Background scheduler initialized');
       } catch (schedulerError) {
-        console.error('❌ Failed to initialize scheduler:', schedulerError);
+        logger.error('Failed to initialize scheduler', { 
+          error: schedulerError.message 
+        });
         // Don't fail startup for scheduler issues
       }
     }
@@ -98,14 +128,13 @@ async function startApplication(options = {}) {
     registerRoutes(app);
 
     // Start server and optionally return instance
-    console.log('🎯 Starting server...');
+    logger.info('Starting server');
 
     if (options.returnServer) {
       // For testing: start server and return the instance
       return new Promise((resolve, reject) => {
         const startCallback = () => {
-          console.log('🎉 Server started successfully!');
-          console.log(`🌐 Server running on port ${runtimeConfig.PORT}`);
+          logger.info('Server started successfully', { port: runtimeConfig.PORT });
 
           // Return a mock server object for supertest compatibility
           const mockServer = {
@@ -117,7 +146,9 @@ async function startApplication(options = {}) {
                   scheduler.stop();
                 }
                 if (dbManager) {
-                  dbManager.close().catch(console.error);
+                  dbManager.close().catch((err) => {
+                    logger.error('Error closing database during cleanup', { error: err.message, stack: err.stack });
+                  });
                 }
                 if (callback) callback();
               }).catch(callback);
@@ -127,11 +158,11 @@ async function startApplication(options = {}) {
             _serverManager: serverManager,
             _scheduler: scheduler
           };
-          console.log('🔧 Resolving promise with mock server...');
+          logger.debug('Resolving promise with mock server for testing');
           resolve(mockServer);
         };
 
-        console.log('🚀 Calling serverManager.start with callback...');
+        logger.debug('Calling serverManager.start with callback');
         serverManager.start(runtimeConfig.PORT, startCallback);
 
         // Handle startup errors
@@ -142,20 +173,22 @@ async function startApplication(options = {}) {
     } else {
       // Normal startup
       serverManager.start(runtimeConfig.PORT, () => {
-        console.log('🎉 Server started successfully!');
-        console.log(`🌐 Server running on port ${runtimeConfig.PORT}`);
+        logger.info('Server started successfully', { port: runtimeConfig.PORT });
       });
     }
 
   } catch (error) {
-    console.error('❌ Failed to start application:', error);
+    logger.error('Failed to start application', { 
+      error: error.message,
+      stack: error.stack 
+    });
 
     // Clean up resources on failure
     if (dbManager) {
       try {
         await dbManager.close();
       } catch (cleanupError) {
-        console.error('Error during database cleanup:', cleanupError);
+        logger.error('Error during database cleanup', { error: cleanupError.message, stack: cleanupError.stack });
       }
     }
 
@@ -172,7 +205,7 @@ async function startApplication(options = {}) {
  * @param {Object} app - Express application instance
  */
 function registerRoutes(app) {
-  console.log('🔗 Registering routes...');
+  logger.info('Registering routes');
 
   // Import route handlers
   const authRoutes = require('./routes/auth');
@@ -209,7 +242,7 @@ function registerRoutes(app) {
       const health = await healthService.getDetailedHealth();
       res.json(health);
     } catch (error) {
-      console.error('Health check error:', error);
+      logger.error('Health check error', { error: error.message });
       res.status(500).json({
         status: 'error',
         message: error.message,
@@ -230,7 +263,7 @@ function registerRoutes(app) {
         uptime: process.uptime()
       });
     } catch (error) {
-      console.error('Readiness check error:', error);
+      logger.error('Readiness check error', { error: error.message });
       res.status(500).json({
         status: 'error',
         message: error.message,
@@ -240,14 +273,33 @@ function registerRoutes(app) {
   });
 
   // Middleware to check database availability
-  const requireDatabase = (req, res, next) => {
-    if (!req.app.locals.dbAvailable) {
+  const requireDatabase = async (req, res, next) => {
+    if (!req.app.locals.dbAvailable || !req.app.locals.db) {
       return res.status(503).json({
         error: 'Service temporarily unavailable',
-        message: 'Database connection is not available'
+        message: 'Database connection is not available',
+        timestamp: new Date().toISOString()
       });
     }
-    next();
+
+    // Perform a quick health check
+    try {
+      await new Promise((resolve, reject) => {
+        req.app.locals.db.get('SELECT 1', (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+      next();
+    } catch (error) {
+      // Database connection lost
+      req.app.locals.dbAvailable = false;
+      return res.status(503).json({
+        error: 'Database connection lost',
+        message: 'The database connection is no longer available. Please try again later.',
+        timestamp: new Date().toISOString()
+      });
+    }
   };
 
   // Register API routes with database availability checks
@@ -267,34 +319,43 @@ function registerRoutes(app) {
   app.use('/api/documents/:documentId/paragraphs/:paragraphId/proposals/:proposalId/vote', requireDatabase, voteRoutes);
   app.use('/api/documents/:documentId/paragraphs/:paragraphId/proposals/:proposalId/comments', requireDatabase, commentRoutes);
 
-  console.log('✅ Routes registered successfully');
+  logger.info('Routes registered successfully');
 }
 
 // Handle graceful shutdown
 process.on('SIGTERM', async () => {
-  console.log('🛑 Received SIGTERM, shutting down gracefully...');
+  logger.info('Received SIGTERM, shutting down gracefully');
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
-  console.log('🛑 Received SIGINT, shutting down gracefully...');
+  logger.info('Received SIGINT, shutting down gracefully');
   process.exit(0);
 });
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (error) => {
-  console.error('💥 Uncaught Exception:', error);
+  logger.error('Uncaught Exception', { 
+    error: error.message,
+    stack: error.stack 
+  });
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('💥 Unhandled Rejection at:', promise, 'reason:', reason);
+  logger.error('Unhandled Rejection', { 
+    reason: reason?.message || String(reason),
+    stack: reason?.stack 
+  });
   process.exit(1);
 });
 
 // Start the application
 startApplication().catch((error) => {
-  console.error('💥 Critical error during application startup:', error);
+  logger.error('Critical error during application startup', { 
+    error: error.message,
+    stack: error.stack 
+  });
   process.exit(1);
 });
 

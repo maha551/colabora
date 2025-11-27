@@ -2,17 +2,16 @@ import { useState, useEffect } from "react";
 import { Organization, User } from "../types";
 import { organizationsApi } from "../lib/api";
 import { Button } from "./ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
-import { Badge } from "./ui/badge";
-import { Avatar, AvatarFallback } from "./ui/avatar";
+import { Card, CardContent } from "./ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Label } from "./ui/label";
-import { Users, Vote, FileText, Settings, Plus, ArrowRight } from "lucide-react";
+import { Users, Plus } from "lucide-react";
 import { RepresentativeSelector } from "./RepresentativeSelector";
 import { toast } from "sonner";
 import { OrganizationManagement } from "./OrganizationManagement/OrganizationManagement";
+import { OrganizationCard } from "./OrganizationManagement/shared/OrganizationCard";
 
 interface OrganizationDashboardProps {
   currentUser: User;
@@ -99,9 +98,9 @@ export function OrganizationDashboard({ currentUser, onSelectOrganization }: Org
 
       // Reload organizations to show the new one
       await loadOrganizations();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to create organization:', err);
-      if (err.status === 403) {
+      if (err && typeof err === 'object' && 'status' in err && err.status === 403) {
         toast.error('Only administrators can create organizations');
       } else {
         toast.error('Failed to create organization');
@@ -111,18 +110,6 @@ export function OrganizationDashboard({ currentUser, onSelectOrganization }: Org
     }
   };
 
-  const getMembershipStatus = (org: Organization) => {
-    // This would be determined by the API response
-    // For now, assume all are members
-    return 'Member';
-  };
-
-  const getRepresentativeStatus = (org: Organization) => {
-    if (org.representatives?.includes(currentUser.id)) {
-      return 'Representative';
-    }
-    return null;
-  };
 
   if (loading) {
     return (
@@ -170,86 +157,13 @@ export function OrganizationDashboard({ currentUser, onSelectOrganization }: Org
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {organizations.map((org) => (
-            <Card key={org.id} className="hover:shadow-md transition-shadow">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="text-lg">{org.name}</CardTitle>
-                    {org.description && (
-                      <CardDescription className="mt-1">{org.description}</CardDescription>
-                    )}
-                  </div>
-                  <div className="flex gap-1 ml-2">
-                    {getRepresentativeStatus(org) && (
-                      <Badge variant="secondary" className="text-xs">
-                        Rep
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {/* Status */}
-                  <div className="flex items-center justify-between text-sm text-gray-600">
-                    <span>Status: {getMembershipStatus(org)}</span>
-                    <div className="flex gap-1">
-                      <Badge variant={org.isActive ? "default" : "secondary"}>
-                        {org.isActive ? "Active" : "Inactive"}
-                      </Badge>
-                      {org.votingEnabled && (
-                        <Badge variant="outline" className="text-green-600 border-green-600">
-                          <Vote className="h-3 w-3 mr-1" />
-                          Voting
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Current Representatives */}
-                  <div>
-                    <div className="text-sm font-medium mb-2">Current Representatives</div>
-                    <div className="flex -space-x-2">
-                      {org.representatives?.slice(0, 3).map((repId, index) => (
-                        <Avatar key={repId} className="h-8 w-8 border-2 border-white">
-                          <AvatarFallback className="text-xs">
-                            R{index + 1}
-                          </AvatarFallback>
-                        </Avatar>
-                      ))}
-                      {(org.representatives?.length || 0) > 3 && (
-                        <Avatar className="h-8 w-8 border-2 border-white">
-                          <AvatarFallback className="text-xs bg-gray-100">
-                            +{(org.representatives?.length || 0) - 3}
-                          </AvatarFallback>
-                        </Avatar>
-                      )}
-                    </div>
-                    <div className="text-xs text-gray-600 mt-2">
-                      Next election: Dec 2024
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex gap-2">
-                    <Button
-                      variant="default"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => onSelectOrganization(org)}
-                    >
-                      <ArrowRight className="h-4 w-4 mr-2" />
-                      Manage
-                    </Button>
-                    {getRepresentativeStatus(org) && (
-                      <Button variant="outline" size="sm">
-                        <Settings className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <OrganizationCard
+              key={org.id}
+              organization={org}
+              currentUser={currentUser}
+              onSelectOrganization={onSelectOrganization}
+              mode="grid"
+            />
           ))}
         </div>
       )}

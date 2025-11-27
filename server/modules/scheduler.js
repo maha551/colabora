@@ -4,6 +4,7 @@
  */
 
 const { v4: uuidv4 } = require('uuid');
+const { logger } = require('../middleware/logger');
 
 class DocumentScheduler {
   constructor(db) {
@@ -17,41 +18,57 @@ class DocumentScheduler {
    */
   start() {
     if (this.isRunning) {
-      console.log('📅 Scheduler already running');
+      logger.debug('Scheduler already running');
       return;
     }
 
-    console.log('🚀 Starting Document Scheduler...');
+    logger.info('Starting Document Scheduler');
     this.isRunning = true;
 
     // Check proposal deadlines every 15 minutes
     this.jobs.set('proposal-check', setInterval(() => {
       this.checkProposalDeadlines().catch(err => {
-        console.error('❌ Error in proposal deadline check:', err);
+        logger.error('Error in proposal deadline check', { error: err.message, stack: err.stack });
+      });
+    }, 15 * 60 * 1000)); // 15 minutes
+
+    // Check proposal cutoff every 15 minutes
+    this.jobs.set('proposal-cutoff-check', setInterval(() => {
+      this.checkProposalCutoff().catch(err => {
+        logger.error('Error in proposal cutoff check', { error: err.message, stack: err.stack });
       });
     }, 15 * 60 * 1000)); // 15 minutes
 
     // Check voting deadlines every 15 minutes
     this.jobs.set('voting-check', setInterval(() => {
       this.checkVotingDeadlines().catch(err => {
-        console.error('❌ Error in voting deadline check:', err);
+        logger.error('Error in voting deadline check', { error: err.message, stack: err.stack });
+      });
+    }, 15 * 60 * 1000)); // 15 minutes
+
+    // Check deletion vote deadlines every 15 minutes
+    this.jobs.set('deletion-check', setInterval(() => {
+      this.checkDeletionDeadlines().catch(err => {
+        logger.error('Error in deletion deadline check', { error: err.message, stack: err.stack });
       });
     }, 15 * 60 * 1000)); // 15 minutes
 
     // Process expired documents hourly
     this.jobs.set('expired-check', setInterval(() => {
       this.processExpiredDocuments().catch(err => {
-        console.error('❌ Error in expired document processing:', err);
+        logger.error('Error in expired document processing', { error: err.message, stack: err.stack });
       });
     }, 60 * 60 * 1000)); // 1 hour
 
     // Run initial checks immediately
     setTimeout(() => {
-      this.checkProposalDeadlines().catch(console.error);
-      this.checkVotingDeadlines().catch(console.error);
+      this.checkProposalDeadlines().catch(err => logger.error('Error in proposal deadline check', { error: err.message }));
+      this.checkProposalCutoff().catch(err => logger.error('Error in proposal cutoff check', { error: err.message }));
+      this.checkVotingDeadlines().catch(err => logger.error('Error in voting deadline check', { error: err.message }));
+      this.checkDeletionDeadlines().catch(err => logger.error('Error in deletion deadline check', { error: err.message }));
     }, 5000); // 5 seconds after startup
 
-    console.log('✅ Document Scheduler started successfully');
+    logger.info('Document Scheduler started successfully');
   }
 
   /**
@@ -60,16 +77,16 @@ class DocumentScheduler {
   stop() {
     if (!this.isRunning) return;
 
-    console.log('🛑 Stopping Document Scheduler...');
+    logger.info('Stopping Document Scheduler');
 
     for (const [name, job] of this.jobs) {
       clearInterval(job);
-      console.log(`🧹 Cleared job: ${name}`);
+      logger.debug('Cleared scheduler job', { jobName: name });
     }
 
     this.jobs.clear();
     this.isRunning = false;
-    console.log('✅ Document Scheduler stopped');
+    logger.info('Document Scheduler stopped');
   }
 
   /**
@@ -77,7 +94,7 @@ class DocumentScheduler {
    * Transition them to voting status
    */
   async checkProposalDeadlines() {
-    console.log('🔍 Checking proposal deadlines...');
+    logger.debug('Checking proposal deadlines');
 
     try {
       const now = new Date().toISOString();
@@ -96,19 +113,19 @@ class DocumentScheduler {
         });
       });
 
-      console.log(`📋 Found ${documents.length} documents ready for voting`);
+      logger.debug('Found documents ready for voting', { count: documents.length });
 
       for (const doc of documents) {
         try {
           await this.transitionToVoting(doc.id, doc.owner_id);
-          console.log(`✅ Transitioned document "${doc.title}" to voting status`);
+          logger.info('Transitioned document to voting status', { documentId: doc.id, title: doc.title.substring(0, 50) });
         } catch (error) {
-          console.error(`❌ Failed to transition document ${doc.id}:`, error);
+          logger.error('Failed to transition document to voting status', { error: error.message, stack: error.stack, documentId: doc.id });
         }
       }
 
     } catch (error) {
-      console.error('❌ Error checking proposal deadlines:', error);
+      logger.error('Error checking proposal deadlines', { error: error.message, stack: error.stack });
     }
   }
 
@@ -117,7 +134,7 @@ class DocumentScheduler {
    * Calculate final results and set final status
    */
   async checkVotingDeadlines() {
-    console.log('🗳️ Checking voting deadlines...');
+    logger.debug('Checking voting deadlines');
 
     try {
       const now = new Date().toISOString();
@@ -136,18 +153,18 @@ class DocumentScheduler {
         });
       });
 
-      console.log(`📋 Found ${documents.length} documents with expired voting periods`);
+      logger.debug('Found documents with expired voting periods', { count: documents.length });
 
       for (const doc of documents) {
         try {
           await this.finalizeVoting(doc);
         } catch (error) {
-          console.error(`❌ Failed to finalize voting for document ${doc.id}:`, error);
+          logger.error('Failed to finalize voting for document', { error: error.message, stack: error.stack, documentId: doc.id });
         }
       }
 
     } catch (error) {
-      console.error('❌ Error checking voting deadlines:', error);
+      logger.error('Error checking voting deadlines', { error: error.message, stack: error.stack });
     }
   }
 
@@ -155,7 +172,7 @@ class DocumentScheduler {
    * Process documents that have been in proposal status too long
    */
   async processExpiredDocuments() {
-    console.log('⏰ Processing expired documents...');
+    logger.debug('Processing expired documents');
 
     try {
       const thirtyDaysAgo = new Date();
@@ -175,19 +192,19 @@ class DocumentScheduler {
         });
       });
 
-      console.log(`📋 Found ${documents.length} expired documents`);
+      logger.debug('Found expired documents', { count: documents.length });
 
       for (const doc of documents) {
         try {
           await this.transitionToExpired(doc.id, doc.owner_id);
-          console.log(`✅ Marked document "${doc.title}" as expired`);
+          logger.info('Marked document as expired', { documentId: doc.id, title: doc.title.substring(0, 50) });
         } catch (error) {
-          console.error(`❌ Failed to expire document ${doc.id}:`, error);
+          logger.error('Failed to expire document', { error: error.message, stack: error.stack, documentId: doc.id });
         }
       }
 
     } catch (error) {
-      console.error('❌ Error processing expired documents:', error);
+      logger.error('Error processing expired documents', { error: error.message, stack: error.stack });
     }
   }
 
@@ -195,9 +212,31 @@ class DocumentScheduler {
    * Transition document from proposal to voting status
    */
   async transitionToVoting(documentId, userId) {
-    const votingPeriodDays = 7; // Configurable
+    // Get document's organization_id to fetch governance rules
+    const document = await new Promise((resolve, reject) => {
+      this.db.get('SELECT organization_id FROM documents WHERE id = ?', [documentId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    // Fetch governance rules to get default_voting_deadline_hours
+    let votingDeadlineHours = 168; // Default 7 days (168 hours)
+    if (document?.organization_id) {
+      try {
+        const governanceModule = require('../routes/governance');
+        const governanceRules = await governanceModule.getGovernanceRules(this.db, document.organization_id);
+        if (governanceRules?.defaultVotingDeadlineHours) {
+          votingDeadlineHours = governanceRules.defaultVotingDeadlineHours;
+        }
+      } catch (govErr) {
+        logger.warn('Could not fetch governance rules for voting deadline, using default', { error: govErr.message, organizationId: doc?.organization_id });
+      }
+    }
+
     const votingDeadline = new Date();
-    votingDeadline.setDate(votingDeadline.getDate() + votingPeriodDays);
+    votingDeadline.setHours(votingDeadline.getHours() + votingDeadlineHours);
+    logger.debug('Voting deadline set from governance rules', { documentId, votingDeadlineHours, days: (votingDeadlineHours / 24).toFixed(1) });
 
     // Get organization member count for quorum calculation
     let minVotersRequired = 0;
@@ -220,35 +259,51 @@ class DocumentScheduler {
           });
         });
 
-        // Require 30% participation for quorum
-        minVotersRequired = Math.max(1, Math.ceil(memberCount * 0.3));
-        console.log(`📊 Document ${documentId}: ${memberCount} org members, requiring ${minVotersRequired} for quorum`);
+        // Get governance rules to use defaultQuorumPercentage
+        let quorumPercentage = 0.3; // Default 30%
+        try {
+          const governanceModule = require('../routes/governance');
+          const governanceRules = await governanceModule.getGovernanceRules(this.db, doc.organization_id);
+          if (governanceRules?.defaultQuorumPercentage) {
+            quorumPercentage = governanceRules.defaultQuorumPercentage;
+          }
+        } catch (govErr) {
+          logger.warn('Could not fetch governance rules for quorum, using default 30%', { error: govErr.message, organizationId: doc.organization_id });
+        }
+        
+        // Require quorum percentage participation (from governance rules or default 30%)
+        minVotersRequired = Math.max(1, Math.ceil(memberCount * quorumPercentage));
+        logger.debug('Document quorum calculation', { documentId, memberCount, minVotersRequired, quorumPercentage: (quorumPercentage * 100).toFixed(0) });
       }
     } catch (error) {
-      console.warn(`⚠️ Could not calculate quorum for document ${documentId}:`, error.message);
+      logger.warn('Could not calculate quorum for document', { error: error.message, documentId });
       minVotersRequired = 1; // Minimum fallback
     }
 
+    // Use DocumentStatusManager for proper status transitions
+    const DocumentStatusManager = require('./document-status');
+    await DocumentStatusManager.transitionToVoting(this.db, documentId, userId || 'system');
+
+    // Update min_voters_required if not already set
     await new Promise((resolve, reject) => {
       this.db.run(`
         UPDATE documents
-        SET status = 'voting',
-            voting_deadline = ?,
-            voting_started_at = CURRENT_TIMESTAMP,
-            min_voters_required = ?,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `, [votingDeadline.toISOString(), minVotersRequired, documentId], function(err) {
+        SET min_voters_required = ?
+        WHERE id = ? AND (min_voters_required IS NULL OR min_voters_required = 0)
+      `, [minVotersRequired, documentId], function(err) {
         if (err) reject(err);
         else resolve();
       });
     });
 
-    // Log status change
-    await this.logStatusChange(documentId, 'proposal', 'voting', 'system', 'proposal_deadline_passed');
-
-    // Send notifications to organization members
-    await this.notifyVotingStarted(documentId);
+    // Broadcast WebSocket update
+    const webSocketManager = require('./websocket');
+    webSocketManager.broadcastDocumentUpdate(documentId, 'document-status-changed', {
+      oldStatus: 'proposal',
+      newStatus: 'voting',
+      votingDeadline: votingDeadline.toISOString(),
+      reason: 'proposal_deadline_passed'
+    });
   }
 
   /**
@@ -283,14 +338,11 @@ class DocumentScheduler {
         });
       });
 
-      // For now, just log the notification (email system can be added later)
-      console.log(`📧 Would send voting started notifications for "${doc.title}" to ${members.length} members`);
-
-      // TODO: Implement actual email notifications
-      // This could integrate with services like SendGrid, Mailgun, etc.
+      // Log notification (email notifications not implemented)
+      logger.debug('Would send voting started notifications', { documentId: doc.id, title: doc.title.substring(0, 50), memberCount: members.length });
 
     } catch (error) {
-      console.error(`❌ Error sending voting notifications for document ${documentId}:`, error);
+      logger.error('Error sending voting notifications for document', { error: error.message, stack: error.stack, documentId });
     }
   }
 
@@ -317,10 +369,29 @@ class DocumentScheduler {
     const proVotes = votes.filter(v => v.vote === 'PRO').length;
     const approvalRate = actualVotes > 0 ? (proVotes / actualVotes) * 100 : 0;
 
-    console.log(`📊 Document ${doc.id} voting results: ${proVotes}/${actualVotes} PRO votes (${approvalRate.toFixed(1)}%), ${totalEligible} eligible voters`);
+    logger.info('Document voting results', { documentId: doc.id, proVotes, actualVotes, approvalRate, totalEligible });
 
-    // Check quorum (minimum 30% participation or min_voters_required)
-    const quorumRequired = Math.max(doc.min_voters_required || 0, Math.ceil(totalEligible * 0.3));
+    // Check quorum - use stored min_voters_required if available, otherwise calculate from eligible voters (30%)
+    // Check quorum - use stored min_voters_required if available, otherwise calculate from governance rules
+    let quorumRequired;
+    if (doc.min_voters_required && doc.min_voters_required > 0) {
+      quorumRequired = doc.min_voters_required;
+    } else {
+      // Get governance rules to use defaultQuorumPercentage
+      let quorumPercentage = 0.3; // Default 30%
+      if (doc.organization_id) {
+        try {
+          const governanceModule = require('../routes/governance');
+          const governanceRules = await governanceModule.getGovernanceRules(this.db, doc.organization_id);
+          if (governanceRules?.defaultQuorumPercentage) {
+            quorumPercentage = governanceRules.defaultQuorumPercentage;
+          }
+        } catch (govErr) {
+          logger.warn('Could not fetch governance rules for quorum, using default 30%', { error: govErr.message, organizationId: doc.organization_id });
+        }
+      }
+      quorumRequired = Math.max(1, Math.ceil(totalEligible * quorumPercentage));
+    }
     const quorumMet = actualVotes >= quorumRequired;
 
     let finalStatus, reason;
@@ -328,52 +399,219 @@ class DocumentScheduler {
     if (!quorumMet) {
       finalStatus = 'rejected';
       reason = 'insufficient_participation';
-      console.log(`❌ Quorum not met: ${actualVotes}/${quorumRequired} required`);
+      logger.warn('Quorum not met', { documentId: doc.id, actualVotes, quorumRequired });
     } else if (approvalRate >= (doc.acceptance_threshold || 75)) {
       finalStatus = 'agreed';
       reason = 'approval_threshold_met';
-      console.log(`✅ Approval threshold met: ${approvalRate.toFixed(1)}% >= ${doc.acceptance_threshold || 75}%`);
+      logger.info('Approval threshold met', { documentId: doc.id, approvalRate, threshold: doc.acceptance_threshold || 75 });
     } else {
       finalStatus = 'rejected';
       reason = 'insufficient_approval';
-      console.log(`❌ Approval threshold not met: ${approvalRate.toFixed(1)}% < ${doc.acceptance_threshold || 75}%`);
+      logger.warn('Approval threshold not met', { documentId: doc.id, approvalRate, threshold: doc.acceptance_threshold || 75 });
     }
 
-    // Update final status
-    await new Promise((resolve, reject) => {
-      this.db.run(`
-        UPDATE documents
-        SET status = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `, [finalStatus, doc.id], function(err) {
+    // Use DocumentStatusManager for proper status transitions
+    const DocumentStatusManager = require('./document-status');
+    if (finalStatus === 'agreed') {
+      await DocumentStatusManager.transitionToAgreed(this.db, doc.id, 'system');
+    } else {
+      await DocumentStatusManager.transitionToRejected(this.db, doc.id, 'system', reason);
+    }
+
+    // Broadcast WebSocket update
+    const webSocketManager = require('./websocket');
+    webSocketManager.broadcastDocumentUpdate(doc.id, 'document-status-changed', {
+      oldStatus: 'voting',
+      newStatus: finalStatus,
+      reason: reason,
+      approvalRate: approvalRate.toFixed(1),
+      quorumMet: quorumMet
+    });
+  }
+
+  /**
+   * Check for documents where proposal cutoff has passed
+   * Disable new paragraph proposals
+   */
+  async checkProposalCutoff() {
+    logger.debug('Checking proposal cutoff deadlines');
+
+    try {
+      const now = new Date().toISOString();
+
+      // Find documents where paragraph_proposals_cutoff < now and status = 'proposal'
+      const documents = await new Promise((resolve, reject) => {
+        this.db.all(`
+          SELECT id, title, paragraph_proposals_cutoff
+          FROM documents
+          WHERE status = 'proposal'
+          AND paragraph_proposals_cutoff < ?
+          AND paragraph_proposals_cutoff IS NOT NULL
+        `, [now], (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        });
+      });
+
+      logger.debug('Found documents past proposal cutoff', { count: documents.length });
+
+      // Broadcast WebSocket updates for proposal cutoff
+      const webSocketManager = require('./websocket');
+      for (const doc of documents) {
+        webSocketManager.broadcastDocumentUpdate(doc.id, 'proposal-cutoff-reached', {
+          documentId: doc.id,
+          cutoffDate: doc.paragraph_proposals_cutoff
+        });
+      }
+
+    } catch (error) {
+      logger.error('Error checking proposal cutoff', { error: error.message, stack: error.stack });
+    }
+  }
+
+  /**
+   * Check for documents where deletion vote deadline has passed
+   * Finalize deletion votes
+   */
+  async checkDeletionDeadlines() {
+    logger.debug('Checking deletion vote deadlines');
+
+    try {
+      const now = new Date().toISOString();
+
+      // Find documents with expired deletion votes
+      const documents = await new Promise((resolve, reject) => {
+        this.db.all(`
+          SELECT id, title, organization_id, deletion_vote_deadline, deletion_proposed_by
+          FROM documents
+          WHERE deletion_vote_deadline < ?
+          AND deletion_vote_deadline IS NOT NULL
+          AND deletion_proposed_at IS NOT NULL
+        `, [now], (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        });
+      });
+
+      logger.debug('Found documents with expired deletion votes', { count: documents.length });
+
+      for (const doc of documents) {
+        try {
+          await this.finalizeDeletionVote(doc);
+        } catch (error) {
+          logger.error('Failed to finalize deletion vote for document', { error: error.message, stack: error.stack, documentId: doc.id });
+        }
+      }
+
+    } catch (error) {
+      logger.error('Error checking deletion deadlines', { error: error.message, stack: error.stack });
+    }
+  }
+
+  /**
+   * Finalize deletion vote and delete document if approved
+   */
+  async finalizeDeletionVote(doc) {
+    // Get deletion votes
+    const votes = await new Promise((resolve, reject) => {
+      this.db.all(`
+        SELECT vote FROM document_deletion_votes WHERE document_id = ?
+      `, [doc.id], (err, rows) => {
         if (err) reject(err);
-        else resolve();
+        else resolve(rows || []);
       });
     });
 
-    // Log status change
-    await this.logStatusChange(doc.id, 'voting', finalStatus, 'system', reason);
+    // Get organization member count
+    const memberCount = await new Promise((resolve, reject) => {
+      this.db.get(`
+        SELECT COUNT(*) as count FROM organization_members
+        WHERE organization_id = ? AND status = 'active'
+      `, [doc.organization_id], (err, row) => {
+        if (err) reject(err);
+        else resolve(row?.count || 0);
+      });
+    });
 
-    // TODO: Send final result notifications
-    console.log(`📧 Would send ${finalStatus} notifications for document ${doc.id}`);
+    const actualVotes = votes.length;
+    const proVotes = votes.filter(v => v.vote === 'PRO').length;
+    const approvalRate = actualVotes > 0 ? (proVotes / actualVotes) * 100 : 0;
+    const quorumRequired = Math.max(1, Math.ceil(memberCount * 0.3));
+    const quorumMet = actualVotes >= quorumRequired;
+
+    // Get governance rules for threshold
+    let threshold = 75.0;
+    if (doc.organization_id) {
+      try {
+        const governanceModule = require('../routes/governance');
+        const governanceRules = await governanceModule.getGovernanceRules(this.db, doc.organization_id);
+        threshold = governanceRules?.defaultAcceptanceThreshold || 75.0;
+      } catch (govErr) {
+        logger.warn('Could not fetch governance rules for acceptance threshold, using default', { error: govErr.message, documentId: doc.id });
+      }
+    }
+
+    if (quorumMet && approvalRate >= threshold) {
+      // Delete the document
+      logger.info('Deleting document (deletion vote approved)', { documentId: doc.id, approvalRate });
+      
+      // Delete document (cascade will handle related records)
+      await new Promise((resolve, reject) => {
+        this.db.run(`DELETE FROM documents WHERE id = ?`, [doc.id], function(err) {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+
+      // Broadcast WebSocket update
+      const webSocketManager = require('./websocket');
+      webSocketManager.broadcastDocumentUpdate(doc.id, 'document-deleted', {
+        documentId: doc.id,
+        reason: 'deletion_approved',
+        approvalRate: approvalRate.toFixed(1)
+      });
+    } else {
+      // Cancel deletion proposal
+      await new Promise((resolve, reject) => {
+        this.db.run(`
+          UPDATE documents
+          SET deletion_proposed_at = NULL,
+              deletion_proposed_by = NULL,
+              deletion_vote_deadline = NULL,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `, [doc.id], function(err) {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+
+      // Delete deletion votes
+      await new Promise((resolve, reject) => {
+        this.db.run(`DELETE FROM document_deletion_votes WHERE document_id = ?`, [doc.id], function(err) {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+
+      logger.info('Deletion vote for document rejected', { documentId: doc.id, approvalRate, quorumMet });
+
+      // Broadcast WebSocket update
+      const webSocketManager = require('./websocket');
+      webSocketManager.broadcastDocumentUpdate(doc.id, 'deletion-vote-rejected', {
+        documentId: doc.id,
+        approvalRate: approvalRate.toFixed(1),
+        quorumMet: quorumMet
+      });
+    }
   }
 
   /**
    * Mark document as expired
    */
   async transitionToExpired(documentId, userId) {
-    await new Promise((resolve, reject) => {
-      this.db.run(`
-        UPDATE documents
-        SET status = 'expired', updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `, [documentId], function(err) {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-
-    await this.logStatusChange(documentId, 'proposal', 'expired', 'system', 'proposal_timeout');
+    const DocumentStatusManager = require('./document-status');
+    await DocumentStatusManager.transitionToExpired(this.db, documentId, userId || 'system');
   }
 
   /**
@@ -393,7 +631,7 @@ class DocumentScheduler {
       });
     });
 
-    console.log(`📝 Logged status change: ${oldStatus} → ${newStatus} (${reason})`);
+    logger.debug('Logged status change', { documentId, oldStatus, newStatus, reason });
   }
 
   /**

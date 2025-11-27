@@ -8,15 +8,15 @@ import { Textarea } from '../ui/textarea';
 import { Badge } from '../ui/badge';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { User, Plus, CheckCircle, Clock, X, AlertTriangle, Vote } from 'lucide-react';
-import { Organization, RepresentativeElection, ElectionCandidate } from '../../types';
+import { User as UserIcon, Plus, CheckCircle, Clock, X, AlertTriangle, Vote } from 'lucide-react';
+import { Organization, RepresentativeElection, ElectionCandidate, User } from '../../types';
 import { governanceApi } from '../../lib/api';
 import { toast } from 'sonner';
 
 interface CandidateNominationInterfaceProps {
   organization: Organization;
   election: RepresentativeElection;
-  currentUser: any;
+  currentUser: User | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
@@ -56,7 +56,7 @@ export function CandidateNominationInterface({
       if (currentElection?.candidates) {
         setCandidates(currentElection.candidates);
         // Check if current user has nominated
-        const userNom = currentElection.candidates.find(c => c.userId === currentUser.id);
+        const userNom = currentElection.candidates.find((c: ElectionCandidate) => c.userId === currentUser.id);
         setUserNomination(userNom || null);
       }
     } catch (error) {
@@ -161,7 +161,7 @@ export function CandidateNominationInterface({
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
                 <span className="flex items-center gap-2">
-                  <User className="h-5 w-5" />
+                  <UserIcon className="h-5 w-5" />
                   Your Nomination Status
                 </span>
                 {nominationDeadline && (

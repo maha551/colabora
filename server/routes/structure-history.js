@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { requireAuth, requireDocumentAccess } = require('../middleware/auth');
+const { logger } = require('../middleware/logger');
 
 // Middleware to check if structure proposals are enabled for the document
 const requireStructureProposalsEnabled = (req, res, next) => {
@@ -9,7 +10,7 @@ const requireStructureProposalsEnabled = (req, res, next) => {
 
   db.get('SELECT structure_proposals_enabled FROM documents WHERE id = ?', [documentId], (err, document) => {
     if (err) {
-      console.error('Error checking structure proposals setting:', err);
+      logger.error('Error checking structure proposals setting', { error: err.message, documentId });
       return res.status(500).json({ error: 'Failed to check document settings' });
     }
 
@@ -46,10 +47,10 @@ router.get('/', requireAuth, requireDocumentAccess, requireStructureProposalsEna
     if (err) {
       // If table doesn't exist, return empty array
       if (err.code === 'SQLITE_ERROR' && err.message.includes('no such table')) {
-        console.log('Structure history tables do not exist yet, returning empty array');
+        logger.debug('Structure history tables do not exist yet, returning empty array', { documentId });
         return res.json({ versions: [] });
       }
-      console.error('Error fetching structure versions:', err);
+      logger.error('Error fetching structure versions', { error: err.message, documentId });
       return res.status(500).json({ error: 'Failed to fetch structure history' });
     }
 
@@ -71,7 +72,7 @@ router.get('/', requireAuth, requireDocumentAccess, requireStructureProposalsEna
         try {
           return JSON.parse(version.structure_snapshot);
         } catch (e) {
-          console.error('Error parsing structure_snapshot:', e);
+          logger.error('Error parsing structure_snapshot', { error: e.message, documentId, versionId });
           return null;
         }
       })()
@@ -100,7 +101,7 @@ router.get('/:versionId', requireAuth, requireDocumentAccess, requireStructurePr
 
   db.get(versionQuery, [versionId, documentId], (err, version) => {
     if (err) {
-      console.error('Error fetching version:', err);
+      logger.error('Error fetching version', { error: err.message, versionId, documentId });
       return res.status(500).json({ error: 'Failed to fetch version' });
     }
 
@@ -121,7 +122,7 @@ router.get('/:versionId', requireAuth, requireDocumentAccess, requireStructurePr
 
     db.all(changeLogQuery, [versionId], (logErr, changes) => {
       if (logErr) {
-        console.error('Error fetching change log:', logErr);
+        logger.error('Error fetching change log', { error: logErr.message, versionId, documentId });
         return res.status(500).json({ error: 'Failed to fetch change log' });
       }
 
@@ -136,7 +137,7 @@ router.get('/:versionId', requireAuth, requireDocumentAccess, requireStructurePr
           try {
             return JSON.parse(change.old_data || '[]');
           } catch (e) {
-            console.error('Error parsing old_data:', e);
+            logger.error('Error parsing old_data', { error: e.message, changeId: change.id });
             return [];
           }
         })(),
@@ -144,7 +145,7 @@ router.get('/:versionId', requireAuth, requireDocumentAccess, requireStructurePr
           try {
             return JSON.parse(change.new_data || '{}');
           } catch (e) {
-            console.error('Error parsing new_data:', e);
+            logger.error('Error parsing new_data', { error: e.message, changeId: change.id });
             return {};
           }
         })(),
@@ -152,7 +153,7 @@ router.get('/:versionId', requireAuth, requireDocumentAccess, requireStructurePr
           try {
             return JSON.parse(change.operation_metadata || '{}');
           } catch (e) {
-            console.error('Error parsing operation_metadata:', e);
+            logger.error('Error parsing operation_metadata', { error: e.message, changeId: change.id });
             return {};
           }
         })(),
@@ -176,7 +177,7 @@ router.get('/:versionId', requireAuth, requireDocumentAccess, requireStructurePr
           try {
             return JSON.parse(version.structure_snapshot);
           } catch (e) {
-            console.error('Error parsing structure_snapshot:', e);
+            logger.error('Error parsing structure_snapshot', { error: e.message, documentId, versionId });
             return null;
           }
         })(),
@@ -197,7 +198,7 @@ router.post('/:versionId/restore', requireAuth, requireDocumentAccess, requireSt
   // Check if user is document owner (only owner can restore)
   db.get('SELECT owner_id FROM documents WHERE id = ?', [documentId], (err, document) => {
     if (err) {
-      console.error('Error checking document ownership:', err);
+      logger.error('Error checking document ownership', { error: err.message, documentId, userId: req.user.id });
       return res.status(500).json({ error: 'Failed to check document ownership' });
     }
 
@@ -217,7 +218,7 @@ router.post('/:versionId/restore', requireAuth, requireDocumentAccess, requireSt
 
     db.get(versionQuery, [versionId, documentId], (verErr, version) => {
       if (verErr) {
-        console.error('Error fetching version:', verErr);
+        logger.error('Error fetching version', { error: verErr.message, versionId, documentId });
         return res.status(500).json({ error: 'Failed to fetch version' });
       }
 
@@ -229,7 +230,7 @@ router.post('/:versionId/restore', requireAuth, requireDocumentAccess, requireSt
       try {
         snapshot = JSON.parse(version.structure_snapshot);
       } catch (e) {
-        console.error('Error parsing structure_snapshot for restore:', e);
+        logger.error('Error parsing structure_snapshot for restore', { error: e.message, versionId, documentId });
         return res.status(500).json({ error: 'Invalid snapshot data' });
       }
 
@@ -244,7 +245,7 @@ router.post('/:versionId/restore', requireAuth, requireDocumentAccess, requireSt
 
       db.all(backupQuery, [documentId], (backupErr, currentParagraphs) => {
         if (backupErr) {
-          console.error('Error backing up current state:', backupErr);
+          logger.error('Error backing up current state', { error: backupErr.message, documentId });
           return res.status(500).json({ error: 'Failed to backup current state' });
         }
 
@@ -252,7 +253,7 @@ router.post('/:versionId/restore', requireAuth, requireDocumentAccess, requireSt
         db.get('SELECT MAX(version_number) as max_version FROM document_structure_versions WHERE document_id = ?',
           [documentId], (verNumErr, result) => {
           if (verNumErr) {
-            console.error('Error getting version number:', verNumErr);
+            logger.error('Error getting version number', { error: verNumErr.message, documentId });
             return res.status(500).json({ error: 'Failed to get version number' });
           }
 
@@ -280,14 +281,14 @@ router.post('/:versionId/restore', requireAuth, requireDocumentAccess, requireSt
             })))
           ], (backupInsertErr) => {
             if (backupInsertErr) {
-              console.error('Error creating backup:', backupInsertErr);
+              logger.error('Error creating backup', { error: backupInsertErr.message, documentId });
               return res.status(500).json({ error: 'Failed to create backup' });
             }
 
             // Now restore the snapshot
             restoreDocumentStructure(db, documentId, snapshot, (restoreErr) => {
               if (restoreErr) {
-                console.error('Error restoring document:', restoreErr);
+                logger.error('Error restoring document', { error: restoreErr.message, documentId, versionId });
                 return res.status(500).json({ error: 'Failed to restore document' });
               }
 
@@ -308,7 +309,7 @@ router.post('/:versionId/restore', requireAuth, requireDocumentAccess, requireSt
                 JSON.stringify(snapshot)
               ], (restoreInsertErr) => {
                 if (restoreInsertErr) {
-                  console.error('Error creating restore version:', restoreInsertErr);
+                  logger.error('Error creating restore version', { error: restoreInsertErr.message, documentId, versionId });
                   // Don't fail the whole operation for this
                 }
 
@@ -331,7 +332,7 @@ function restoreDocumentStructure(db, documentId, snapshot, callback) {
   // First, mark all existing paragraphs as deleted (soft delete)
   db.run('UPDATE paragraphs SET text = "" WHERE document_id = ?', [documentId], (deleteErr) => {
     if (deleteErr) {
-      console.error('Error clearing existing paragraphs:', deleteErr);
+      logger.error('Error clearing existing paragraphs', { error: deleteErr.message, documentId });
       return callback(deleteErr);
     }
 
@@ -358,7 +359,7 @@ function restoreDocumentStructure(db, documentId, snapshot, callback) {
         documentId
       ], function(updateErr) {
         if (updateErr) {
-          console.error('Error updating paragraph:', updateErr);
+          logger.error('Error updating paragraph', { error: updateErr.message, paragraphId: para.id, documentId });
           return callback(updateErr);
         }
 
@@ -376,7 +377,7 @@ function restoreDocumentStructure(db, documentId, snapshot, callback) {
             paragraph.headingLevel
           ], (insertErr) => {
             if (insertErr) {
-              console.error('Error inserting paragraph:', insertErr);
+              logger.error('Error inserting paragraph', { error: insertErr.message, documentId });
               return callback(insertErr);
             }
 

@@ -215,6 +215,126 @@ const paramValidation = {
       .withMessage('Invalid user ID format'),
 
     handleValidationErrors
+  ],
+
+  organizationId: [
+    param('organizationId')
+      .isUUID()
+      .withMessage('Invalid organization ID format'),
+
+    handleValidationErrors
+  ],
+
+  repId: [
+    param('repId')
+      .isUUID()
+      .withMessage('Invalid representative ID format'),
+
+    handleValidationErrors
+  ],
+
+  memberUserId: [
+    param('memberUserId')
+      .isUUID()
+      .withMessage('Invalid member user ID format'),
+
+    handleValidationErrors
+  ]
+};
+
+// Organization validation rules
+const organizationValidation = {
+  create: [
+    body('name')
+      .isLength({ min: 1, max: 200 })
+      .withMessage('Organization name must be between 1 and 200 characters')
+      .customSanitizer(sanitizeString),
+
+    body('description')
+      .optional()
+      .isLength({ max: 1000 })
+      .withMessage('Description must be less than 1000 characters')
+      .customSanitizer(sanitizeString),
+
+    body('representatives')
+      .isArray({ min: 3, max: 10 })
+      .withMessage('Representatives must be an array with 3-10 members'),
+
+    body('representatives.*')
+      .isUUID()
+      .withMessage('Each representative must be a valid UUID'),
+
+    body('membershipPolicy')
+      .optional()
+      .isIn(['open', 'invitation'])
+      .withMessage('Membership policy must be either "open" or "invitation"'),
+
+    body('votingEnabled')
+      .optional()
+      .isBoolean()
+      .withMessage('Voting enabled must be a boolean'),
+
+    body('votingThreshold')
+      .optional()
+      .isFloat({ min: 0.1, max: 1.0 })
+      .withMessage('Voting threshold must be between 0.1 and 1.0'),
+
+    handleValidationErrors
+  ],
+
+  update: [
+    body('name')
+      .optional()
+      .isLength({ min: 1, max: 200 })
+      .withMessage('Organization name must be between 1 and 200 characters')
+      .customSanitizer(sanitizeString),
+
+    body('description')
+      .optional()
+      .isLength({ max: 1000 })
+      .withMessage('Description must be less than 1000 characters')
+      .customSanitizer(sanitizeString),
+
+    body('membershipPolicy')
+      .optional()
+      .isIn(['open', 'invitation'])
+      .withMessage('Membership policy must be either "open" or "invitation"'),
+
+    body('votingThreshold')
+      .optional()
+      .isFloat({ min: 0.1, max: 1.0 })
+      .withMessage('Voting threshold must be between 0.1 and 1.0'),
+
+    handleValidationErrors
+  ],
+
+  nominateRepresentative: [
+    body('newRepresentativeId')
+      .isUUID()
+      .withMessage('Representative ID must be a valid UUID'),
+
+    handleValidationErrors
+  ],
+
+  addMember: [
+    body('userId')
+      .isUUID()
+      .withMessage('User ID must be a valid UUID'),
+
+    handleValidationErrors
+  ],
+
+  inviteMembers: [
+    body('emails')
+      .isArray({ min: 1 })
+      .withMessage('Emails must be a non-empty array'),
+
+    body('emails.*')
+      .isEmail()
+      .normalizeEmail()
+      .withMessage('Each email must be a valid email address'),
+
+    handleValidationErrors
   ]
 };
 
@@ -244,6 +364,7 @@ module.exports = {
   proposalValidation,
   voteValidation,
   commentValidation,
+  organizationValidation,
   paramValidation,
   queryValidation
 };

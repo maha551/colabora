@@ -2,6 +2,8 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { metricsCollector } = require('../middleware/monitoring');
 const { requireAuth, requireDocumentAccess } = require('../middleware/auth');
+const webSocketManager = require('../modules/websocket');
+const { logger } = require('../middleware/logger');
 
 const router = express.Router({ mergeParams: true });
 
@@ -28,7 +30,7 @@ router.post('/', requireAuth, requireDocumentAccess, (req, res) => {
 
   db.get(verifyQuery, [proposalId, paragraphId, documentId], (err, proposal) => {
     if (err) {
-      console.error('Error verifying proposal:', err);
+      logger.error('Error verifying proposal', { error: err.message, proposalId, paragraphId, documentId });
       return res.status(500).json({ error: 'Failed to add comment' });
     }
 
@@ -42,7 +44,7 @@ router.post('/', requireAuth, requireDocumentAccess, (req, res) => {
         SELECT id FROM comments WHERE id = ? AND proposal_id = ?
       `, [parentId, proposalId], (err, parentComment) => {
         if (err) {
-          console.error('Error verifying parent comment:', err);
+          logger.error('Error verifying parent comment', { error: err.message, parentId, proposalId });
           return res.status(500).json({ error: 'Failed to add comment' });
         }
 
@@ -64,7 +66,7 @@ router.post('/', requireAuth, requireDocumentAccess, (req, res) => {
         VALUES (?, ?, ?, ?, ?)
       `, [commentId, proposalId, userId, text.trim(), parentId || null], function(err) {
         if (err) {
-          console.error('Error adding comment:', err);
+          logger.error('Error adding comment', { error: err.message, proposalId, userId });
           return res.status(500).json({ error: 'Failed to add comment' });
         }
 
@@ -116,6 +118,9 @@ router.post('/', requireAuth, requireDocumentAccess, (req, res) => {
             documentId
           });
 
+          // Broadcast real-time update via WebSocket
+          webSocketManager.broadcastCommentUpdate(documentId, proposalId, paragraphId, result);
+
           res.status(201).json({ comment: result });
         });
       });
@@ -144,7 +149,7 @@ router.get('/', requireAuth, requireDocumentAccess, (req, res) => {
 
   db.all(query, [proposalId], (err, comments) => {
     if (err) {
-      console.error('Error fetching comments:', err);
+      logger.error('Error fetching comments', { error: err.message, proposalId, paragraphId, documentId });
       return res.status(500).json({ error: 'Failed to fetch comments' });
     }
 

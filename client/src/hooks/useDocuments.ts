@@ -1,15 +1,24 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Document } from '../types';
 import { documentsApi } from '../lib/api';
 import { toast } from 'sonner';
 
-export function useDocuments(currentUser: any) {
+import { User } from '../types';
+
+export function useDocuments(currentUser: User | null) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const loadingRef = useRef(false); // Prevent duplicate simultaneous requests
 
   // Load documents
-  const loadDocuments = useCallback(async (user?: any) => {
+  const loadDocuments = useCallback(async (user?: User | null) => {
+    // Prevent duplicate simultaneous requests
+    if (loadingRef.current) {
+      console.log('loadDocuments already in progress, skipping duplicate request...');
+      return;
+    }
+
     const userToUse = user || currentUser;
     if (!userToUse) {
       console.log('No user available for loadDocuments');
@@ -17,6 +26,7 @@ export function useDocuments(currentUser: any) {
       return;
     }
 
+    loadingRef.current = true;
     console.log('Loading documents for user:', userToUse.name);
     setLoading(true);
     setError(null);
@@ -35,13 +45,14 @@ export function useDocuments(currentUser: any) {
         setError('Invalid API response');
         toast.error('Invalid API response');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load documents';
       console.error('loadDocuments error:', errorMessage, err);
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
       setLoading(false);
+      loadingRef.current = false;
     }
   }, [currentUser]);
 
@@ -82,7 +93,7 @@ export function useDocuments(currentUser: any) {
       console.log('Reloading documents...');
       await loadDocuments(); // Reload documents list
       console.log('Documents reloaded');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Document creation failed:', err);
       toast.error('Failed to create document');
       throw err; // Re-throw to let the dashboard handle the error
@@ -94,20 +105,24 @@ export function useDocuments(currentUser: any) {
     try {
       await documentsApi.deleteDocument(documentId);
       await loadDocuments(); // Reload documents list
-    } catch (err: any) {
+    } catch (err: unknown) {
+      console.error('Failed to delete document:', err);
       toast.error('Failed to delete document');
       throw err; // Re-throw to let the dashboard handle the error
     }
   }, [loadDocuments]);
 
   // Update documents list when user changes
+  // Note: loadDocuments is NOT in deps to prevent infinite loops
+  // It's stable because it only depends on currentUser
   useEffect(() => {
     if (currentUser) {
       loadDocuments(currentUser);
     } else {
       setDocuments([]);
     }
-  }, [currentUser, loadDocuments]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser]); // Only depend on currentUser, not loadDocuments
 
   return {
     documents,

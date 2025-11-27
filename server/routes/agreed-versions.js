@@ -1,13 +1,7 @@
 const express = require('express');
+const { requireAuth } = require('../middleware/auth');
+const { logger } = require('../middleware/logger');
 const router = express.Router();
-
-// Middleware to check authentication
-const requireAuth = (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  next();
-};
 
 // GET /api/agreed-versions - Get recently accepted proposal versions
 router.get('/', requireAuth, async (req, res) => {
@@ -83,7 +77,7 @@ router.get('/', requireAuth, async (req, res) => {
 
     db.all(query, params, (err, rows) => {
       if (err) {
-        console.error('Error fetching agreed versions:', err);
+        logger.error('Error fetching agreed versions', { error: err.message, userId });
         return res.status(500).json({ error: 'Failed to fetch agreed versions' });
       }
 
@@ -107,12 +101,12 @@ router.get('/', requireAuth, async (req, res) => {
         proVotes: row.pro_votes || 0,
       }));
 
-      console.log(`📋 Found ${formattedVersions.length} agreed versions for user ${userId}`);
+      logger.debug('Found agreed versions for user', { userId, count: formattedVersions.length });
       res.json({ versions: formattedVersions });
     });
 
   } catch (error) {
-    console.error('Error in agreed versions API:', error);
+    logger.error('Error in agreed versions API', { error: error.message, stack: error.stack, userId });
     res.status(500).json({ error: 'Failed to fetch agreed versions' });
   }
 });

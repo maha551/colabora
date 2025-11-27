@@ -1,13 +1,7 @@
 const express = require('express');
+const { requireAuth } = require('../middleware/auth');
+const { logger } = require('../middleware/logger');
 const router = express.Router();
-
-// Middleware to check authentication
-const requireAuth = (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  next();
-};
 
 // GET /api/pending-votes - Get all proposals that need the current user's vote
 router.get('/', requireAuth, (req, res) => {
@@ -24,7 +18,7 @@ router.get('/', requireAuth, (req, res) => {
 
   db.all(documentsQuery, [userId, userId], (err, documents) => {
     if (err) {
-      console.error('Error fetching documents:', err);
+      logger.error('Error fetching documents', { error: err.message, userId });
       return res.status(500).json({ error: 'Failed to fetch documents' });
     }
 
@@ -74,7 +68,7 @@ router.get('/', requireAuth, (req, res) => {
 
     db.all(proposalsQuery, [...documentIds, userId], (err, proposals) => {
       if (err) {
-        console.error('Error fetching proposals:', err);
+        logger.error('Error fetching proposals', { error: err.message, userId, documentCount: documents.length });
         return res.status(500).json({ error: 'Failed to fetch proposals' });
       }
 

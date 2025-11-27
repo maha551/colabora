@@ -6,14 +6,14 @@ import { Badge } from '../ui/badge';
 import { Progress } from '../ui/progress';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Trophy, Users, Vote, CheckCircle, Clock, TrendingUp, AlertTriangle } from 'lucide-react';
-import { Organization, RepresentativeElection, ElectionCandidate } from '../../types';
+import { Organization, RepresentativeElection, ElectionCandidate, User } from '../../types';
 import { governanceApi } from '../../lib/api';
 import { toast } from 'sonner';
 
 interface ElectionResultsProps {
   organization: Organization;
   election: RepresentativeElection;
-  currentUser: any;
+  currentUser: User | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
@@ -59,15 +59,17 @@ export function ElectionResults({
       const { election: electionData, candidates, stats } = response;
 
       // Convert candidates to ElectionResult format
-      const results: ElectionResult[] = candidates.map((candidate: any, index: number) => ({
+      const results: ElectionResult[] = candidates.map((candidate: ElectionCandidate, index: number) => ({
         candidate: {
           id: candidate.id,
           electionId: election.id,
-          userId: candidate.user_id,
-          user: { name: candidate.user_name || 'Unknown' },
-          nominatedAt: candidate.nominated_at,
-          nominationStatement: candidate.nomination_statement,
-          status: candidate.status || 'approved'
+          userId: candidate.userId,
+          user: { name: (candidate as unknown as { userName?: string; user_name?: string }).userName || (candidate as unknown as { userName?: string; user_name?: string }).user_name || 'Unknown' },
+          nominatedAt: (candidate as unknown as { nominatedAt?: string; nominated_at?: string }).nominatedAt || (candidate as unknown as { nominatedAt?: string; nominated_at?: string }).nominated_at,
+          nominationStatement: (candidate as unknown as { nominationStatement?: string; nomination_statement?: string }).nominationStatement || (candidate as unknown as { nominationStatement?: string; nomination_statement?: string }).nomination_statement,
+          acceptedNomination: true,
+          votesReceived: (candidate as unknown as { votes_received?: number }).votes_received || 0,
+          elected: false
         } as ElectionCandidate,
         votesReceived: candidate.votes_received || 0,
         votePercentage: stats.totalVotes > 0 ? ((candidate.votes_received || 0) / stats.totalVotes) * 100 : 0,

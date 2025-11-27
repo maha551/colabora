@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Document, User } from "../types";
+import { Document, User, Organization } from "../types";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
@@ -74,7 +74,7 @@ interface DocumentDashboardProps {
   isCreateDialogOpen?: boolean;
   onSetCreateDialogOpen?: (open: boolean) => void;
   // New props for organizational context
-  organizations?: any[];
+  organizations?: Organization[];
   currentOrganizationId?: string;
 }
 

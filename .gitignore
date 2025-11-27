@@ -10,6 +10,8 @@ yarn-error.log*
 *.sqlite3
 colabora.db
 server/colabora.db
+test-colabora-*.db
+nonexistent_*.db
 
 # Build outputs
 client/build/

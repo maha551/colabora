@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Document } from '../types';
+import { useState, useEffect } from 'react';
+import { Document, User, HeadingLevel, Organization } from '../types';
+import { organizationsApi } from '../lib/api';
 import { DocumentEditor } from '../components/DocumentEditor';
 import { AgreedDocument } from '../components/AgreedDocument';
 import { StructureHistory } from '../components/StructureHistory';
@@ -9,15 +10,18 @@ import { Avatar, AvatarFallback } from '../components/ui/avatar';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Users, FileText, Edit3, Clock, CheckCircle2 } from 'lucide-react';
+import { OrganizationalDocumentStatus } from '../components/OrganizationalDocumentStatus';
+// @ts-ignore - JSX file without types
+import OrganizationalDocumentVoting from '../components/OrganizationalDocumentVoting';
+import { DocumentDeletionProposal } from '../components/DocumentDeletionProposal';
 import { StructureProposalCard } from '../components/StructureProposalCard';
 import { StructureProposalMode } from '../components/StructureProposalMode';
 import { StructureProposal } from '../types';
-import { toast } from 'sonner';
 
 interface DocumentViewPageProps {
   document: Document;
   totalUsers: number;
-  currentUser: any;
+  currentUser: User | null;
   documentLoadKey: number;
   structureProposals: StructureProposal[];
   showStructureProposalMode: boolean;
@@ -26,21 +30,21 @@ interface DocumentViewPageProps {
     data: {
       text: string;
       type?: 'BODY' | 'TITLE';
-      headingLevel?: any;
+      headingLevel?: HeadingLevel;
     }
   ) => Promise<void>;
   onVote: (suggestionId: string, voteType: 'PRO' | 'NEUTRAL' | 'CONTRA') => Promise<void>;
   onComment: (suggestionId: string, text: string, parentId?: string) => Promise<void>;
   onAddElement: (
-    elementType: any,
+    elementType: 'heading' | 'paragraph',
     options?: {
       text?: string;
       title?: string;
-      headingLevel?: any;
+      headingLevel?: HeadingLevel;
       order?: number;
     }
   ) => Promise<void>;
-  onCollaboratorAdded: (user: any) => Promise<void>;
+  onCollaboratorAdded: (user: User) => Promise<void>;
   onCollaboratorRemoved: (userId: string) => Promise<void>;
   onShareDocument: () => void;
   onApplyStructureProposal: (proposalId: string) => Promise<void>;
@@ -69,6 +73,30 @@ export function DocumentViewPage({
   refreshStructureProposals,
 }: DocumentViewPageProps) {
   const [activeTab, setActiveTab] = useState<'discussion' | 'agreed' | 'history'>('discussion');
+  const [organization, setOrganization] = useState<Organization | null>(null);
+  const [isRepresentative, setIsRepresentative] = useState(false);
+
+  // Fetch organization data and check if user is a representative
+  useEffect(() => {
+    const fetchOrganization = async () => {
+      if (document?.organizationId && currentUser) {
+        try {
+          const response = await organizationsApi.getOrganization(document.organizationId);
+          setOrganization(response.organization);
+          // Check if current user is a representative
+          const userIsRepresentative = response.organization.representatives?.includes(currentUser.id) || false;
+          setIsRepresentative(userIsRepresentative);
+        } catch (error) {
+          console.error('Failed to fetch organization:', error);
+          setIsRepresentative(false);
+        }
+      } else {
+        setIsRepresentative(false);
+      }
+    };
+
+    fetchOrganization();
+  }, [document?.organizationId, currentUser?.id]);
 
   const totalSuggestions = document?.paragraphs?.reduce(
     (sum, p) => sum + (p.proposals?.length || 0),
@@ -90,6 +118,31 @@ export function DocumentViewPage({
           </div>
         )}
 
+        {/* Organizational Document Components */}
+        {document?.ownershipType === 'organizational' && (
+          <div className="mb-6 space-y-4">
+            <OrganizationalDocumentStatus document={document} />
+            <OrganizationalDocumentVoting 
+              document={document} 
+              user={currentUser}
+              onVoteCast={() => {
+                // Reload document to get updated voting data
+                // This will be handled by parent component
+              }}
+            />
+            <DocumentDeletionProposal
+              document={document}
+              currentUser={currentUser}
+              isRepresentative={isRepresentative}
+              onDeletionProposed={() => {
+                // Reload document
+              }}
+              onDeletionCancelled={() => {
+                // Reload document
+              }}
+            />
+          </div>
+        )}
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "discussion" | "agreed" | "history")}>

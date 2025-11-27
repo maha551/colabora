@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
-import { User, Document } from "../types";
+import React, { useEffect, useState, useRef } from "react";
+import { User, Document, Proposal, Comment, Vote } from "../types";
+import { DocumentUpdate } from "../hooks/useWebSocket";
 import { Card } from "./ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Badge } from "./ui/badge";
@@ -191,17 +192,21 @@ interface ActivityFeedViewProps {
   currentUser: User;
   onNavigateToDocument: (documentId: string) => void;
   onAddComment?: (proposalId: string, documentId: string, paragraphId: string, text: string, parentId?: string) => Promise<void>;
+  onWebSocketUpdate?: (handler: (update: DocumentUpdate) => void) => void;
 }
 
-export function ActivityFeedView({ documents, currentUser, onNavigateToDocument, onAddComment }: ActivityFeedViewProps) {
+export function ActivityFeedView({ documents, currentUser, onNavigateToDocument, onAddComment, onWebSocketUpdate }: ActivityFeedViewProps) {
   const [activePanel, setActivePanel] = useState<'agreed' | 'pending' | 'debated'>('agreed');
   const [agreedVersions, setAgreedVersions] = useState<AgreedVersion[]>([]);
   const [loadingAgreed, setLoadingAgreed] = useState(false);
   const [paragraphHistories, setParagraphHistories] = useState<Record<string, VersionHistory[]>>({});
-  const [debatedProposals, setDebatedProposals] = useState<any[]>([]);
+  const [debatedProposals, setDebatedProposals] = useState<Proposal[]>([]);
   const [loadingDebated, setLoadingDebated] = useState(false);
-  const [pendingProposals, setPendingProposals] = useState<any[]>([]);
+  const [pendingProposals, setPendingProposals] = useState<Proposal[]>([]);
   const [loadingPending, setLoadingPending] = useState(false);
+  
+  // Track which proposals have been updated via WebSocket to refresh activity feed
+  const [updatedProposalIds, setUpdatedProposalIds] = useState<Set<string>>(new Set());
   const [lastViewedTimestamps, setLastViewedTimestamps] = useState<Record<string, string>>({});
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
@@ -425,11 +430,11 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
   };
 
   // Organize comments hierarchically
-  const getTopLevelComments = (comments: any[]) => {
+  const getTopLevelComments = (comments: Comment[]) => {
     return comments.filter(c => !c.parentId);
   };
 
-  const getReplies = (comments: any[], commentId: string) => {
+  const getReplies = (comments: Comment[], commentId: string) => {
     return comments.filter(c => c.parentId === commentId);
   };
 
@@ -480,32 +485,122 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
   // Handle voting from Activity Feed
   const handleVote = async (proposalId: string, documentId: string, paragraphId: string, voteType: 'PRO' | 'NEUTRAL' | 'CONTRA') => {
     try {
-      const response = await fetch(`/api/documents/${documentId}/paragraphs/${paragraphId}/proposals/${proposalId}/vote`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-        },
-        body: JSON.stringify({ vote: voteType }),
-      });
-
-      if (response.ok) {
-        toast.success('Vote recorded');
-        // Refresh the current tab
+      // Use the proper API instead of direct fetch
+      const { votesApi } = await import('../lib/api');
+      await votesApi.castVote(documentId, paragraphId, proposalId, voteType);
+      toast.success('Vote recorded', { duration: 2000 });
+      
+      // Mark this proposal as updated - WebSocket will trigger refresh
+      setUpdatedProposalIds(prev => new Set(prev).add(proposalId));
+      
+      // Refresh proposals after WebSocket update (fallback if WebSocket is slow)
+      // WebSocket should update immediately, but refresh after 500ms as safety
+      setTimeout(() => {
         if (activePanel === 'pending') {
           fetchPendingProposals();
         } else if (activePanel === 'debated') {
           fetchDebatedProposals();
         }
-      } else {
-        const error = await response.json();
-        toast.error(error.error || 'Failed to record vote');
-      }
+      }, 500);
     } catch (error) {
       console.error('Failed to vote:', error);
-      toast.error('Failed to record vote');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to record vote';
+      toast.error(errorMessage);
     }
   };
+  
+  // Handle WebSocket updates for activity feed
+  // The parent (App.tsx) will call onWebSocketUpdate when updates arrive
+  useEffect(() => {
+    if (!onWebSocketUpdate) return;
+
+    // Set up handler that processes WebSocket updates
+    const handleUpdate = (update: DocumentUpdate) => {
+      // Handle vote updates
+      if (update.eventType === 'vote' && update.data && typeof update.data === 'object' && 'proposalId' in update.data) {
+        const { proposalId, vote: voteData } = update.data as { proposalId: string; vote?: { allVotes?: Vote[] } };
+        
+        if (voteData?.allVotes) {
+          const updateProposalVotes = (proposals: Proposal[]) => {
+            return proposals.map(prop => {
+              if (prop.id === proposalId) {
+                return {
+                  ...prop,
+                  votes: voteData.allVotes!.map((v: Vote) => ({
+                    id: v.id,
+                    userId: v.userId,
+                    vote: v.vote,
+                    createdAt: v.createdAt || v.created_at,
+                    user: v.user || undefined
+                  }))
+                };
+              }
+              return prop;
+            });
+          };
+
+          setPendingProposals(prev => {
+            const hasProposal = prev.some(p => p.id === proposalId);
+            return hasProposal ? updateProposalVotes(prev) : prev;
+          });
+
+          setDebatedProposals(prev => {
+            const hasProposal = prev.some(p => p.id === proposalId);
+            return hasProposal ? updateProposalVotes(prev) : prev;
+          });
+        }
+      }
+      // Handle comment updates
+      else if (update.eventType === 'comment' && update.data && typeof update.data === 'object' && 'proposalId' in update.data) {
+        const { proposalId, comment } = update.data as { proposalId: string; comment?: Comment };
+        
+        if (comment) {
+          const updateProposalComments = (proposals: Proposal[]) => {
+            return proposals.map(prop => {
+              if (prop.id === proposalId) {
+                const existingComments = prop.comments || [];
+                const commentExists = existingComments.some(c => c.id === comment.id);
+                return {
+                  ...prop,
+                  comments: commentExists 
+                    ? existingComments.map(c => c.id === comment.id ? comment : c)
+                    : [...existingComments, comment]
+                };
+              }
+              return prop;
+            });
+          };
+
+          setPendingProposals(prev => {
+            const hasProposal = prev.some(p => p.id === proposalId);
+            return hasProposal ? updateProposalComments(prev) : prev;
+          });
+
+          setDebatedProposals(prev => {
+            const hasProposal = prev.some(p => p.id === proposalId);
+            return hasProposal ? updateProposalComments(prev) : prev;
+          });
+        }
+      }
+      // Handle new proposal updates
+      else if (update.eventType === 'proposal' && update.data && typeof update.data === 'object' && 'proposal' in update.data) {
+        const { proposal } = update.data as { proposal?: Proposal };
+        
+        if (proposal) {
+          setPendingProposals(prev => {
+            const exists = prev.some(p => p.id === proposal.id);
+            return exists ? prev : [proposal, ...prev];
+          });
+        }
+      }
+    };
+
+    // Expose handler to parent via callback prop
+    // The parent will call this handler when WebSocket updates arrive
+    if (onWebSocketUpdate) {
+      onWebSocketUpdate(handleUpdate);
+    }
+  }, [onWebSocketUpdate]);
 
   // Get all collaborators for a document
   const getAllCollaborators = (documentId: string): User[] => {
@@ -743,7 +838,7 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
               </Card>
             ) : (
               <div className="space-y-4">
-                {getDisplayedItems(debatedProposals, 'debated').map((proposal: any, index: number) => {
+                {getDisplayedItems(debatedProposals, 'debated').map((proposal: Proposal, index: number) => {
                   // Adjust index for filtered results
                   const filtered = filterByDocument(debatedProposals);
                   const actualIndex = filtered.indexOf(proposal);
@@ -823,7 +918,7 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
               </Card>
             ) : (
               <div className="space-y-4">
-                {getDisplayedItems(pendingProposals, 'pending').map((proposal: any) => {
+                {getDisplayedItems(pendingProposals, 'pending').map((proposal: Proposal) => {
                   const adaptedSuggestion = adaptProposalToSuggestion(proposal);
                   const documentContext = extractDocumentContext(proposal);
                   const originalText = getOriginalText(proposal);

@@ -1,4 +1,6 @@
 // Document-level locking to prevent race conditions during agreed view updates
+const { logger } = require('../middleware/logger');
+
 class DocumentLockManager {
   constructor() {
     this.locks = new Map(); // documentId -> { promise, resolve, timeout }
@@ -14,7 +16,7 @@ class DocumentLockManager {
 
     // Check if lock already exists
     if (this.locks.has(lockKey)) {
-      console.log(`Waiting for existing lock on document ${documentId}`);
+      logger.debug('Waiting for existing lock on document', { documentId });
       await this.locks.get(lockKey).promise;
       // Lock was released, now try to acquire it again
       return this.acquireLock(documentId);
@@ -25,13 +27,13 @@ class DocumentLockManager {
     const promise = new Promise(r => { resolve = r; });
 
     const timeout = setTimeout(() => {
-      console.warn(`Lock timeout for document ${documentId}, forcing release`);
+      logger.warn('Lock timeout for document, forcing release', { documentId });
       this.releaseLock(documentId);
     }, this.maxLockTime);
 
     this.locks.set(lockKey, { promise, resolve, timeout });
 
-    console.log(`Acquired lock for document ${documentId}`);
+    logger.debug('Acquired lock for document', { documentId });
     return promise;
   }
 
@@ -46,7 +48,7 @@ class DocumentLockManager {
       clearTimeout(lock.timeout);
       lock.resolve();
       this.locks.delete(lockKey);
-      console.log(`Released lock for document ${documentId}`);
+      logger.debug('Released lock for document', { documentId });
     }
   }
 

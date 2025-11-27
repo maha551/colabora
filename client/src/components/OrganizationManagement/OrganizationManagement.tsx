@@ -1,16 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Users, Vote, FileText, BarChart3, Building2 } from 'lucide-react';
 
 import { Organization, User, Document } from '../../types';
 import { useOrganizationPermissions } from '../../hooks/useOrganizationPermissions';
 import { useOrganizationData } from '../../hooks/useOrganizationData';
+import { useOrganizationWebSocket, OrganizationUpdate } from '../../hooks/useOrganizationWebSocket';
 import { ErrorBoundary } from './ErrorBoundary';
+import { toast } from 'sonner';
 
 import { GovernanceTab } from './tabs/GovernanceTab';
 import { DocumentsTab } from './tabs/DocumentsTab';
 import { MembersTab } from './tabs/MembersTab';
 import { AnalyticsTab } from './tabs/AnalyticsTab';
+import { DashboardTab } from './tabs/DashboardTab';
 
 interface OrganizationManagementProps {
   organization: Organization;
@@ -25,12 +28,58 @@ export function OrganizationManagement({
   onBack,
   onSelectDocument
 }: OrganizationManagementProps) {
-  const [activeTab, setActiveTab] = useState('documents');
+  const [activeTab, setActiveTab] = useState('dashboard');
 
   // Use our custom hooks for data and permissions
   const permissions = useOrganizationPermissions(currentUser, organization);
   const { data, actions } = useOrganizationData(organization.id, activeTab);
 
+  // Handle organization WebSocket updates
+  const handleOrganizationUpdate = useCallback((update: OrganizationUpdate) => {
+    if (update.organizationId !== organization.id) return;
+
+    console.log('Received organization update:', update);
+
+    switch (update.eventType) {
+      case 'governance-rules-updated':
+        toast.success('Governance rules updated');
+        actions.refreshGovernance();
+        break;
+      case 'election-created':
+        toast.success('New election created');
+        actions.refreshElections();
+        break;
+      case 'election-updated':
+      case 'election-completed':
+        actions.refreshElections();
+        break;
+      case 'member-added':
+        toast.success('Member added to organization');
+        actions.refreshAll(); // Refresh all to update members list
+        break;
+      case 'member-removed':
+        toast.success('Member removed from organization');
+        actions.refreshAll(); // Refresh all to update members list
+        break;
+      case 'member-invited':
+        toast.success(`${update.data.invitationCount || 1} invitation(s) sent`);
+        break;
+      case 'rule-proposal-created':
+      case 'rule-proposal-approved':
+        actions.refreshGovernance();
+        break;
+      default:
+        console.log('Unhandled organization update:', update.eventType);
+    }
+  }, [organization.id, actions]);
+
+  // Subscribe to organization WebSocket updates
+  useOrganizationWebSocket({
+    organizationId: organization.id,
+    userId: currentUser?.id || null,
+    authToken: localStorage.getItem('authToken'),
+    onOrganizationUpdate: handleOrganizationUpdate
+  });
 
   const handleUpdate = () => {
     // Refresh all data
@@ -42,7 +91,11 @@ export function OrganizationManagement({
       <ErrorBoundary>
         {/* Navigation Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-4 h-auto">
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-5 h-auto">
+            <TabsTrigger value="dashboard" className="gap-2">
+              <Building2 className="h-4 w-4" />
+              Dashboard
+            </TabsTrigger>
             <TabsTrigger value="governance" className="gap-2">
               <Vote className="h-4 w-4" />
               Governance
@@ -62,6 +115,23 @@ export function OrganizationManagement({
           </TabsList>
 
           {/* Tab Content */}
+
+          <TabsContent value="dashboard" className="mt-6">
+            <ErrorBoundary>
+              <DashboardTab
+                organization={organization}
+                currentUser={currentUser}
+                permissions={permissions}
+                governanceRules={data.governanceRules}
+                elections={data.elections}
+                documents={data.documents}
+                onCreateElection={actions.createElection}
+                onNavigateToDocuments={() => setActiveTab('documents')}
+                onNavigateToMembers={() => setActiveTab('members')}
+                onNavigateToGovernance={() => setActiveTab('governance')}
+              />
+            </ErrorBoundary>
+          </TabsContent>
 
           <TabsContent value="governance" className="mt-6">
             <ErrorBoundary>

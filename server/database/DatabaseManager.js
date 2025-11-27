@@ -2,6 +2,7 @@ const DatabaseConnection = require('./connection');
 const UserService = require('./services/UserService');
 const { hashPassword } = require('../middleware/auth');
 const demoUsers = require('../demoUsers');
+const { logger } = require('../middleware/logger');
 
 /**
  * Database Manager
@@ -24,8 +25,7 @@ class DatabaseManager {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`🔌 Database initialization attempt ${attempt}/${maxRetries}`);
-        console.log(`📍 Database path: ${this.config.DATABASE_URL}`);
+        logger.info('Database initialization attempt', { attempt, maxRetries, databasePath: this.config.DATABASE_URL });
 
         // Initialize connection
         this.db = await this.connection.initialize();
@@ -34,11 +34,11 @@ class DatabaseManager {
         await this.initializeSchema();
         await this.initializeDemoData();
 
-        console.log('✅ Database fully initialized');
+        logger.info('Database fully initialized');
         return this.db;
 
       } catch (error) {
-        console.error(`❌ Database initialization attempt ${attempt}/${maxRetries} failed:`, error);
+        logger.error('Database initialization attempt failed', { attempt, maxRetries, error: error.message, stack: error.stack });
         lastError = error;
 
         // Clean up failed connection
@@ -46,28 +46,28 @@ class DatabaseManager {
           try {
             await this.connection.close();
           } catch (closeError) {
-            console.warn('Warning: Failed to close failed database connection:', closeError);
+            logger.warn('Failed to close failed database connection', { error: closeError.message });
           }
           this.db = null;
         }
 
         // Don't retry in production for faster startup
         if (this.config.NODE_ENV === 'production') {
-          console.warn('⚠️  Production mode: Not retrying database initialization');
+          logger.warn('Production mode: Not retrying database initialization');
           break;
         }
 
         // Wait before retrying (exponential backoff)
         if (attempt < maxRetries) {
           const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
-          console.log(`⏳ Retrying in ${delay}ms...`);
+          logger.info('Retrying database initialization', { delay, attempt, maxRetries });
           await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
     }
 
     // If we get here, all retries failed
-    console.error('💥 All database initialization attempts failed');
+    logger.error('All database initialization attempts failed', { maxRetries, lastError: lastError?.message });
     throw new Error(`Database initialization failed after ${maxRetries} attempts: ${lastError?.message || 'Unknown error'}`);
   }
 
@@ -76,7 +76,7 @@ class DatabaseManager {
    * @returns {Promise<void>}
    */
   async initializeSchema() {
-    console.log('Initializing database schema...');
+    logger.info('Initializing database schema');
 
     try {
       const tables = this.getTableDefinitions();
@@ -88,13 +88,13 @@ class DatabaseManager {
       // Ensure role column exists
       await this.ensureRoleColumn();
 
-      console.log('✅ Database schema initialized');
+      logger.info('Database schema initialized');
     } catch (error) {
-      console.error('❌ Schema initialization failed:', error);
+      logger.error('Schema initialization failed', { error: error.message, stack: error.stack });
 
       // If we're in production and schema init fails, try to recreate database
       if (this.config.NODE_ENV === 'production') {
-        console.log('🔄 Production mode: Attempting database recreation due to schema incompatibility...');
+        logger.warn('Production mode: Attempting database recreation due to schema incompatibility');
         await this.recreateDatabase();
       } else {
         throw error;
@@ -107,14 +107,14 @@ class DatabaseManager {
    * @returns {Promise<void>}
    */
   async recreateDatabase() {
-    console.log('🗑️  Recreating database due to schema incompatibility...');
+    logger.warn('Recreating database due to schema incompatibility');
 
     try {
       // Close current connection
       if (this.db) {
         await new Promise((resolve) => {
           this.db.close((err) => {
-            if (err) console.warn('Warning: Error closing database:', err);
+            if (err) logger.warn('Error closing database', { error: err.message });
             resolve();
           });
         });
@@ -126,7 +126,7 @@ class DatabaseManager {
 
       if (fs.existsSync(dbPath)) {
         fs.unlinkSync(dbPath);
-        console.log('✅ Removed old database file');
+        logger.info('Removed old database file');
       }
 
       // Remove WAL and SHM files if they exist
@@ -136,17 +136,17 @@ class DatabaseManager {
       if (fs.existsSync(walFile)) fs.unlinkSync(walFile);
       if (fs.existsSync(shmFile)) fs.unlinkSync(shmFile);
 
-      console.log('🔄 Reinitializing database connection...');
+      logger.info('Reinitializing database connection');
 
       // Reinitialize connection and schema
       this.db = await this.connection.initialize();
       await this.initializeSchema();
       await this.initializeDemoData();
 
-      console.log('✅ Database recreated successfully');
+      logger.info('Database recreated successfully');
 
     } catch (error) {
-      console.error('❌ Database recreation failed:', error);
+      logger.error('Database recreation failed', { error: error.message, stack: error.stack });
       throw new Error(`Database recreation failed: ${error.message}`);
     }
   }
@@ -200,6 +200,8 @@ class DatabaseManager {
           default_voting_deadline_hours INTEGER DEFAULT 168,
           default_quorum_percentage REAL DEFAULT 0.5,
           document_proposal_period_days INTEGER DEFAULT 365,
+          threshold_calculation_method TEXT CHECK(threshold_calculation_method IN ('all_votes', 'all_members')) DEFAULT 'all_votes',
+          default_acceptance_threshold REAL DEFAULT 75.0,
           anonymous_voting_enabled BOOLEAN DEFAULT 1,
           vote_change_allowed BOOLEAN DEFAULT 0,
           representative_can_create_votes BOOLEAN DEFAULT 1,
@@ -242,9 +244,16 @@ class DatabaseManager {
             creator_ids TEXT, -- JSON array for shared docs
             organization_id TEXT, -- For organizational docs
             parent_id TEXT, -- For hierarchical document structure
-            status TEXT CHECK(status IN ('proposal', 'draft', 'agreed')) DEFAULT 'draft',
+            status TEXT CHECK(status IN ('proposal', 'draft', 'agreed', 'voting', 'rejected', 'expired')) DEFAULT 'draft',
             proposal_deadline DATETIME, -- Deadline for proposal period (default 1 year from creation, configurable via governance)
             voting_deadline DATETIME, -- Deadline for voting period
+            paragraph_proposals_cutoff DATETIME, -- When to disable new paragraph proposals
+            voting_started_at DATETIME, -- When voting period started
+            min_voters_required INTEGER DEFAULT 0, -- Minimum voters for quorum
+            adopted_at DATETIME, -- When document was adopted
+            deletion_proposed_at DATETIME, -- When deletion was proposed
+            deletion_proposed_by TEXT, -- Who proposed deletion
+            deletion_vote_deadline DATETIME, -- Deadline for deletion vote
             acceptance_threshold REAL DEFAULT 75.0 NOT NULL,
             voting_anonymous BOOLEAN DEFAULT 0 NOT NULL,
             voting_anonymity_locked BOOLEAN DEFAULT 0 NOT NULL,
@@ -376,6 +385,33 @@ class DatabaseManager {
           FOREIGN KEY (user_id) REFERENCES users(id),
           FOREIGN KEY (parent_id) REFERENCES comments(id)
         )`
+      },
+      {
+        name: 'document_deletion_votes',
+        sql: `CREATE TABLE IF NOT EXISTS document_deletion_votes (
+          id TEXT PRIMARY KEY,
+          document_id TEXT NOT NULL,
+          user_id TEXT NOT NULL,
+          vote TEXT CHECK(vote IN ('PRO', 'NEUTRAL', 'CONTRA')) NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
+          FOREIGN KEY (user_id) REFERENCES users(id),
+          UNIQUE(document_id, user_id)
+        )`
+      },
+      {
+        name: 'document_status_history',
+        sql: `CREATE TABLE IF NOT EXISTS document_status_history (
+          id TEXT PRIMARY KEY,
+          document_id TEXT NOT NULL,
+          old_status TEXT,
+          new_status TEXT NOT NULL,
+          changed_by TEXT,
+          change_reason TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
+          FOREIGN KEY (changed_by) REFERENCES users(id)
+        )`
       }
     ];
   }
@@ -388,9 +424,9 @@ class DatabaseManager {
   async executeTableCreation(table) {
     try {
       await this.connection.execute(table.sql);
-      console.log(`✅ Created table: ${table.name}`);
+      logger.debug('Created table', { tableName: table.name });
     } catch (error) {
-      console.error(`❌ Error creating table ${table.name}:`, error);
+      logger.error('Error creating table', { tableName: table.name, error: error.message, stack: error.stack });
       throw error;
     }
   }
@@ -402,11 +438,11 @@ class DatabaseManager {
   async ensureRoleColumn() {
     try {
       await this.connection.execute('ALTER TABLE users ADD COLUMN role TEXT DEFAULT \'user\'');
-      console.log('✅ Role column ensured');
+      logger.debug('Role column ensured');
     } catch (error) {
       // Ignore error if column already exists
       if (!error.message.includes('duplicate column name')) {
-        console.error('Error adding role column:', error);
+        logger.error('Error adding role column', { error: error.message, stack: error.stack });
         throw error;
       }
     }
@@ -417,7 +453,7 @@ class DatabaseManager {
    * @returns {Promise<void>}
    */
   async initializeDemoData() {
-    console.log('Creating demo users...');
+    logger.info('Creating demo users');
 
     const demoUsersData = [
       { ...demoUsers[0], password: 'SecurePass123!', role: 'user' },
@@ -432,7 +468,7 @@ class DatabaseManager {
         // Check if user already exists
         const existingUser = await UserService.findByEmail(this.db, userData.email);
         if (existingUser) {
-          console.log(`⚠️  Demo user ${userData.name} already exists, skipping`);
+          logger.debug('Demo user already exists, skipping', { userName: userData.name });
           continue;
         }
 
@@ -445,20 +481,20 @@ class DatabaseManager {
           role: userData.role
         });
 
-        console.log(`✅ Created demo user: ${userData.name} (${userData.role})`);
+        logger.debug('Created demo user', { userName: userData.name, role: userData.role });
       } catch (error) {
         // Handle unique constraint violations gracefully
         if (error.message && error.message.includes('UNIQUE constraint failed')) {
-          console.log(`⚠️  Demo user ${userData.name} already exists (constraint violation), skipping`);
+          logger.debug('Demo user already exists (constraint violation), skipping', { userName: userData.name });
         } else {
-          console.error(`❌ Error creating demo user ${userData.name}:`, error);
+          logger.error('Error creating demo user', { userName: userData.name, error: error.message, stack: error.stack });
           // Don't throw error for demo user creation failures - they're not critical
-          console.warn('⚠️  Continuing despite demo user creation error');
+          logger.warn('Continuing despite demo user creation error', { userName: userData.name });
         }
       }
     }
 
-    console.log('✅ Demo users created');
+    logger.info('Demo users created');
   }
 
   /**

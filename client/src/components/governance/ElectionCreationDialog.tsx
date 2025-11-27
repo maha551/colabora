@@ -8,13 +8,13 @@ import { Textarea } from '../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Calendar, Vote, Users, Clock, AlertTriangle, Info } from 'lucide-react';
-import { Organization, OrganizationGovernanceRules } from '../../types';
+import { Organization, OrganizationGovernanceRules, User } from '../../types';
 import { governanceApi } from '../../lib/api';
 import { toast } from 'sonner';
 
 interface ElectionCreationDialogProps {
   organization: Organization;
-  currentUser: any;
+  currentUser: User | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;

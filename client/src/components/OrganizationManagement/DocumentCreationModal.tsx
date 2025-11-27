@@ -51,9 +51,9 @@ export function DocumentCreationModal({
   useEffect(() => {
     if (isOpen && governanceRules) {
       // Initialize with organization's governance rules
-      setAcceptanceThreshold(75); // Default, can be customized
-      setVotingAnonymous(governanceRules.anonymousVotingEnabled);
-      setVoteChangeAllowed(governanceRules.voteChangeAllowed);
+      setAcceptanceThreshold(governanceRules.defaultAcceptanceThreshold || 75);
+      setVotingAnonymous(governanceRules.anonymousVotingEnabled ?? false);
+      setVoteChangeAllowed(governanceRules.voteChangeAllowed ?? true);
       setStructureProposalsEnabled(true); // Default to enabled
     } else if (isOpen && !governanceRules) {
       // Fallback defaults if no governance rules
@@ -93,9 +93,15 @@ export function DocumentCreationModal({
       toast.success('Document created successfully!');
       onSuccess();
       handleClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to create document:', error);
-      toast.error(error.message || 'Failed to create document. Please try again.');
+      if (error instanceof Error && 'details' in error) {
+        console.error('Error details:', (error as { details?: unknown }).details);
+      }
+      const errorMessage = error.details 
+        ? `Validation failed: ${JSON.stringify(error.details)}`
+        : (error.message || 'Failed to create document. Please try again.');
+      toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -162,7 +168,7 @@ export function DocumentCreationModal({
                   Document Options
                 </CardTitle>
                 <CardDescription>
-                  Configure voting and collaboration settings for this document. These settings cannot be changed after creation.
+                  These settings are determined by your organization's governance rules and cannot be changed. They ensure consistency across all organizational documents.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -182,9 +188,10 @@ export function DocumentCreationModal({
                     value={[acceptanceThreshold]}
                     onValueChange={(value) => setAcceptanceThreshold(value[0])}
                     className="w-full"
+                    disabled={true}
                   />
                   <p className="text-xs text-gray-500">
-                    Percentage of PRO votes required for proposals to be automatically accepted
+                    Percentage of PRO votes required for proposals to be automatically accepted (set by organization governance rules)
                   </p>
                 </div>
 
@@ -195,6 +202,7 @@ export function DocumentCreationModal({
                     value={votingAnonymous ? 'anonymous' : 'public'}
                     onValueChange={(value) => setVotingAnonymous(value === 'anonymous')}
                     className="flex flex-col space-y-2"
+                    disabled={true}
                   >
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="public" id="public-voting" />
@@ -209,11 +217,9 @@ export function DocumentCreationModal({
                       </Label>
                     </div>
                   </RadioGroup>
-                  {governanceRules && (
-                    <p className="text-xs text-blue-600">
-                      Organization default: {governanceRules.anonymousVotingEnabled ? 'Anonymous' : 'Public'}
-                    </p>
-                  )}
+                  <p className="text-xs text-gray-600 italic">
+                    Set by organization governance rules
+                  </p>
                 </div>
 
                 {/* Vote Flexibility */}
@@ -223,6 +229,7 @@ export function DocumentCreationModal({
                     value={voteChangeAllowed ? 'flexible' : 'locked'}
                     onValueChange={(value) => setVoteChangeAllowed(value === 'flexible')}
                     className="flex flex-col space-y-2"
+                    disabled={true}
                   >
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="flexible" id="flexible-votes" />
@@ -237,11 +244,9 @@ export function DocumentCreationModal({
                       </Label>
                     </div>
                   </RadioGroup>
-                  {governanceRules && (
-                    <p className="text-xs text-blue-600">
-                      Organization default: {governanceRules.voteChangeAllowed ? 'Flexible' : 'Locked'}
-                    </p>
-                  )}
+                  <p className="text-xs text-gray-600 italic">
+                    Set by organization governance rules
+                  </p>
                 </div>
 
                 {/* Structure Proposals */}
@@ -258,6 +263,7 @@ export function DocumentCreationModal({
                     id="structure-proposals"
                     checked={structureProposalsEnabled}
                     onCheckedChange={setStructureProposalsEnabled}
+                    disabled={true}
                   />
                 </div>
               </CardContent>
@@ -271,13 +277,13 @@ export function DocumentCreationModal({
                   Organizational Document
                 </h4>
                 <p className="text-sm text-blue-700 mb-2">
-                  This document will be owned by the entire organization and follow the governance rules established in the Governance tab.
+                  This document will be owned by the entire organization and will use the governance rules established in the Governance tab. All document settings are automatically set from these rules and cannot be customized per document.
                 </p>
                 <div className="text-xs text-blue-600 space-y-1">
                   <p>• All active organization members will be included as collaborators</p>
                   <p>• Document will be created in proposal status and require member voting for approval</p>
                   {parentId && <p>• Document will be created as a child of the selected parent document</p>}
-                  <p>• Settings above will be locked after document creation</p>
+                  <p>• Settings are determined by organization governance rules and cannot be customized</p>
                 </div>
               </CardContent>
             </Card>

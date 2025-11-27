@@ -298,7 +298,7 @@ class HealthCheckService {
 
   // Deployment validation check
   async validateDeployment() {
-    console.log('🔍 Validating deployment readiness...');
+    logger.info('Validating deployment readiness');
 
     const validation = {
       timestamp: new Date().toISOString(),

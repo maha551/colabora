@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const config = require('../config');
+const { logger } = require('./logger');
 
 // JWT token generation
 function generateToken(user) {
@@ -30,16 +31,15 @@ function authenticateToken(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, config.JWT_CONFIG.secret, {
-      // Temporarily disable strict issuer/audience checking to fix auth issues
-      // issuer: config.JWT_CONFIG.issuer,
-      // audience: config.JWT_CONFIG.audience,
+      issuer: config.JWT_CONFIG.issuer,
+      audience: config.JWT_CONFIG.audience,
       ignoreExpiration: false
     });
 
     // Fetch user role from database
     req.app.locals.db.get('SELECT role FROM users WHERE id = ?', [decoded.userId], (err, row) => {
       if (err) {
-        console.error('Error fetching user role:', err);
+        logger.error('Error fetching user role during authentication', { userId: decoded.userId, error: err.message });
         return res.status(500).json({ error: 'Authentication failed' });
       }
 
@@ -57,7 +57,7 @@ function authenticateToken(req, res, next) {
       next();
     });
   } catch (error) {
-    console.error('JWT verification failed:', error.message);
+    logger.warn('JWT verification failed', { error: error.message });
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
 }
@@ -108,7 +108,7 @@ function requireAdmin(req, res, next) {
   // Check admin role from database (not from JWT token)
   req.app.locals.db.get('SELECT role FROM users WHERE id = ?', [req.user.id], (err, row) => {
     if (err) {
-      console.error('Error checking admin role:', err);
+      logger.error('Error checking admin role', { userId: req.user.id, error: err.message });
       return res.status(500).json({ error: 'Authorization check failed' });
     }
 
@@ -130,8 +130,6 @@ function requireDocumentAccess(req, res, next) {
     return res.status(400).json({ error: 'Document ID is required' });
   }
 
-  console.log(`[ACCESS CHECK] User ${userId} accessing document ${documentId}`);
-
   const query = `
     SELECT d.id, d.owner_id FROM documents d
     LEFT JOIN document_collaborators dc ON d.id = dc.document_id
@@ -140,16 +138,16 @@ function requireDocumentAccess(req, res, next) {
 
   db.get(query, [documentId, userId, userId], (err, document) => {
     if (err) {
-      console.error('Error checking document access:', err);
+      logger.error('Error checking document access', { userId, documentId, error: err.message });
       return res.status(500).json({ error: 'Access check failed' });
     }
 
-    console.log(`[ACCESS CHECK] Result for user ${userId}, document ${documentId}:`, document ? 'GRANTED' : 'DENIED');
-
     if (!document) {
-      console.log(`[ACCESS DENIED] User ${userId} cannot access document ${documentId}`);
+      logger.warn('Document access denied', { userId, documentId });
       return res.status(403).json({ error: 'Access denied to this document' });
     }
+
+    logger.debug('Document access granted', { userId, documentId });
 
     next();
   });

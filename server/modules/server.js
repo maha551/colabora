@@ -7,7 +7,7 @@ const path = require('path');
 const rateLimit = require('express-rate-limit');
 const { v4: uuidv4 } = require('uuid');
 const { requireAuth } = require('../middleware/auth');
-const { requestLogger, errorLogger, securityLogger } = require('../middleware/logger');
+const { requestLogger, errorLogger, securityLogger, logger } = require('../middleware/logger');
 const { metricsCollector, requestMetrics } = require('../middleware/monitoring');
 const HealthCheckService = require('./health');
 
@@ -28,6 +28,8 @@ class ServerManager {
     // Initialize health service (will be updated with DB later)
     this.healthService = new HealthCheckService(this.config, db);
 
+    // Setup CORS first (before rate limiting) to handle preflight requests
+    this.setupCORS();
     this.setupSecurity();
     this.setupMiddleware();
     this.setupBasicRoutes(); // Health endpoints
@@ -74,7 +76,9 @@ class ServerManager {
         res.status(429).json({
           error: 'Too many authentication attempts, please try again later.'
         });
-      }
+      },
+      // Skip OPTIONS requests (CORS preflight) - must not be rate limited
+      skip: (req) => req.method === 'OPTIONS'
     });
 
     const apiLimiter = rateLimit({
@@ -100,6 +104,18 @@ class ServerManager {
         res.status(429).json({
           error: 'Too many requests from this IP, please try again later.'
         });
+      },
+      // Skip rate limiting for:
+      // 1. OPTIONS requests (CORS preflight) - must not be rate limited
+      // 2. Vote endpoints (they're user actions, not automated)
+      skip: (req) => {
+        // Always skip OPTIONS requests (CORS preflight)
+        if (req.method === 'OPTIONS') {
+          return true;
+        }
+        // Skip vote endpoints
+        const path = req.path || '';
+        return path.includes('/vote') && req.method === 'POST';
       }
     });
 
@@ -109,23 +125,42 @@ class ServerManager {
     this.app.use('/api', apiLimiter);
   }
 
-  setupMiddleware() {
-    // CORS configuration
+  setupCORS() {
+    // CORS configuration - must be before rate limiting to handle preflight requests
     this.app.use(cors({
       origin: (origin, callback) => {
-        // Allow requests with no origin (mobile apps, etc.)
+        // Allow requests with no origin (mobile apps, Postman, etc.)
         if (!origin) return callback(null, true);
 
-        if (this.config.ALLOWED_ORIGINS.includes(origin)) {
+        // In development, allow all localhost origins (any port)
+        if (this.config.NODE_ENV === 'development') {
+          if (origin.startsWith('http://localhost:') || 
+              origin.startsWith('http://127.0.0.1:') ||
+              origin === 'http://localhost' ||
+              origin === 'http://127.0.0.1') {
+            return callback(null, true);
+          }
+        }
+
+        // Check allowed origins list
+        if (this.config.ALLOWED_ORIGINS && this.config.ALLOWED_ORIGINS.includes(origin)) {
           return callback(null, true);
         }
 
-        return callback(new Error('Not allowed by CORS'));
+        // Log the blocked origin for debugging
+        logger.warn('CORS blocked origin', { origin, allowedOrigins: this.config.ALLOWED_ORIGINS ? this.config.ALLOWED_ORIGINS.join(', ') : 'none' });
+        return callback(new Error(`Not allowed by CORS: ${origin}`));
       },
       credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+      exposedHeaders: ['Content-Type', 'Authorization'],
+      preflightContinue: false,
+      optionsSuccessStatus: 204
     }));
+  }
+
+  setupMiddleware() {
 
     // Body parsing
     this.app.use(bodyParser.json({ limit: '10mb' }));
@@ -258,7 +293,7 @@ class ServerManager {
     return new Promise((resolve) => {
       if (this.server) {
         this.server.close(() => {
-          console.log('✅ Server shutdown complete');
+          logger.info('Server shutdown complete');
           this.server = null;
           this.serverStarted = false;
           resolve();
@@ -280,7 +315,7 @@ class ServerManager {
       this.serverStartTimeout = null;
     }
 
-    console.log('Starting HTTP server...');
+    logger.info('Starting HTTP server');
 
     // Serve static files from client build in production
     if (this.config.NODE_ENV === 'production') {
@@ -300,37 +335,46 @@ class ServerManager {
 
     // Graceful shutdown handling
     const gracefulShutdown = (signal) => {
-      console.log(`\n🛑 Received ${signal}, shutting down gracefully...`);
+      logger.info('Received shutdown signal, shutting down gracefully', { signal });
       metricsCollector.shutdown();
       if (this.server) {
         this.server.close(() => {
-          console.log('✅ Server shutdown complete');
+          logger.info('Server shutdown complete');
           process.exit(0);
         });
       }
 
       // Force shutdown after 10 seconds
       setTimeout(() => {
-        console.error('❌ Forced shutdown after timeout');
+        logger.error('Forced shutdown after timeout');
         process.exit(1);
       }, 10000);
     };
 
     // Start server
-    console.log(`🔄 Attempting to start server on 0.0.0.0:${port}...`);
+    logger.info('Attempting to start server', { port, host: '0.0.0.0' });
     this.server = this.app.listen(port, '0.0.0.0', () => {
-      console.log(`🚀 Server successfully started on 0.0.0.0:${port}`);
-      console.log(`🌍 Environment: ${this.config.NODE_ENV}`);
-      console.log(`🔒 Security: ${this.config.NODE_ENV === 'production' ? 'Production mode enabled' : 'Development mode - NOT SECURE FOR PRODUCTION'}`);
-      console.log(`📊 Rate limiting: ${this.config.RATE_LIMIT_MAX_REQUESTS} API requests per ${this.config.RATE_LIMIT_WINDOW_MS / 1000}s, 50 auth requests per 15min`);
-      console.log(`📈 Monitoring: Active - collecting metrics every 60s`);
-      console.log('✅ Server initialization complete - ready to accept connections');
+      logger.info('Server successfully started', { 
+        port, 
+        host: '0.0.0.0',
+        environment: this.config.NODE_ENV,
+        security: this.config.NODE_ENV === 'production' ? 'Production mode enabled' : 'Development mode - NOT SECURE FOR PRODUCTION',
+        rateLimit: `${this.config.RATE_LIMIT_MAX_REQUESTS} API requests per ${this.config.RATE_LIMIT_WINDOW_MS / 1000}s, 50 auth requests per 15min`,
+        monitoring: 'Active - collecting metrics every 60s'
+      });
+      
+      // Initialize WebSocket server for real-time updates
+      const webSocketManager = require('./websocket');
+      webSocketManager.initialize(this.server);
+      logger.info('WebSocket server initialized - real-time updates enabled');
+      
+      logger.info('Server initialization complete - ready to accept connections');
 
       if (callback) callback();
     });
 
     this.server.on('error', (error) => {
-      console.error('❌ Server failed to start:', error.message);
+      logger.error('Server failed to start', { error: error.message, stack: error.stack, port });
       process.exit(1);
     });
 

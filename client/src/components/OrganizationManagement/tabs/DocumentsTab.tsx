@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { Button } from '../../ui/button';
-import { Badge } from '../../ui/badge';
 import { Input } from '../../ui/input';
 import { Textarea } from '../../ui/textarea';
 import { Label } from '../../ui/label';
@@ -19,7 +18,7 @@ interface DocumentsTabProps {
   permissions: OrganizationPermissions;
   governanceRules: OrganizationGovernanceRules | null;
   documents: Document[];
-  policyVotes: any[];
+  policyVotes: unknown[]; // Deprecated - kept for backwards compatibility
   loading: boolean;
   error?: string | null;
   onCreateDocument: (title: string, description?: string) => Promise<void>;
@@ -57,9 +56,9 @@ export function DocumentsTab({
       await documentsApi.voteOnDocument(documentId, voteType);
       toast.success(`Vote recorded: ${voteType}`);
       await onRefreshDocuments();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to cast vote:', error);
-      const errorMessage = error.message || 'Failed to cast vote';
+      const errorMessage = error instanceof Error ? error.message : 'Failed to cast vote';
       toast.error(errorMessage);
     }
   };

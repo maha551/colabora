@@ -2,12 +2,13 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { metricsCollector } = require('../middleware/monitoring');
 const { requireAuth, requireDocumentAccess } = require('../middleware/auth');
+const { logger } = require('../middleware/logger');
 
 const router = express.Router({ mergeParams: true });
 
 // Get all structure proposals for a document
 router.get('/', requireAuth, requireDocumentAccess, (req, res) => {
-  console.log('GET /structure-proposals called for document:', req.params.documentId);
+  logger.debug('GET /structure-proposals called', { documentId: req.params.documentId });
   const db = req.app.locals.db;
   const documentId = req.params.documentId;
 
@@ -21,18 +22,18 @@ router.get('/', requireAuth, requireDocumentAccess, (req, res) => {
     ORDER BY sp.created_at DESC
   `;
 
-  console.log('Executing query:', query, 'with params:', [documentId]);
+  logger.debug('Executing structure proposals query', { documentId });
 
   db.all(query, [documentId], (err, structureProposals) => {
-    console.log('Query result - err:', err, 'rows:', structureProposals ? structureProposals.length : 'undefined');
+    logger.debug('Structure proposals query result', { documentId, error: err?.message, count: structureProposals ? structureProposals.length : 0 });
 
     if (err) {
       // If table doesn't exist, return empty array
       if (err.code === 'SQLITE_ERROR' && err.message.includes('no such table')) {
-        console.log('Structure proposals table does not exist yet, returning empty array');
+        logger.debug('Structure proposals table does not exist yet, returning empty array', { documentId });
         return res.json({ structureProposals: [] });
       }
-      console.error('Error fetching structure proposals:', err);
+      logger.error('Error fetching structure proposals', { error: err.message, documentId });
       return res.status(500).json({ error: 'Failed to fetch structure proposals' });
     }
 
@@ -78,7 +79,7 @@ router.get('/', requireAuth, requireDocumentAccess, (req, res) => {
           new Promise(resolveOps => {
             db.all(operationsQuery, [sp.id], (err, operations) => {
               if (err) {
-                console.error('Error fetching operations:', err);
+                logger.error('Error fetching operations', { error: err.message, proposalId: proposal.id, documentId });
                 return resolveOps([]);
               }
               resolveOps(operations || []);
@@ -91,7 +92,7 @@ router.get('/', requireAuth, requireDocumentAccess, (req, res) => {
                 if (err.code === 'SQLITE_ERROR' && err.message.includes('no such table')) {
                   return resolveVotes([]);
                 }
-                console.error('Error fetching votes:', err);
+                logger.error('Error fetching votes', { error: err.message, proposalId: proposal.id, documentId });
                 return resolveVotes([]);
               }
               const enrichedVotes = (votes || []).map(vote => {
@@ -122,7 +123,7 @@ router.get('/', requireAuth, requireDocumentAccess, (req, res) => {
                 if (err.code === 'SQLITE_ERROR' && err.message.includes('no such table')) {
                   return resolveComments([]);
                 }
-                console.error('Error fetching comments:', err);
+                logger.error('Error fetching comments', { error: err.message, proposalId: proposal.id, documentId });
                 return resolveComments([]);
               }
               const enrichedComments = (comments || []).map(comment => ({
@@ -161,7 +162,7 @@ router.get('/', requireAuth, requireDocumentAccess, (req, res) => {
     };
 
       Promise.all(structureProposals.map(enrichStructureProposal)).then(enrichedProposals => {
-        console.log('Sending response with', enrichedProposals.length, 'structure proposals');
+        logger.debug('Sending structure proposals response', { documentId, count: enrichedProposals.length });
         res.json({ structureProposals: enrichedProposals });
       });
     });
@@ -190,10 +191,10 @@ router.post('/', requireAuth, requireDocumentAccess, (req, res) => {
       if (err) {
         // If table doesn't exist, allow creation (table will be created on first use)
         if (err.code === 'SQLITE_ERROR' && err.message.includes('no such table')) {
-          console.log('Structure proposals table does not exist yet, allowing creation');
+          logger.debug('Structure proposals table does not exist yet, allowing creation', { documentId });
           // Continue to create the proposal (table will be auto-created)
         } else {
-          console.error('Error checking active proposals:', err);
+          logger.error('Error checking active proposals', { error: err.message, documentId });
           return res.status(500).json({ error: 'Failed to check active proposals' });
         }
       } else if (activeProposal) {
@@ -217,7 +218,7 @@ router.post('/', requireAuth, requireDocumentAccess, (req, res) => {
         VALUES (?, ?, ?, ?, ?)
       `, [structureProposalId, documentId, userId, title, description || null], function(err) {
         if (err) {
-          console.error('Error creating structure proposal:', err);
+          logger.error('Error creating structure proposal', { error: err.message, documentId, userId: req.user.id });
           return res.status(500).json({ error: 'Failed to create structure proposal' });
         }
 
@@ -272,7 +273,7 @@ router.post('/', requireAuth, requireDocumentAccess, (req, res) => {
             operationData ? JSON.stringify(operationData) : null
           ], (opErr) => {
             if (opErr) {
-              console.error('Error inserting operation:', opErr);
+              logger.error('Error inserting operation', { error: opErr.message, proposalId, operationType: op.operationType, documentId });
               return res.status(500).json({ error: 'Failed to create structure proposal operations' });
             }
 
@@ -322,7 +323,7 @@ router.get('/:proposalId', requireAuth, requireDocumentAccess, (req, res) => {
 
   db.get(query, [proposalId, documentId], (err, structureProposal) => {
     if (err) {
-      console.error('Error fetching structure proposal:', err);
+      logger.error('Error fetching structure proposal', { error: err.message, proposalId: req.params.proposalId, documentId });
       return res.status(500).json({ error: 'Failed to fetch structure proposal' });
     }
 
@@ -425,7 +426,7 @@ router.post('/:proposalId/vote', requireAuth, requireDocumentAccess, (req, res) 
 
   db.get(proposalQuery, [proposalId, documentId], (err, proposal) => {
     if (err) {
-      console.error('Error fetching structure proposal:', err);
+      logger.error('Error fetching structure proposal', { error: err.message, proposalId: req.params.proposalId, documentId });
       return res.status(500).json({ error: 'Failed to check structure proposal' });
     }
 
@@ -444,7 +445,7 @@ router.post('/:proposalId/vote', requireAuth, requireDocumentAccess, (req, res) 
       VALUES (?, ?, ?, ?)
     `, [voteId, proposalId, userId, vote], function(err) {
       if (err) {
-        console.error('Error casting vote:', err);
+        logger.error('Error casting vote', { error: err.message, proposalId: req.params.proposalId, documentId, userId: req.user.id });
         return res.status(500).json({ error: 'Failed to cast vote' });
       }
 
@@ -465,7 +466,7 @@ router.post('/:proposalId/apply', requireAuth, requireDocumentAccess, (req, res)
   // Check if user is document owner (only owner can apply)
   db.get('SELECT owner_id FROM documents WHERE id = ?', [documentId], (err, document) => {
     if (err) {
-      console.error('Error checking document ownership:', err);
+      logger.error('Error checking document ownership', { error: err.message, documentId, userId: req.user.id });
       return res.status(500).json({ error: 'Failed to check document ownership' });
     }
 
@@ -485,7 +486,7 @@ router.post('/:proposalId/apply', requireAuth, requireDocumentAccess, (req, res)
 
     db.get(proposalQuery, [proposalId, documentId], (err, proposal) => {
       if (err) {
-        console.error('Error fetching structure proposal:', err);
+        logger.error('Error fetching structure proposal', { error: err.message, proposalId: req.params.proposalId, documentId });
         return res.status(500).json({ error: 'Failed to check structure proposal' });
       }
 
@@ -513,7 +514,7 @@ router.post('/:proposalId/apply', requireAuth, requireDocumentAccess, (req, res)
           WHERE id = ?
         `, [proposalId], (updateErr) => {
           if (updateErr) {
-            console.error('Error marking proposal as applied:', updateErr);
+            logger.error('Error marking proposal as applied', { error: updateErr.message, proposalId: req.params.proposalId, documentId });
             return res.status(500).json({ error: 'Failed to mark proposal as applied' });
           }
 
@@ -548,7 +549,7 @@ router.delete('/:proposalId', requireAuth, requireDocumentAccess, (req, res) => 
       if (err.code === 'SQLITE_ERROR' && err.message.includes('no such table')) {
         return res.status(404).json({ error: 'Structure proposal not found' });
       }
-      console.error('Error checking proposal creator:', err);
+      logger.error('Error checking proposal creator', { error: err.message, proposalId: req.params.proposalId, documentId });
       return res.status(500).json({ error: 'Failed to check proposal ownership' });
     }
 
@@ -573,25 +574,25 @@ router.delete('/:proposalId', requireAuth, requireDocumentAccess, (req, res) => 
     // Execute in sequence to avoid foreign key issues
     db.run(deleteOperations, [proposalId], (opErr) => {
       if (opErr && !opErr.message.includes('no such table')) {
-        console.error('Error deleting operations:', opErr);
+        logger.error('Error deleting operations', { error: opErr.message, proposalId: req.params.proposalId, documentId });
         return res.status(500).json({ error: 'Failed to delete proposal operations' });
       }
 
       db.run(deleteVotes, [proposalId], (voteErr) => {
         if (voteErr && !voteErr.message.includes('no such table')) {
-          console.error('Error deleting votes:', voteErr);
+          logger.error('Error deleting votes', { error: voteErr.message, proposalId: req.params.proposalId, documentId });
           return res.status(500).json({ error: 'Failed to delete proposal votes' });
         }
 
         db.run(deleteComments, [proposalId], (commentErr) => {
           if (commentErr && !commentErr.message.includes('no such table')) {
-            console.error('Error deleting comments:', commentErr);
+            logger.error('Error deleting comments', { error: commentErr.message, proposalId: req.params.proposalId, documentId });
             return res.status(500).json({ error: 'Failed to delete proposal comments' });
           }
 
           db.run(deleteProposal, [proposalId], (propErr) => {
             if (propErr) {
-              console.error('Error deleting proposal:', propErr);
+              logger.error('Error deleting proposal', { error: propErr.message, proposalId: req.params.proposalId, documentId });
               return res.status(500).json({ error: 'Failed to delete proposal' });
             }
 
@@ -667,7 +668,7 @@ router.post('/:proposalId/comments', requireAuth, requireDocumentAccess, (req, r
     WHERE id = ? AND document_id = ?
   `, [proposalId, documentId], (err, proposal) => {
     if (err) {
-      console.error('Error checking structure proposal:', err);
+      logger.error('Error checking structure proposal', { error: err.message, proposalId: req.params.proposalId, documentId });
       return res.status(500).json({ error: 'Failed to check structure proposal' });
     }
 
@@ -681,7 +682,7 @@ router.post('/:proposalId/comments', requireAuth, requireDocumentAccess, (req, r
       VALUES (?, ?, ?, ?, ?)
     `, [commentId, proposalId, userId, text.trim(), parentId || null], function(err) {
       if (err) {
-        console.error('Error adding comment:', err);
+        logger.error('Error adding comment', { error: err.message, proposalId: req.params.proposalId, documentId, userId: req.user.id });
         return res.status(500).json({ error: 'Failed to add comment' });
       }
 
@@ -695,7 +696,7 @@ function checkAndUpdateStructureProposalApproval(db, documentId, proposalId, cal
   // Get document threshold
   db.get('SELECT acceptance_threshold FROM documents WHERE id = ?', [documentId], (err, document) => {
     if (err) {
-      console.error('Error fetching document threshold:', err);
+      logger.error('Error fetching document threshold', { error: err.message, documentId });
       return callback();
     }
 
@@ -712,7 +713,7 @@ function checkAndUpdateStructureProposalApproval(db, documentId, proposalId, cal
 
     db.get(collaboratorQuery, [documentId, documentId], (err, result) => {
       if (err) {
-        console.error('Error counting collaborators:', err);
+        logger.error('Error counting collaborators', { error: err.message, documentId });
         return callback();
       }
 
@@ -726,7 +727,7 @@ function checkAndUpdateStructureProposalApproval(db, documentId, proposalId, cal
 
       db.get(proVoteQuery, [proposalId], (err, voteResult) => {
         if (err) {
-          console.error('Error counting PRO votes:', err);
+          logger.error('Error counting PRO votes', { error: err.message, proposalId, documentId });
           return callback();
         }
 
@@ -740,7 +741,7 @@ function checkAndUpdateStructureProposalApproval(db, documentId, proposalId, cal
             WHERE id = ?
           `, [proposalId], (updateErr) => {
             if (updateErr) {
-              console.error('Error updating proposal approval:', updateErr);
+              logger.error('Error updating proposal approval', { error: updateErr.message, proposalId, documentId });
             }
             callback();
           });
@@ -764,7 +765,7 @@ function createStructureVersion(db, documentId, proposalId, userId, operations, 
 
   db.all(structureQuery, [documentId], (err, paragraphs) => {
     if (err) {
-      console.error('Error fetching current structure:', err);
+      logger.error('Error fetching current structure', { error: err.message, documentId });
       return callback(err);
     }
 
@@ -782,7 +783,7 @@ function createStructureVersion(db, documentId, proposalId, userId, operations, 
     db.get('SELECT MAX(version_number) as max_version FROM document_structure_versions WHERE document_id = ?',
       [documentId], (verErr, result) => {
       if (verErr) {
-        console.error('Error getting version number:', verErr);
+        logger.error('Error getting version number', { error: verErr.message, documentId });
         return callback(verErr);
       }
 
@@ -804,14 +805,14 @@ function createStructureVersion(db, documentId, proposalId, userId, operations, 
         proposalId
       ], function(versionErr) {
         if (versionErr) {
-          console.error('Error creating structure version:', versionErr);
+          logger.error('Error creating structure version', { error: versionErr.message, documentId });
           return callback(versionErr);
         }
 
         // Create detailed change log for each operation
         createChangeLog(db, documentId, versionId, operations, (logErr) => {
           if (logErr) {
-            console.error('Error creating change log:', logErr);
+            logger.error('Error creating change log', { error: logErr.message, documentId });
             // Don't fail the whole operation for logging issues
           }
           callback();
@@ -910,7 +911,7 @@ function createChangeLog(db, documentId, versionId, operations, callback) {
         JSON.stringify(metadata)
       ], (logErr) => {
         if (logErr) {
-          console.error('Error inserting change log:', logErr);
+          logger.error('Error inserting change log', { error: logErr.message, documentId, changeId: change.id });
         }
 
         completed++;
@@ -944,7 +945,7 @@ function applyStructureProposal(db, documentId, proposalId, userId, callback) {
 
   db.all(operationsQuery, [proposalId], (err, operations) => {
     if (err) {
-      console.error('Error fetching operations:', err);
+      logger.error('Error fetching operations', { error: err.message, proposalId: req.params.proposalId, documentId });
       return callback(new Error('Failed to fetch operations'));
     }
 
@@ -955,14 +956,14 @@ function applyStructureProposal(db, documentId, proposalId, userId, callback) {
     // Start transaction for all operations
     db.run('BEGIN TRANSACTION', (beginErr) => {
       if (beginErr) {
-        console.error('Error starting transaction:', beginErr);
+        logger.error('Error starting transaction', { error: beginErr.message, proposalId: req.params.proposalId, documentId });
         return callback(new Error('Failed to start database transaction'));
       }
 
       // Create structure version snapshot BEFORE applying changes
       createStructureVersion(db, documentId, proposalId, userId, operations, (versionErr) => {
         if (versionErr) {
-          console.error('Error creating structure version:', versionErr);
+          logger.error('Error creating structure version', { error: versionErr.message, documentId });
           // Continue with applying changes even if versioning fails
         }
 
@@ -972,14 +973,14 @@ function applyStructureProposal(db, documentId, proposalId, userId, callback) {
 
         if (total === 0) {
           // No operations to execute, commit transaction
-          console.log('No operations to execute, finalizing proposal');
+          logger.debug('No operations to execute, finalizing proposal', { proposalId: req.params.proposalId, documentId });
           // Commit transaction after all operations complete
           db.run('COMMIT', (commitErr) => {
             if (commitErr) {
-              console.error('Error committing transaction:', commitErr);
+              logger.error('Error committing transaction', { error: commitErr.message, proposalId: req.params.proposalId, documentId });
               return callback(new Error('Failed to commit transaction'));
             }
-            console.log('Successfully applied 0 structure operations');
+            logger.info('Successfully applied 0 structure operations', { proposalId: req.params.proposalId, documentId });
             callback(); // All operations completed successfully
           });
           return;
@@ -988,12 +989,12 @@ function applyStructureProposal(db, documentId, proposalId, userId, callback) {
         const processNextOperation = () => {
           if (operationIndex >= total) {
             // All operations completed successfully
-            console.log('All operations completed, finalizing proposal');
+            logger.debug('All operations completed, finalizing proposal', { proposalId: req.params.proposalId, documentId, operationCount: total });
 
             // After all operations are applied, invalidate affected paragraph proposals
             invalidateAffectedProposals(db, documentId, operations, (invalidateErr) => {
               if (invalidateErr) {
-                console.error('Error invalidating affected proposals:', invalidateErr);
+                logger.error('Error invalidating affected proposals', { error: invalidateErr.message, proposalId: req.params.proposalId, documentId });
                 // Don't fail the whole operation for this
               }
 
@@ -1004,7 +1005,7 @@ function applyStructureProposal(db, documentId, proposalId, userId, callback) {
                 ORDER BY order_index ASC, updated_at ASC
               `, [documentId], (orderErr, paragraphs) => {
                 if (orderErr) {
-                  console.error('Error fetching paragraphs for reordering:', orderErr);
+                  logger.error('Error fetching paragraphs for reordering', { error: orderErr.message, documentId });
                   // Continue with commit even if reordering fails
                 } else {
                   // Update order_index to be sequential (0, 1, 2, ...)
@@ -1014,16 +1015,16 @@ function applyStructureProposal(db, documentId, proposalId, userId, callback) {
                       WHERE id = ? AND document_id = ?
                     `, [index, para.id, documentId]);
                   });
-                  console.log(`Renormalized order_index for ${paragraphs.length} paragraphs`);
+                  logger.debug('Renormalized order_index for paragraphs', { documentId, paragraphCount: paragraphs.length });
                 }
 
                 // Commit transaction after all operations complete
                 db.run('COMMIT', (commitErr) => {
                   if (commitErr) {
-                    console.error('Error committing transaction:', commitErr);
+                    logger.error('Error committing transaction', { error: commitErr.message, proposalId: req.params.proposalId, documentId });
                     return callback(new Error('Failed to commit transaction'));
                   }
-                  console.log(`Successfully applied ${total} structure operations`);
+                  logger.info('Successfully applied structure operations', { proposalId: req.params.proposalId, documentId, operationCount: total });
                   callback(); // All operations completed successfully
                 });
               });
@@ -1032,15 +1033,15 @@ function applyStructureProposal(db, documentId, proposalId, userId, callback) {
           }
 
           const operation = operations[operationIndex];
-          console.log(`Executing operation ${operationIndex + 1}/${total}: ${operation.operation_type || operation.operationType}`);
+          logger.debug('Executing structure operation', { operationIndex: operationIndex + 1, total, operationType: operation.operation_type || operation.operationType, proposalId: req.params.proposalId, documentId });
 
           executeOperation(db, documentId, operation, (opErr) => {
             if (opErr) {
-              console.error(`Operation ${operationIndex + 1} failed:`, opErr);
+              logger.error('Operation failed', { error: opErr.message, operationIndex: operationIndex + 1, total, operationType: operation.operation_type || operation.operationType, proposalId: req.params.proposalId, documentId });
               // Rollback transaction on error
               db.run('ROLLBACK', (rollbackErr) => {
                 if (rollbackErr) {
-                  console.error('Error rolling back transaction:', rollbackErr);
+                  logger.error('Error rolling back transaction', { error: rollbackErr.message, proposalId: req.params.proposalId, documentId });
                 }
                 return callback(opErr);
               });
@@ -1084,21 +1085,21 @@ function invalidateAffectedProposals(db, documentId, operations, callback) {
 
   // Mark proposals for affected paragraphs as invalidated (we'll add an invalidated flag to proposals table)
   // For now, we'll just log this - in a real implementation, you might want to add an invalidated column
-  console.log('Invalidating proposals for paragraphs:', idsList);
+  logger.debug('Invalidating proposals for paragraphs', { paragraphIds: idsList, documentId });
 
   // Check if proposals table has an invalidated column, if not, we'll skip this for now
   db.all(`
     PRAGMA table_info(proposals)
   `, (err, columns) => {
     if (err) {
-      console.error('Error checking proposals table schema:', err);
+      logger.error('Error checking proposals table schema', { error: err.message, documentId });
       return callback();
     }
 
     const hasInvalidatedColumn = columns.some(col => col.name === 'invalidated');
 
     if (!hasInvalidatedColumn) {
-      console.log('Proposals table does not have invalidated column, skipping invalidation');
+      logger.debug('Proposals table does not have invalidated column, skipping invalidation', { documentId });
       return callback();
     }
 
@@ -1108,11 +1109,11 @@ function invalidateAffectedProposals(db, documentId, operations, callback) {
       WHERE paragraph_id IN (${placeholders})
     `, idsList, (updateErr) => {
       if (updateErr) {
-        console.error('Error invalidating proposals:', updateErr);
+        logger.error('Error invalidating proposals', { error: updateErr.message, paragraphIds: idsList, documentId });
         return callback(updateErr);
       }
 
-      console.log(`Invalidated proposals for ${idsList.length} affected paragraphs`);
+      logger.debug('Invalidated proposals for affected paragraphs', { paragraphCount: idsList.length, documentId });
       callback();
     });
   });
@@ -1227,7 +1228,7 @@ function executeOperation(db, documentId, operation, callback) {
               WHERE id = ? AND document_id = ?
             `, [sourceId, documentId], (sourceErr) => {
               if (sourceErr) {
-                console.error('Error updating source paragraph:', sourceErr);
+                logger.error('Error updating source paragraph', { error: sourceErr.message, paragraphId: sourceParagraphId, documentId });
                 return callback(sourceErr);
               }
 

@@ -1,13 +1,7 @@
 const express = require('express');
+const { requireAuth } = require('../middleware/auth');
+const { logger } = require('../middleware/logger');
 const router = express.Router();
-
-// Middleware to check authentication
-const requireAuth = (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  next();
-};
 
 // GET /api/debated-proposals - Get most debated proposals for user's documents
 router.get('/', requireAuth, async (req, res) => {
@@ -39,7 +33,7 @@ router.get('/', requireAuth, async (req, res) => {
     res.json({ proposals: debatedProposals.slice(0, 10) });
 
   } catch (error) {
-    console.error('Error in debated proposals API:', error);
+    logger.error('Error in debated proposals API', { error: error.message, stack: error.stack, userId });
     res.status(500).json({ error: 'Failed to fetch debated proposals' });
   }
 });
@@ -125,7 +119,7 @@ async function calculateDebatedProposals(db, documentIds, documents) {
   return new Promise((resolve, reject) => {
     db.all(query, documentIds, (err, rows) => {
       if (err) {
-        console.error('Error querying debated proposals:', err);
+        logger.error('Error querying debated proposals', { error: err.message, documentIds });
         return reject(err);
       }
 
@@ -150,7 +144,7 @@ async function calculateDebatedProposals(db, documentIds, documents) {
 
       db.all(commentsQuery, proposalIds, (commentErr, commentRows) => {
         if (commentErr) {
-          console.error('Error querying comments:', commentErr);
+          logger.error('Error querying comments', { error: commentErr.message, proposalIds });
           return reject(commentErr);
         }
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Paragraph } from '../types';
 import {
   DndContext,
   closestCenter,
@@ -32,7 +33,7 @@ import { structureProposalsApi, ApiError, NetworkError, AuthError } from '@/lib/
 
 interface StructureProposalModeProps {
   documentId: string;
-  paragraphs: any[];
+  paragraphs: Paragraph[];
   onClose: () => void;
   onSuccess: () => void;
 }

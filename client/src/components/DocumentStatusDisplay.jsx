@@ -15,8 +15,8 @@ function DocumentStatusDisplay({ document, compact = false }) {
         return {
           icon: '⏳',
           label: 'Proposal',
-          description: document.proposal_deadline
-            ? `Voting starts ${formatDistanceToNow(new Date(document.proposal_deadline), { addSuffix: true })}`
+          description: (document.proposalDeadline || document.proposal_deadline)
+            ? `Voting starts ${formatDistanceToNow(new Date(document.proposalDeadline || document.proposal_deadline), { addSuffix: true })}`
             : 'Awaiting voting period',
           color: 'text-blue-600',
           bgColor: 'bg-blue-50',
@@ -100,14 +100,14 @@ function DocumentStatusDisplay({ document, compact = false }) {
         {/* Timeline info for organizational documents */}
         {document.ownership_type === 'organizational' && (
           <div className="text-right text-xs text-gray-500">
-            {document.proposal_deadline && (
+            {(document.proposalDeadline || document.proposal_deadline) && (
               <div>
-                Proposed: {format(new Date(document.created_at), 'MMM d, yyyy')}
+                Proposed: {format(new Date(document.createdAt || document.created_at), 'MMM d, yyyy')}
               </div>
             )}
-            {document.voting_started_at && (
+            {(document.votingStartedAt || document.voting_started_at) && (
               <div>
-                Voting started: {format(new Date(document.voting_started_at), 'MMM d, yyyy')}
+                Voting started: {format(new Date(document.votingStartedAt || document.voting_started_at), 'MMM d, yyyy')}
               </div>
             )}
           </div>

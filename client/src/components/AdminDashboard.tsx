@@ -230,7 +230,10 @@ export function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
       loadDashboardData(); // Refresh data
     } catch (error) {
       console.error('Failed to create organization:', error);
-      toast.error('Failed to create organization');
+      const errorMessage = error instanceof Error ? error.message : 
+                          (typeof error === 'object' && error.details) ? error.details : 
+                          'Failed to create organization';
+      toast.error(errorMessage);
     } finally {
       setCreatingOrg(false);
     }

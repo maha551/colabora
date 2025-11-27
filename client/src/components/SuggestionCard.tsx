@@ -8,8 +8,9 @@ import { Progress } from "./ui/progress";
 import { ThumbsUp, ThumbsDown, MessageSquare, CheckCircle2, Users, FileText, History } from "lucide-react";
 import { Textarea } from "./ui/textarea";
 import { DiffViewer } from "./DiffViewer";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { cn } from "./ui/utils";
+import { toast } from "sonner";
 import {
   Tooltip,
   TooltipContent,
@@ -26,7 +27,7 @@ interface SuggestionCardProps {
   isSelected?: boolean;
   selectionIndex?: number;
   onToggleSelect?: (suggestionId: string) => void;
-  onVote: (suggestionId: string, voteType: 'PRO' | 'NEUTRAL' | 'CONTRA') => void;
+  onVote: (suggestionId: string, voteType: 'PRO' | 'NEUTRAL' | 'CONTRA') => Promise<void> | void;
   onComment: (suggestionId: string, text: string, parentId?: string) => void;
   originalText?: string;
   showDiffInline?: boolean;
@@ -77,6 +78,9 @@ export function SuggestionCard({
 }: SuggestionCardProps) {
   const [commentText, setCommentText] = useState("");
   const [showVoteDetails, setShowVoteDetails] = useState(false);
+  const [isVoting, setIsVoting] = useState(false);
+  const [lastVoteTime, setLastVoteTime] = useState<number>(0);
+  const [optimisticVote, setOptimisticVote] = useState<'PRO' | 'NEUTRAL' | 'CONTRA' | null>(null);
   const [isThreadExpanded, setIsThreadExpanded] = useState(() => {
     // Auto-expand comment thread for deletion suggestions
     if (originalText && suggestion.text.trim()) {
@@ -114,8 +118,71 @@ export function SuggestionCard({
   const contraPercentage = totalUsers > 0 ? (contraCount / totalUsers) * 100 : 0;
   const notVotedPercentage = totalUsers > 0 ? (notVotedCount / totalUsers) * 100 : 0;
 
-  const currentUserVote = suggestion.votes.find((v) => v.userId === currentUser.id);
+  // Use optimistic vote if present, otherwise use actual vote
+  const actualUserVote = suggestion.votes.find((v) => v.userId === currentUser.id);
+  const currentUserVote = optimisticVote 
+    ? { userId: currentUser.id, vote: optimisticVote, id: 'optimistic' }
+    : actualUserVote;
   const hasVoted = !!currentUserVote;
+  
+  // Clear loading state and optimistic vote when WebSocket update arrives
+  // This allows the button to immediately show the colored state (voted) instead of spinner
+  useEffect(() => {
+    if (actualUserVote && actualUserVote.id !== 'optimistic') {
+      // Vote has been updated via WebSocket, immediately clear loading state and optimistic vote
+      // This makes the button change color to reflect the actual vote state
+      if (isVoting) {
+      setIsVoting(false);
+      }
+      if (optimisticVote) {
+      setOptimisticVote(null);
+    }
+    }
+  }, [actualUserVote?.id, actualUserVote?.vote, isVoting, optimisticVote]);
+
+  // Auto-expand comment thread when new comments arrive via WebSocket, but only if:
+  // 1. Thread is already expanded (user is viewing comments)
+  // 2. It's a reply to a comment the current user made
+  // 3. It's a reply to a comment the user is currently replying to
+  const previousCommentCountRef = useRef(suggestion.comments.length);
+  const previousCommentsRef = useRef<typeof suggestion.comments>([]);
+  
+  useEffect(() => {
+    const currentCommentCount = suggestion.comments.length;
+    const previousCommentCount = previousCommentCountRef.current;
+    
+    // Only act if comment count increased and thread is already expanded
+    if (currentCommentCount > previousCommentCount && isThreadExpanded) {
+      const previousComments = previousCommentsRef.current;
+      const newComments = suggestion.comments.filter(
+        comment => !previousComments.some(prev => prev.id === comment.id)
+      );
+      
+      // Check if any new comment is:
+      // 1. A reply to a comment the current user made
+      // 2. A reply to the comment the user is currently replying to
+      const shouldKeepExpanded = newComments.some(newComment => {
+        if (!newComment.parentId) return true; // Top-level comment, keep expanded
+        
+        // Check if it's a reply to user's comment
+        const parentComment = suggestion.comments.find(c => c.id === newComment.parentId);
+        if (parentComment?.userId === currentUser.id) return true;
+        
+        // Check if it's a reply to the comment user is currently replying to
+        if (replyingTo && newComment.parentId === replyingTo) return true;
+        
+        return false;
+      });
+      
+      // Keep thread expanded if relevant, but don't force expand if collapsed
+      if (shouldKeepExpanded) {
+        setIsThreadExpanded(true);
+      }
+    }
+    
+    previousCommentCountRef.current = currentCommentCount;
+    previousCommentsRef.current = [...suggestion.comments];
+  }, [suggestion.comments, isThreadExpanded, currentUser.id, replyingTo]);
   
   // Check if vote changes are allowed
   const voteChangeAllowed = documentOptions?.voteChangeAllowed !== false; // Default to true
@@ -125,7 +192,8 @@ export function SuggestionCard({
   const isAnonymous = documentOptions?.votingAnonymous === true;
   
   // Get users who haven't voted yet
-  const votedUserIds = new Set(suggestion.votes.map(v => v.userId));
+  // Handle anonymous voting where userId might be undefined
+  const votedUserIds = new Set(suggestion.votes.map(v => v.userId).filter((id): id is string => !!id));
   const usersWhoHaventVoted = allCollaborators.filter(user => !votedUserIds.has(user.id));
 
   // Organize comments into threads
@@ -336,42 +404,147 @@ export function SuggestionCard({
                 <Button
                   size="sm"
                   variant={currentUserVote?.vote === 'PRO' ? "default" : "ghost"}
-                  onClick={() => onVote(suggestion.id, 'PRO')}
-                  disabled={isVoteLocked}
+                  onClick={async () => {
+                    // Check cooldown period (2 seconds)
+                    const now = Date.now();
+                    const timeSinceLastVote = now - lastVoteTime;
+                    if (timeSinceLastVote < 2000) {
+                      const remainingSeconds = ((2000 - timeSinceLastVote) / 1000).toFixed(1);
+                      toast.info(`Please wait ${remainingSeconds}s before voting again`, { duration: 1500 });
+                      return;
+                    }
+                    
+                    if (isVoting) return;
+                    
+                    // Optimistic update - change color instantly
+                    setOptimisticVote('PRO');
+                    setLastVoteTime(now);
+                    setIsVoting(true);
+                    
+                    try {
+                      await onVote(suggestion.id, 'PRO');
+                    } catch (error) {
+                      // Rollback optimistic update on error
+                      setOptimisticVote(null);
+                      throw error;
+                    } finally {
+                      // WebSocket update will clear this immediately (see useEffect above)
+                      // Fallback timeout only if WebSocket is slow (reduced to 1 second)
+                      setTimeout(() => {
+                        setIsVoting(false);
+                        setOptimisticVote((prev) => prev === 'PRO' ? null : prev);
+                      }, 1000);
+                    }
+                  }}
+                  disabled={isVoteLocked || isVoting}
                   className={cn(
                     "h-8 w-8 p-0",
                     currentUserVote?.vote === 'PRO' && "bg-green-600 hover:bg-green-700 text-white",
-                    isVoteLocked && "opacity-50 cursor-not-allowed"
+                    (isVoteLocked || isVoting) && "opacity-50 cursor-not-allowed"
                   )}
                   title={`Approve (${proCount})`}
                 >
-                  <ThumbsUp className="h-4 w-4" />
+                  {isVoting ? (
+                    <div className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <ThumbsUp className="h-4 w-4" />
+                  )}
                 </Button>
                 <Button
                   size="sm"
                   variant={currentUserVote?.vote === 'NEUTRAL' ? "secondary" : "ghost"}
-                  onClick={() => onVote(suggestion.id, 'NEUTRAL')}
-                  disabled={isVoteLocked}
+                  onClick={async () => {
+                    // Check cooldown period (2 seconds)
+                    const now = Date.now();
+                    const timeSinceLastVote = now - lastVoteTime;
+                    if (timeSinceLastVote < 2000) {
+                      const remainingSeconds = ((2000 - timeSinceLastVote) / 1000).toFixed(1);
+                      toast.info(`Please wait ${remainingSeconds}s before voting again`, { duration: 1500 });
+                      return;
+                    }
+                    
+                    if (isVoting) return;
+                    
+                    // Optimistic update - change color instantly
+                    setOptimisticVote('NEUTRAL');
+                    setLastVoteTime(now);
+                    setIsVoting(true);
+                    
+                    try {
+                      await onVote(suggestion.id, 'NEUTRAL');
+                    } catch (error) {
+                      // Rollback optimistic update on error
+                      setOptimisticVote(null);
+                      throw error;
+                    } finally {
+                      // WebSocket update will clear this immediately (see useEffect above)
+                      // Fallback timeout only if WebSocket is slow (reduced to 1 second)
+                      setTimeout(() => {
+                        setIsVoting(false);
+                        setOptimisticVote((prev) => prev === 'NEUTRAL' ? null : prev);
+                      }, 1000);
+                    }
+                  }}
+                  disabled={isVoteLocked || isVoting}
                   className={cn(
                     "h-8 w-8 p-0",
-                    isVoteLocked && "opacity-50 cursor-not-allowed"
+                    (isVoteLocked || isVoting) && "opacity-50 cursor-not-allowed"
                   )}
                   title={`Neutral (${neutralCount})`}
                 >
-                  <span className="text-lg leading-none">○</span>
+                  {isVoting ? (
+                    <div className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <span className="text-lg leading-none">○</span>
+                  )}
                 </Button>
                 <Button
                   size="sm"
                   variant={currentUserVote?.vote === 'CONTRA' ? "destructive" : "ghost"}
-                  onClick={() => onVote(suggestion.id, 'CONTRA')}
-                  disabled={isVoteLocked}
+                  onClick={async () => {
+                    // Check cooldown period (2 seconds)
+                    const now = Date.now();
+                    const timeSinceLastVote = now - lastVoteTime;
+                    if (timeSinceLastVote < 2000) {
+                      const remainingSeconds = ((2000 - timeSinceLastVote) / 1000).toFixed(1);
+                      toast.info(`Please wait ${remainingSeconds}s before voting again`, { duration: 1500 });
+                      return;
+                    }
+                    
+                    if (isVoting) return;
+                    
+                    // Optimistic update - change color instantly
+                    setOptimisticVote('CONTRA');
+                    setLastVoteTime(now);
+                    setIsVoting(true);
+                    
+                    try {
+                      await onVote(suggestion.id, 'CONTRA');
+                    } catch (error) {
+                      // Rollback optimistic update on error
+                      setOptimisticVote(null);
+                      throw error;
+                    } finally {
+                      // WebSocket update will clear this immediately (see useEffect above)
+                      // Fallback timeout only if WebSocket is slow (reduced to 1 second)
+                      setTimeout(() => {
+                        setIsVoting(false);
+                        setOptimisticVote((prev) => prev === 'CONTRA' ? null : prev);
+                      }, 1000);
+                    }
+                  }}
+                  disabled={isVoteLocked || isVoting}
                   className={cn(
                     "h-8 w-8 p-0",
-                    isVoteLocked && "opacity-50 cursor-not-allowed"
+                    (isVoteLocked || isVoting) && "opacity-50 cursor-not-allowed"
                   )}
                   title={`Reject (${contraCount})`}
                 >
-                  <ThumbsDown className="h-4 w-4" />
+                  {isVoting ? (
+                    <div className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <ThumbsDown className="h-4 w-4" />
+                  )}
                 </Button>
               </>
             )}

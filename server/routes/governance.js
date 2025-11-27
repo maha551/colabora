@@ -1,16 +1,10 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const crypto = require('crypto');
+const { requireAuth } = require('../middleware/auth');
+const { logger } = require('../middleware/logger');
 
 const router = express.Router();
-
-// Middleware to check authentication
-const requireAuth = (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  next();
-};
 
 // Helper function to check if user is representative of organization
 function isRepresentative(db, userId, organizationId) {
@@ -39,12 +33,42 @@ function isActiveMember(db, userId, organizationId) {
   });
 }
 
+// Helper function to transform snake_case database fields to camelCase for API
+function transformGovernanceRules(row) {
+  if (!row) return null;
+  
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    representativeTermMonths: row.representative_term_months,
+    representativeTermLimits: row.representative_term_limits,
+    electionVotingMethod: row.election_voting_method,
+    electionQuorumPercentage: row.election_quorum_percentage,
+    electionNoticeDays: row.election_notice_days,
+    defaultVotingDeadlineHours: row.default_voting_deadline_hours,
+    defaultQuorumPercentage: row.default_quorum_percentage,
+    documentProposalPeriodDays: row.document_proposal_period_days,
+    thresholdCalculationMethod: row.threshold_calculation_method,
+    defaultAcceptanceThreshold: row.default_acceptance_threshold,
+    anonymousVotingEnabled: row.anonymous_voting_enabled === 1 || row.anonymous_voting_enabled === true,
+    voteChangeAllowed: row.vote_change_allowed === 1 || row.vote_change_allowed === true,
+    representativeCanCreateVotes: row.representative_can_create_votes === 1 || row.representative_can_create_votes === true,
+    representativeCanInviteMembers: row.representative_can_invite_members === 1 || row.representative_can_invite_members === true,
+    representativeCanManageDocuments: row.representative_can_manage_documents === 1 || row.representative_can_manage_documents === true,
+    representativeApprovalRequired: row.representative_approval_required === 1 || row.representative_approval_required === true,
+    tamperProofEnabled: row.tamper_proof_enabled === 1 || row.tamper_proof_enabled === true,
+    auditTrailEnabled: row.audit_trail_enabled === 1 || row.audit_trail_enabled === true,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
 // Helper function to get governance rules for organization
 function getGovernanceRules(db, organizationId) {
   return new Promise((resolve, reject) => {
     db.get('SELECT * FROM organization_governance_rules WHERE organization_id = ?', [organizationId], (err, row) => {
       if (err) return reject(err);
-      resolve(row);
+      resolve(transformGovernanceRules(row));
     });
   });
 }
@@ -65,6 +89,7 @@ function hashVote(voteData) {
 module.exports = router;
 module.exports.generateAnonymousToken = generateAnonymousToken;
 module.exports.hashVote = hashVote;
+module.exports.getGovernanceRules = getGovernanceRules;
 
 // Helper function to log audit events
 function logAudit(db, organizationId, actionType, performedByUserId, affectedUserId = null, details = {}, req) {
@@ -119,6 +144,8 @@ router.get('/:organizationId/governance-rules', requireAuth, async (req, res) =>
       defaultVotingDeadlineHours: 168,
       defaultQuorumPercentage: 0.5,
       documentProposalPeriodDays: 365, // Default 1 year proposal period for documents
+      thresholdCalculationMethod: 'all_votes',
+      defaultAcceptanceThreshold: 75.0,
       anonymousVotingEnabled: true,
       voteChangeAllowed: false,
       representativeCanCreateVotes: true,
@@ -133,13 +160,18 @@ router.get('/:organizationId/governance-rules', requireAuth, async (req, res) =>
 
     res.json({ governanceRules: rules || defaultRules });
   } catch (error) {
-    console.error('Error fetching governance rules:', error);
+    logger.error('Error fetching governance rules', { error: error.message, stack: error.stack, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Failed to fetch governance rules' });
   }
 });
 
+// DEPRECATED: Policy votes - removed in favor of rule proposals
 // Get policy votes for organization
 router.get('/:organizationId/policy-votes', requireAuth, async (req, res) => {
+  return res.status(410).json({ 
+    error: 'Policy votes have been deprecated. Use rule proposals instead.',
+    deprecated: true 
+  });
   const db = req.app.locals.db;
   const { organizationId } = req.params;
   const userId = req.user.id;
@@ -162,7 +194,7 @@ router.get('/:organizationId/policy-votes', requireAuth, async (req, res) => {
       ORDER BY pv.created_at DESC
     `, [organizationId], (err, votes) => {
       if (err) {
-        console.error('Error fetching policy votes:', err);
+        logger.error('Error fetching policy votes', { error: err.message, organizationId: req.params.organizationId });
         return res.status(500).json({ error: 'Failed to fetch policy votes' });
       }
 
@@ -170,13 +202,18 @@ router.get('/:organizationId/policy-votes', requireAuth, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching policy votes:', error);
+    logger.error('Error fetching policy votes', { error: error.message, stack: error.stack, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Failed to fetch policy votes' });
   }
 });
 
+// DEPRECATED: Policy votes - removed in favor of rule proposals
 // Create policy vote
 router.post('/:organizationId/policy-votes', requireAuth, async (req, res) => {
+  return res.status(410).json({ 
+    error: 'Policy votes have been deprecated. Use rule proposals instead.',
+    deprecated: true 
+  });
   const db = req.app.locals.db;
   const { organizationId } = req.params;
   const userId = req.user.id;
@@ -203,7 +240,7 @@ router.post('/:organizationId/policy-votes', requireAuth, async (req, res) => {
       threshold || 50, deadline.toISOString(), userId, now.toISOString()
     ], function(err) {
       if (err) {
-        console.error('Error creating policy vote:', err);
+        logger.error('Error creating policy vote', { error: err.message, organizationId: req.params.organizationId });
         return res.status(500).json({ error: 'Failed to create policy vote' });
       }
 
@@ -226,13 +263,18 @@ router.post('/:organizationId/policy-votes', requireAuth, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error creating policy vote:', error);
+    logger.error('Error creating policy vote', { error: error.message, stack: error.stack, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Failed to create policy vote' });
   }
 });
 
+// DEPRECATED: Policy votes - removed in favor of rule proposals
 // Vote on policy vote
 router.post('/:organizationId/policy-votes/:voteId/vote', requireAuth, async (req, res) => {
+  return res.status(410).json({ 
+    error: 'Policy votes have been deprecated. Use rule proposals instead.',
+    deprecated: true 
+  });
   const db = req.app.locals.db;
   const { organizationId, voteId } = req.params;
   const userId = req.user.id;
@@ -260,7 +302,7 @@ router.post('/:organizationId/policy-votes/:voteId/vote', requireAuth, async (re
         WHERE policy_vote_id = ? AND user_id = ?
       `, [voteId, userId], (err, existingVote) => {
         if (err) {
-          console.error('Error checking existing vote:', err);
+          logger.error('Error checking existing vote', { error: err.message, organizationId: req.params.organizationId, voteId: req.params.voteId });
           return res.status(500).json({ error: 'Failed to check vote status' });
         }
 
@@ -278,7 +320,7 @@ router.post('/:organizationId/policy-votes/:voteId/vote', requireAuth, async (re
           responseId, voteId, userId, vote, new Date().toISOString()
         ], function(err) {
           if (err) {
-            console.error('Error recording vote:', err);
+            logger.error('Error recording vote', { error: err.message, organizationId: req.params.organizationId, voteId: req.params.voteId });
             return res.status(500).json({ error: 'Failed to record vote' });
           }
 
@@ -294,7 +336,7 @@ router.post('/:organizationId/policy-votes/:voteId/vote', requireAuth, async (re
     });
 
   } catch (error) {
-    console.error('Error voting on policy:', error);
+    logger.error('Error voting on policy', { error: error.message, stack: error.stack, organizationId: req.params.organizationId, voteId: req.params.voteId });
     res.status(500).json({ error: 'Failed to cast vote' });
   }
 });
@@ -335,7 +377,7 @@ router.get('/:organizationId/elections/:electionId/results', requireAuth, async 
         ORDER BY ec.votes_received DESC, ec.nominated_at ASC
       `, [electionId], (err, candidates) => {
         if (err) {
-          console.error('Error fetching candidates:', err);
+          logger.error('Error fetching candidates', { error: err.message, organizationId: req.params.organizationId, electionId: req.params.electionId });
           return res.status(500).json({ error: 'Failed to fetch election results' });
         }
 
@@ -360,7 +402,7 @@ router.get('/:organizationId/elections/:electionId/results', requireAuth, async 
     });
 
   } catch (error) {
-    console.error('Error fetching election results:', error);
+    logger.error('Error fetching election results', { error: error.message, stack: error.stack, organizationId: req.params.organizationId, electionId: req.params.electionId });
     res.status(500).json({ error: 'Failed to fetch election results' });
   }
 });
@@ -391,7 +433,7 @@ router.get('/:organizationId/rule-proposals', requireAuth, async (req, res) => {
       ORDER BY grp.created_at DESC
     `, [organizationId], (err, proposals) => {
       if (err) {
-        console.error('Error fetching rule proposals:', err);
+        logger.error('Error fetching rule proposals', { error: err.message, organizationId: req.params.organizationId });
         return res.status(500).json({ error: 'Failed to fetch rule proposals' });
       }
 
@@ -413,7 +455,7 @@ router.get('/:organizationId/rule-proposals', requireAuth, async (req, res) => {
         ORDER BY grpv.voted_at ASC
       `, proposalIds, (err, votes) => {
         if (err) {
-          console.error('Error fetching proposal votes:', err);
+          logger.error('Error fetching proposal votes', { error: err.message, organizationId: req.params.organizationId, proposalId: req.params.proposalId });
           return res.status(500).json({ error: 'Failed to fetch proposal votes' });
         }
 
@@ -437,18 +479,102 @@ router.get('/:organizationId/rule-proposals', requireAuth, async (req, res) => {
           });
         });
 
-        // Attach votes to proposals
-        const proposalsWithVotes = proposals.map(proposal => ({
-          ...proposal,
-          votes: votesByProposal[proposal.id] || []
-        }));
+        // Get options for all proposals
+        const proposalIdsForOptions = proposals.map(p => p.id);
+        if (proposalIdsForOptions.length === 0) {
+          // No proposals, return empty array
+          return res.json({ ruleProposals: [] });
+        }
 
-        res.json({ ruleProposals: proposalsWithVotes });
+        const optionPlaceholders = proposalIdsForOptions.map(() => '?').join(',');
+        
+        db.all(`
+          SELECT * FROM governance_rule_proposal_options
+          WHERE proposal_id IN (${optionPlaceholders})
+          ORDER BY created_at ASC
+        `, proposalIdsForOptions, (err, options) => {
+          if (err) {
+            logger.error('Error fetching proposal options', { error: err.message, organizationId: req.params.organizationId, proposalId: req.params.proposalId });
+            // Continue without options rather than failing
+          }
+
+          // Group options by proposal
+          const optionsByProposal = {};
+          (options || []).forEach(option => {
+            if (!optionsByProposal[option.proposal_id]) {
+              optionsByProposal[option.proposal_id] = [];
+            }
+            try {
+              optionsByProposal[option.proposal_id].push({
+                id: option.id,
+                optionTitle: option.option_title,
+                optionDescription: option.option_description,
+                proposedValue: option.proposed_value ? (typeof option.proposed_value === 'string' ? JSON.parse(option.proposed_value) : option.proposed_value) : null
+              });
+            } catch (parseErr) {
+              logger.error('Error parsing option value', { error: parseErr.message, organizationId: req.params.organizationId, proposalId: req.params.proposalId });
+            }
+          });
+
+          // Map proposals with proper field names and include options
+          const proposalsWithVotes = proposals.map(proposal => {
+            try {
+              return {
+                id: proposal.id,
+                title: proposal.title,
+                description: proposal.description,
+                ruleField: proposal.current_rule_field,
+                currentValue: proposal.current_rule_value ? (typeof proposal.current_rule_value === 'string' ? JSON.parse(proposal.current_rule_value) : proposal.current_rule_value) : null,
+                proposedValue: proposal.proposed_rule_value ? (typeof proposal.proposed_rule_value === 'string' ? JSON.parse(proposal.proposed_rule_value) : proposal.proposed_rule_value) : null,
+                status: proposal.status,
+                votingStartsAt: proposal.voting_starts_at,
+                votingEndsAt: proposal.voting_ends_at,
+                votingDeadline: proposal.voting_ends_at, // Alias for compatibility
+                thresholdPercentage: proposal.threshold_percentage || 75.0,
+                anonymousVoting: proposal.anonymous_voting === 1 || proposal.anonymous_voting === true,
+                votesYes: proposal.votes_yes || 0,
+                votesNo: proposal.votes_no || 0,
+                votesAbstain: proposal.votes_abstain || 0,
+                totalVoters: proposal.total_voters || 0,
+                votesCast: proposal.votes_cast || 0,
+                approvedAt: proposal.approved_at,
+                implementedAt: proposal.implemented_at,
+                createdBy: {
+                  id: proposal.created_by,
+                  name: proposal.created_by_name
+                },
+                createdAt: proposal.created_at,
+                updatedAt: proposal.updated_at,
+                options: optionsByProposal[proposal.id] || [],
+                votes: votesByProposal[proposal.id] || []
+              };
+            } catch (parseErr) {
+              logger.error('Error parsing proposal', { error: parseErr.message, organizationId: req.params.organizationId, proposalId: req.params.proposalId });
+              // Return basic proposal data even if parsing fails
+              return {
+                id: proposal.id,
+                title: proposal.title,
+                description: proposal.description,
+                ruleField: proposal.current_rule_field,
+                status: proposal.status,
+                createdBy: {
+                  id: proposal.created_by,
+                  name: proposal.created_by_name
+                },
+                createdAt: proposal.created_at,
+                options: [],
+                votes: votesByProposal[proposal.id] || []
+              };
+            }
+          });
+
+          res.json({ ruleProposals: proposalsWithVotes });
+        });
       });
     });
 
   } catch (error) {
-    console.error('Error fetching rule proposals:', error);
+    logger.error('Error fetching rule proposals', { error: error.message, stack: error.stack, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Failed to fetch rule proposals' });
   }
 });
@@ -474,11 +600,13 @@ router.post('/:organizationId/rule-proposals', requireAuth, async (req, res) => 
     db.get('SELECT * FROM organization_governance_rules WHERE organization_id = ?',
       [organizationId], (err, currentRules) => {
         if (err) {
-          console.error('Error fetching current rules:', err);
+          logger.error('Error fetching current rules', { error: err.message, organizationId: req.params.organizationId });
           return res.status(500).json({ error: 'Failed to fetch current rules' });
         }
 
-        const currentValue = currentRules ? JSON.stringify(currentRules[ruleField]) : null;
+        // Transform snake_case database fields to camelCase to match frontend field names
+        const transformedRules = currentRules ? transformGovernanceRules(currentRules) : null;
+        const currentValue = transformedRules ? JSON.stringify(transformedRules[ruleField]) : null;
 
         db.run(`
           INSERT INTO governance_rule_proposals (
@@ -490,7 +618,7 @@ router.post('/:organizationId/rule-proposals', requireAuth, async (req, res) => 
           currentValue, JSON.stringify(proposedValue), userId, now.toISOString()
         ], function(err) {
           if (err) {
-            console.error('Error creating rule proposal:', err);
+            logger.error('Error creating rule proposal', { error: err.message, organizationId: req.params.organizationId });
             return res.status(500).json({ error: 'Failed to create rule proposal' });
           }
 
@@ -522,6 +650,17 @@ router.post('/:organizationId/rule-proposals', requireAuth, async (req, res) => 
                 optionCount: options.length
               }, req);
 
+              // Broadcast WebSocket update
+              const webSocketManager = require('../modules/websocket');
+              webSocketManager.broadcastOrganizationUpdate(organizationId, 'rule-proposal-created', {
+                organizationId,
+                proposalId,
+                ruleField,
+                title,
+                hasOptions: true,
+                optionCount: options.length
+              });
+
               res.json({
                 success: true,
                 ruleProposal: {
@@ -534,7 +673,7 @@ router.post('/:organizationId/rule-proposals', requireAuth, async (req, res) => 
                 }
               });
             }).catch(err => {
-              console.error('Error creating proposal options:', err);
+              logger.error('Error creating proposal options', { error: err.message, organizationId: req.params.organizationId });
               res.status(500).json({ error: 'Failed to create proposal options' });
             });
           } else {
@@ -544,6 +683,16 @@ router.post('/:organizationId/rule-proposals', requireAuth, async (req, res) => 
               ruleField,
               hasOptions: false
             }, req);
+
+            // Broadcast WebSocket update
+            const webSocketManager = require('../modules/websocket');
+            webSocketManager.broadcastOrganizationUpdate(organizationId, 'rule-proposal-created', {
+              organizationId,
+              proposalId,
+              ruleField,
+              title,
+              hasOptions: false
+            });
 
             res.json({
               success: true,
@@ -560,7 +709,7 @@ router.post('/:organizationId/rule-proposals', requireAuth, async (req, res) => 
       });
 
   } catch (error) {
-    console.error('Error creating rule proposal:', error);
+    logger.error('Error creating rule proposal', { error: error.message, stack: error.stack, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Failed to create rule proposal' });
   }
 });
@@ -585,7 +734,7 @@ router.post('/:organizationId/rule-proposals/:proposalId/start-voting', requireA
     db.get('SELECT COUNT(*) as total FROM organization_members WHERE organization_id = ? AND status = "active"',
       [organizationId], (err, result) => {
         if (err) {
-          console.error('Error counting members:', err);
+          logger.error('Error counting members', { error: err.message, organizationId: req.params.organizationId });
           return res.status(500).json({ error: 'Failed to count members' });
         }
 
@@ -604,7 +753,7 @@ router.post('/:organizationId/rule-proposals/:proposalId/start-voting', requireA
           now.toISOString(), proposalId, organizationId
         ], function(err) {
           if (err) {
-            console.error('Error starting rule proposal voting:', err);
+            logger.error('Error starting rule proposal voting', { error: err.message, proposalId, organizationId: req.params.organizationId });
             return res.status(500).json({ error: 'Failed to start voting' });
           }
 
@@ -627,7 +776,7 @@ router.post('/:organizationId/rule-proposals/:proposalId/start-voting', requireA
       });
 
   } catch (error) {
-    console.error('Error starting rule proposal voting:', error);
+    logger.error('Error starting rule proposal voting', { error: error.message, stack: error.stack, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Failed to start voting' });
   }
 });
@@ -661,7 +810,7 @@ router.post('/:organizationId/rule-proposals/:proposalId/vote', requireAuth, asy
         WHERE proposal_id = ? AND user_id = ?
       `, [proposalId, userId], (err, existingVote) => {
         if (err) {
-          console.error('Error checking existing vote:', err);
+          logger.error('Error checking existing vote', { error: err.message, organizationId: req.params.organizationId, voteId: req.params.voteId });
           return res.status(500).json({ error: 'Failed to check vote status' });
         }
 
@@ -679,7 +828,7 @@ router.post('/:organizationId/rule-proposals/:proposalId/vote', requireAuth, asy
           voteId, proposalId, userId, selectedOptionId || null, voteChoice || null, new Date().toISOString()
         ], function(err) {
           if (err) {
-            console.error('Error recording vote:', err);
+            logger.error('Error recording vote', { error: err.message, organizationId: req.params.organizationId, voteId: req.params.voteId });
             return res.status(500).json({ error: 'Failed to record vote' });
           }
 
@@ -699,7 +848,7 @@ router.post('/:organizationId/rule-proposals/:proposalId/vote', requireAuth, asy
     });
 
   } catch (error) {
-    console.error('Error voting on rule proposal:', error);
+    logger.error('Error voting on rule proposal', { error: error.message, stack: error.stack, proposalId: req.params.proposalId, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Failed to cast vote' });
   }
 });
@@ -737,9 +886,35 @@ router.post('/:organizationId/rule-proposals/:proposalId/complete', requireAuth,
         // Update governance rules
         const updates = {};
         try {
-          updates[proposal.current_rule_field] = JSON.parse(proposal.proposed_rule_value);
+          const fieldName = proposal.current_rule_field;
+          // Map camelCase field names from frontend to snake_case database field names
+          const fieldNameMapping = {
+            'thresholdCalculationMethod': 'threshold_calculation_method',
+            'defaultAcceptanceThreshold': 'default_acceptance_threshold',
+            'documentProposalPeriodDays': 'document_proposal_period_days',
+            'defaultVotingDeadlineHours': 'default_voting_deadline_hours',
+            'defaultQuorumPercentage': 'default_quorum_percentage',
+            'anonymousVotingEnabled': 'anonymous_voting_enabled',
+            'voteChangeAllowed': 'vote_change_allowed',
+            'representativeTermMonths': 'representative_term_months',
+            'representativeTermLimits': 'representative_term_limits',
+            'electionVotingMethod': 'election_voting_method',
+            'electionQuorumPercentage': 'election_quorum_percentage',
+            'electionNoticeDays': 'election_notice_days',
+            'representativeCanCreateVotes': 'representative_can_create_votes',
+            'representativeCanInviteMembers': 'representative_can_invite_members',
+            'representativeCanManageDocuments': 'representative_can_manage_documents',
+            'representativeApprovalRequired': 'representative_approval_required',
+            'tamperProofEnabled': 'tamper_proof_enabled',
+            'auditTrailEnabled': 'audit_trail_enabled'
+          };
+          
+          // Use mapping if available, otherwise assume fieldName is already snake_case
+          const dbFieldName = fieldNameMapping[fieldName] || fieldName;
+          
+          updates[dbFieldName] = JSON.parse(proposal.proposed_rule_value);
         } catch (parseErr) {
-          console.error('Error parsing proposed_rule_value:', parseErr);
+          logger.error('Error parsing proposed_rule_value', { error: parseErr.message, proposalId, organizationId: req.params.organizationId });
           return res.status(500).json({ error: 'Invalid rule value format' });
         }
 
@@ -750,7 +925,7 @@ router.post('/:organizationId/rule-proposals/:proposalId/complete', requireAuth,
         db.run(`UPDATE organization_governance_rules SET ${setClause}, updated_at = ? WHERE organization_id = ?`,
           [...updateValues, now.toISOString(), organizationId], (err) => {
             if (err) {
-              console.error('Error updating governance rules:', err);
+              logger.error('Error updating governance rules', { error: err.message, proposalId, organizationId: req.params.organizationId });
               return res.status(500).json({ error: 'Failed to update governance rules' });
             }
 
@@ -773,11 +948,39 @@ router.post('/:organizationId/rule-proposals/:proposalId/complete', requireAuth,
               approvalRate
             }, req);
 
+            // Broadcast WebSocket update to organization members
+            const webSocketManager = require('../modules/websocket');
+            // Broadcast to organization room
+            webSocketManager.broadcastOrganizationUpdate(organizationId, 'rule-proposal-approved', {
+              organizationId,
+              proposalId,
+              ruleField: proposal.current_rule_field,
+              newValue: proposal.proposed_rule_value,
+              approvalRate
+            });
+            
+            // Also broadcast to all org documents for backward compatibility
+            db.all(`
+              SELECT id FROM documents WHERE organization_id = ?
+            `, [organizationId], (docErr, docs) => {
+              if (!docErr && docs) {
+                docs.forEach(doc => {
+                  webSocketManager.broadcastDocumentUpdate(doc.id, 'rule-proposal-approved', {
+                    organizationId,
+                    proposalId,
+                    ruleField: proposal.current_rule_field,
+                    newValue: proposal.proposed_rule_value,
+                    approvalRate
+                  });
+                });
+              }
+            });
+
             let newRuleValue;
             try {
               newRuleValue = JSON.parse(proposal.proposed_rule_value);
             } catch (e) {
-              console.error('Error parsing proposed_rule_value for response:', e);
+              logger.error('Error parsing proposed_rule_value for response', { error: e.message, proposalId, organizationId: req.params.organizationId });
               newRuleValue = proposal.proposed_rule_value; // Return raw value if parse fails
             }
             res.json({
@@ -815,7 +1018,7 @@ router.post('/:organizationId/rule-proposals/:proposalId/complete', requireAuth,
     });
 
   } catch (error) {
-    console.error('Error completing rule proposal:', error);
+    logger.error('Error completing rule proposal', { error: error.message, stack: error.stack, proposalId: req.params.proposalId, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Failed to complete rule proposal' });
   }
 });
@@ -903,18 +1106,39 @@ router.put('/:organizationId/governance-rules', requireAuth, async (req, res) =>
       updateValues,
       function(err) {
         if (err) {
-          console.error('Error updating governance rules:', err);
+          logger.error('Error updating governance rules', { error: err.message, organizationId: req.params.organizationId });
           return res.status(500).json({ error: 'Failed to update governance rules' });
         }
 
         // Log audit event
         logAudit(db, organizationId, 'governance_rules_updated', userId, null, updates, req);
 
+        // Broadcast WebSocket update to organization subscribers
+        const webSocketManager = require('../modules/websocket');
+        webSocketManager.broadcastOrganizationUpdate(organizationId, 'governance-rules-updated', {
+          organizationId,
+          updates,
+          updatedBy: userId
+        });
+
+        // Also broadcast to all organization documents for backward compatibility
+        db.all(`SELECT id FROM documents WHERE organization_id = ?`, [organizationId], (docErr, docs) => {
+          if (!docErr && docs) {
+            docs.forEach(doc => {
+              webSocketManager.broadcastDocumentUpdate(doc.id, 'governance-rules-updated', {
+                organizationId,
+                updates,
+                updatedBy: userId
+              });
+            });
+          }
+        });
+
         res.json({ success: true, message: 'Governance rules updated successfully' });
       }
     );
   } catch (error) {
-    console.error('Error updating governance rules:', error);
+    logger.error('Error updating governance rules', { error: error.message, stack: error.stack, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Failed to update governance rules' });
   }
 });
@@ -948,7 +1172,7 @@ router.post('/:organizationId/elections', requireAuth, async (req, res) => {
     db.get('SELECT COUNT(*) as memberCount FROM organization_members WHERE organization_id = ? AND status = "active"',
       [organizationId], (err, row) => {
         if (err) {
-          console.error('Error counting members:', err);
+          logger.error('Error counting members', { error: err.message, organizationId: req.params.organizationId });
           return res.status(500).json({ error: 'Failed to create election' });
         }
 
@@ -965,7 +1189,7 @@ router.post('/:organizationId/elections', requireAuth, async (req, res) => {
           rules.anonymous_voting_enabled ? 1 : 0, userId
         ], function(err) {
           if (err) {
-            console.error('Error creating election:', err);
+            logger.error('Error creating election', { error: err.message, organizationId: req.params.organizationId });
             return res.status(500).json({ error: 'Failed to create election' });
           }
 
@@ -973,6 +1197,16 @@ router.post('/:organizationId/elections', requireAuth, async (req, res) => {
           logAudit(db, organizationId, 'election_created', userId, null, {
             electionId, title, positionsAvailable, termMonths
           }, req);
+
+          // Broadcast WebSocket update
+          const webSocketManager = require('../modules/websocket');
+          webSocketManager.broadcastOrganizationUpdate(organizationId, 'election-created', {
+            organizationId,
+            electionId,
+            title,
+            positionsAvailable,
+            status: 'draft'
+          });
 
           res.json({
             election: {
@@ -989,7 +1223,7 @@ router.post('/:organizationId/elections', requireAuth, async (req, res) => {
         });
       });
   } catch (error) {
-    console.error('Error creating election:', error);
+    logger.error('Error creating election', { error: error.message, stack: error.stack, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Failed to create election' });
   }
 });
@@ -1009,11 +1243,61 @@ router.get('/:organizationId/elections', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    // Return empty elections list (governance tables not implemented in simplified system)
-    console.log('Returning empty elections list for organization:', organizationId);
-    res.json({ elections: [] });
+    // Query elections from database
+    db.all(`
+      SELECT 
+        re.*,
+        u.name as created_by_name
+      FROM representative_elections re
+      LEFT JOIN users u ON re.created_by = u.id
+      WHERE re.organization_id = ?
+      ORDER BY re.created_at DESC
+    `, [organizationId], (err, elections) => {
+      if (err) {
+        logger.error('Error fetching elections', { error: err.message, organizationId: req.params.organizationId });
+        return res.status(500).json({ error: 'Failed to fetch elections' });
+      }
+
+      // Map snake_case to camelCase and handle status mapping
+      const mappedElections = (elections || []).map(election => {
+        // Map status: backend uses 'nomination'/'voting', frontend expects 'announced'/'active'
+        let status = election.status;
+        if (status === 'nomination') {
+          status = 'announced';
+        } else if (status === 'voting') {
+          status = 'active';
+        }
+
+        return {
+          id: election.id,
+          organizationId: election.organization_id,
+          electionTitle: election.election_title,
+          electionDescription: election.election_description,
+          status: status,
+          positionsAvailable: election.positions_available,
+          termStartDate: election.term_start_date,
+          termEndDate: election.term_end_date,
+          nominationStartsAt: election.nomination_starts_at,
+          nominationEndsAt: election.nomination_ends_at,
+          votingStartsAt: election.voting_starts_at,
+          votingEndsAt: election.voting_ends_at,
+          quorumRequired: election.quorum_required || 0,
+          totalVoters: election.total_voters || 0,
+          votesCast: election.votes_cast || 0,
+          quorumMet: election.quorum_met === 1 || election.quorum_met === true,
+          anonymousVoting: election.anonymous_voting === 1 || election.anonymous_voting === true,
+          electionCompletedAt: election.election_completed_at,
+          createdBy: election.created_by,
+          createdByName: election.created_by_name,
+          createdAt: election.created_at,
+          updatedAt: election.updated_at
+        };
+      });
+
+      res.json({ elections: mappedElections });
+    });
   } catch (error) {
-    console.error('Error fetching elections:', error);
+    logger.error('Error fetching elections', { error: error.message, stack: error.stack, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Failed to fetch elections' });
   }
 });
@@ -1059,7 +1343,7 @@ router.post('/:organizationId/elections/:electionId/candidates', requireAuth, as
             if (err.message.includes('UNIQUE constraint failed')) {
               return res.status(400).json({ error: 'User is already nominated for this election' });
             }
-            console.error('Error nominating candidate:', err);
+            logger.error('Error nominating candidate', { error: err.message, electionId: req.params.electionId, organizationId: req.params.organizationId });
             return res.status(500).json({ error: 'Failed to nominate candidate' });
           }
 
@@ -1075,7 +1359,7 @@ router.post('/:organizationId/elections/:electionId/candidates', requireAuth, as
         });
       });
   } catch (error) {
-    console.error('Error nominating candidate:', error);
+    logger.error('Error nominating candidate', { error: error.message, stack: error.stack, electionId: req.params.electionId, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Failed to nominate candidate' });
   }
 });
@@ -1103,7 +1387,7 @@ router.post('/:organizationId/elections/:electionId/candidates/:candidateId/acce
           [candidateId],
           function(err) {
             if (err) {
-              console.error('Error accepting nomination:', err);
+              logger.error('Error accepting nomination', { error: err.message, electionId: req.params.electionId, candidateId: req.params.candidateId });
               return res.status(500).json({ error: 'Failed to accept nomination' });
             }
 
@@ -1112,7 +1396,7 @@ router.post('/:organizationId/elections/:electionId/candidates/:candidateId/acce
         );
       });
   } catch (error) {
-    console.error('Error accepting nomination:', error);
+    logger.error('Error accepting nomination', { error: error.message, stack: error.stack, electionId: req.params.electionId, candidateId: req.params.candidateId });
     res.status(500).json({ error: 'Failed to accept nomination' });
   }
 });
@@ -1153,7 +1437,7 @@ router.post('/:organizationId/elections/:electionId/start', requireAuth, async (
         db.get('SELECT COUNT(*) as count FROM organization_members WHERE organization_id = ? AND status = "active"',
           [organizationId], (err, row) => {
             if (err) {
-              console.error('Error counting members:', err);
+              logger.error('Error counting members', { error: err.message, organizationId: req.params.organizationId });
               return res.status(500).json({ error: 'Failed to start election' });
             }
 
@@ -1170,14 +1454,14 @@ router.post('/:organizationId/elections/:electionId/start', requireAuth, async (
               [startDate.toISOString(), endDate.toISOString(), memberCount, electionId],
               function(err) {
                 if (err) {
-                  console.error('Error starting election:', err);
+                  logger.error('Error starting election', { error: err.message, electionId: req.params.electionId, organizationId: req.params.organizationId });
                   return res.status(500).json({ error: 'Failed to start election' });
                 }
 
                 // Create voter tokens for anonymous voting
                 createVoterTokensForElection(db, electionId, organizationId, (tokenErr) => {
                   if (tokenErr) {
-                    console.error('Error creating voter tokens:', tokenErr);
+                    logger.error('Error creating voter tokens', { error: tokenErr.message, electionId: req.params.electionId });
                     // Don't fail the election start, just log the error
                   }
 
@@ -1185,6 +1469,18 @@ router.post('/:organizationId/elections/:electionId/start', requireAuth, async (
                   logAudit(db, organizationId, 'election_started', userId, null, {
                     electionId, startDate: startDate.toISOString(), endDate: endDate.toISOString()
                   }, req);
+
+                  // Broadcast WebSocket update
+                  const webSocketManager = require('../modules/websocket');
+                  webSocketManager.broadcastOrganizationUpdate(organizationId, 'election-updated', {
+                    organizationId,
+                    electionId,
+                    oldPhase: 'draft',
+                    newPhase: 'active',
+                    status: 'active',
+                    votingStartsAt: startDate.toISOString(),
+                    votingEndsAt: endDate.toISOString()
+                  });
 
                   res.json({
                     success: true,
@@ -1198,7 +1494,7 @@ router.post('/:organizationId/elections/:electionId/start', requireAuth, async (
           });
       });
   } catch (error) {
-    console.error('Error starting election:', error);
+    logger.error('Error starting election', { error: error.message, stack: error.stack, electionId: req.params.electionId, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Failed to start election' });
   }
 });
@@ -1253,7 +1549,7 @@ function createVoterTokensForElection(db, electionId, organizationId, callback) 
             tokenId, sessionId, member.user_id, anonymousToken
           ], function(err) {
             if (err) {
-              console.error('Error creating voter token:', err);
+              logger.error('Error creating voter token', { error: err.message, electionId, userId });
             }
             tokensCreated++;
 
@@ -1329,7 +1625,7 @@ router.post('/:organizationId/elections/:electionId/vote', requireAuth, async (r
                     candidateRanking[0], voteHash
                   ], function(err) {
                     if (err) {
-                      console.error('Error casting vote:', err);
+                      logger.error('Error casting vote', { error: err.message, electionId, candidateId, userId });
                       return res.status(500).json({ error: 'Failed to cast vote' });
                     }
 
@@ -1351,7 +1647,7 @@ router.post('/:organizationId/elections/:electionId/vote', requireAuth, async (r
         }
       });
   } catch (error) {
-    console.error('Error casting vote:', error);
+    logger.error('Error casting vote', { error: error.message, stack: error.stack, electionId: req.params.electionId, candidateId: req.params.candidateId });
     res.status(500).json({ error: 'Failed to cast vote' });
   }
 });
@@ -1416,7 +1712,7 @@ router.post('/:organizationId/elections/:electionId/update-phase', requireAuth, 
         db.run(`UPDATE representative_elections SET ${setClause} WHERE id = ?`,
           [...updateValues, electionId], function(err) {
             if (err) {
-              console.error('Error updating election phase:', err);
+              logger.error('Error updating election phase', { error: err.message, electionId: req.params.electionId });
               return res.status(500).json({ error: 'Failed to update election phase' });
             }
 
@@ -1428,6 +1724,16 @@ router.post('/:organizationId/elections/:electionId/update-phase', requireAuth, 
               updates
             }, req);
 
+            // Broadcast WebSocket update
+            const webSocketManager = require('../modules/websocket');
+            webSocketManager.broadcastOrganizationUpdate(organizationId, 'election-updated', {
+              organizationId,
+              electionId,
+              oldPhase: election.status,
+              newPhase,
+              status: updates.status || election.status
+            });
+
             res.json({
               success: true,
               message: `Election moved to ${newPhase} phase`,
@@ -1437,7 +1743,7 @@ router.post('/:organizationId/elections/:electionId/update-phase', requireAuth, 
       });
 
   } catch (error) {
-    console.error('Error updating election phase:', error);
+    logger.error('Error updating election phase', { error: error.message, stack: error.stack, electionId: req.params.electionId });
     res.status(500).json({ error: 'Failed to update election phase' });
   }
 });
@@ -1464,7 +1770,7 @@ router.post('/:organizationId/elections/auto-schedule', requireAuth, async (req,
       ORDER BY rt.term_end_date ASC
     `, [organizationId], (err, terms) => {
       if (err) {
-        console.error('Error fetching representative terms:', err);
+        logger.error('Error fetching representative terms', { error: err.message, organizationId: req.params.organizationId });
         return res.status(500).json({ error: 'Failed to check term expirations' });
       }
 
@@ -1509,7 +1815,7 @@ router.post('/:organizationId/elections/auto-schedule', requireAuth, async (req,
         now.toISOString(), now.toISOString()
       ], function(err) {
         if (err) {
-          console.error('Error creating auto-scheduled election:', err);
+          logger.error('Error creating auto-scheduled election', { error: err.message, organizationId: req.params.organizationId });
           return res.status(500).json({ error: 'Failed to schedule election' });
         }
 
@@ -1520,6 +1826,17 @@ router.post('/:organizationId/elections/auto-schedule', requireAuth, async (req,
           expiringTerms: expiringTerms.map(t => ({ userId: t.user_id, termEnd: t.term_end_date })),
           positions: expiringTerms.length
         }, req);
+
+        // Broadcast WebSocket update
+        const webSocketManager = require('../modules/websocket');
+        webSocketManager.broadcastOrganizationUpdate(organizationId, 'election-created', {
+          organizationId,
+          electionId,
+          title: electionTitle,
+          positionsAvailable: expiringTerms.length,
+          status: 'draft',
+          autoScheduled: true
+        });
 
         res.json({
           success: true,
@@ -1537,7 +1854,7 @@ router.post('/:organizationId/elections/auto-schedule', requireAuth, async (req,
     });
 
   } catch (error) {
-    console.error('Error auto-scheduling election:', error);
+    logger.error('Error auto-scheduling election', { error: error.message, stack: error.stack, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Failed to auto-schedule election' });
   }
 });
@@ -1584,7 +1901,7 @@ router.post('/:organizationId/elections/:electionId/complete', requireAuth, asyn
         db.all('SELECT * FROM election_candidates WHERE election_id = ? ORDER BY votes_received DESC',
           [electionId], (err, candidates) => {
             if (err) {
-              console.error('Error fetching candidates:', err);
+              logger.error('Error fetching candidates', { error: err.message, organizationId: req.params.organizationId, electionId: req.params.electionId });
               return res.status(500).json({ error: 'Failed to complete election' });
             }
 
@@ -1622,7 +1939,7 @@ router.post('/:organizationId/elections/:electionId/complete', requireAuth, asyn
             db.run('UPDATE organizations SET representatives = ? WHERE id = ?',
               [representativesJson, organizationId], (err) => {
               if (err) {
-                console.error('Error updating organization representatives:', err);
+                logger.error('Error updating organization representatives', { error: err.message, electionId: req.params.electionId, organizationId: req.params.organizationId });
                 return res.status(500).json({ error: 'Failed to update organization representatives' });
               }
 
@@ -1630,7 +1947,7 @@ router.post('/:organizationId/elections/:electionId/complete', requireAuth, asyn
               db.run('UPDATE representative_elections SET status = "completed", quorum_met = 1, election_completed_at = CURRENT_TIMESTAMP WHERE id = ?',
                 [electionId], (err) => {
                 if (err) {
-                  console.error('Error updating election status:', err);
+                  logger.error('Error updating election status', { error: err.message, electionId: req.params.electionId });
                   return res.status(500).json({ error: 'Failed to complete election' });
                 }
 
@@ -1640,6 +1957,15 @@ router.post('/:organizationId/elections/:electionId/complete', requireAuth, asyn
                   positionsFilled: electedUserIds.length,
                   electedUserIds
                 }, req);
+
+                // Broadcast WebSocket update
+                const webSocketManager = require('../modules/websocket');
+                webSocketManager.broadcastOrganizationUpdate(organizationId, 'election-completed', {
+                  organizationId,
+                  electionId,
+                  positionsFilled: electedUserIds.length,
+                  electedUserIds
+                });
 
                 res.json({
                   success: true,
@@ -1655,7 +1981,7 @@ router.post('/:organizationId/elections/:electionId/complete', requireAuth, asyn
       });
     });
   } catch (error) {
-    console.error('Error completing election:', error);
+    logger.error('Error completing election', { error: error.message, stack: error.stack, electionId: req.params.electionId, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Failed to complete election' });
   }
 });
@@ -1678,20 +2004,116 @@ router.get('/:organizationId/public-audit-logs', requireAuth, async (req, res) =
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    // Return empty audit logs (organization_audit table not implemented in simplified system)
-    console.log('Returning empty audit logs for organization:', organizationId);
-    res.json({
-      auditLogs: [],
-      pagination: {
-        total: 0,
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        hasMore: false
+    // Ensure organization_audit table exists, then execute query
+    db.run(`CREATE TABLE IF NOT EXISTS organization_audit (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      action_type TEXT,
+      performed_by_user_id TEXT NOT NULL,
+      affected_user_id TEXT,
+      details TEXT,
+      ip_address TEXT,
+      user_agent TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (organization_id) REFERENCES organizations(id),
+      FOREIGN KEY (performed_by_user_id) REFERENCES users(id),
+      FOREIGN KEY (affected_user_id) REFERENCES users(id)
+    )`, (createErr) => {
+      if (createErr && !createErr.message.includes('already exists') && !createErr.message.includes('duplicate')) {
+        logger.error('Error ensuring organization_audit table exists', { error: createErr.message, organizationId: req.params.organizationId });
+        return res.status(500).json({ error: 'Failed to initialize audit logs table' });
       }
+
+      // Build query with filters
+    let query = `
+      SELECT 
+        oa.id,
+        oa.action_type,
+        oa.created_at,
+        u1.name as performed_by_name,
+        u2.name as affected_user_name,
+        oa.details
+      FROM organization_audit oa
+      LEFT JOIN users u1 ON oa.performed_by_user_id = u1.id
+      LEFT JOIN users u2 ON oa.affected_user_id = u2.id
+      WHERE oa.organization_id = ?
+    `;
+    const params = [organizationId];
+
+    if (actionType) {
+      query += ' AND oa.action_type = ?';
+      params.push(actionType);
+    }
+
+    if (startDate) {
+      query += ' AND oa.created_at >= ?';
+      params.push(startDate);
+    }
+
+    if (endDate) {
+      query += ' AND oa.created_at <= ?';
+      params.push(endDate);
+    }
+
+    // Get total count for pagination
+    const countQuery = query.replace(/SELECT[\s\S]*?FROM/, 'SELECT COUNT(*) as total FROM');
+    db.get(countQuery, params, (err, countResult) => {
+      if (err) {
+        logger.error('Error counting audit logs', { error: err.message, organizationId: req.params.organizationId });
+        return res.status(500).json({ error: 'Failed to fetch audit logs' });
+      }
+
+      const total = countResult?.total || 0;
+
+      // Add ordering and pagination
+      query += ' ORDER BY oa.created_at DESC LIMIT ? OFFSET ?';
+      params.push(parseInt(limit), parseInt(offset));
+
+      db.all(query, params, (err, logs) => {
+        if (err) {
+          logger.error('Error fetching audit logs', { error: err.message, organizationId: req.params.organizationId });
+          return res.status(500).json({ error: 'Failed to fetch audit logs' });
+        }
+
+        // Parse details JSON if it exists
+        const mappedLogs = (logs || []).map(log => {
+          let parsedDetails = null;
+          if (log.details) {
+            try {
+              parsedDetails = typeof log.details === 'string' ? JSON.parse(log.details) : log.details;
+            } catch (parseErr) {
+              logger.error('Error parsing audit log details', { error: parseErr.message, logId: log.id, organizationId: req.params.organizationId });
+              // If parsing fails, return the raw string or empty object
+              parsedDetails = typeof log.details === 'string' ? log.details : {};
+            }
+          }
+          
+          return {
+            id: log.id,
+            action_type: log.action_type,
+            created_at: log.created_at,
+            createdAt: log.created_at, // Also provide camelCase for compatibility
+            performed_by_name: log.performed_by_name,
+            affected_user_name: log.affected_user_name,
+            details: parsedDetails
+          };
+        });
+
+        res.json({
+          auditLogs: mappedLogs,
+          pagination: {
+            total: total,
+            limit: parseInt(limit),
+            offset: parseInt(offset),
+            hasMore: (parseInt(offset) + parseInt(limit)) < total
+          }
+        });
+      });
     });
+    }); // Close the db.run callback
 
   } catch (error) {
-    console.error('Error fetching audit logs:', error);
+    logger.error('Error fetching audit logs', { error: error.message, stack: error.stack, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Failed to fetch audit logs' });
   }
 });
@@ -1721,7 +2143,7 @@ router.get('/:organizationId/audit-stats', requireAuth, async (req, res) => {
       ORDER BY count DESC
     `, [organizationId, startDate], (err, actionStats) => {
       if (err) {
-        console.error('Error fetching action stats:', err);
+        logger.error('Error fetching action stats', { error: err.message, organizationId: req.params.organizationId });
         return res.status(500).json({ error: 'Failed to fetch audit statistics' });
       }
 
@@ -1736,7 +2158,7 @@ router.get('/:organizationId/audit-stats', requireAuth, async (req, res) => {
         LIMIT 10
       `, [organizationId, startDate], (err, userStats) => {
         if (err) {
-          console.error('Error fetching user stats:', err);
+          logger.error('Error fetching user stats', { error: err.message, organizationId: req.params.organizationId });
           return res.status(500).json({ error: 'Failed to fetch user statistics' });
         }
 
@@ -1749,7 +2171,7 @@ router.get('/:organizationId/audit-stats', requireAuth, async (req, res) => {
           ORDER BY date DESC
         `, [organizationId, startDate], (err, dailyStats) => {
           if (err) {
-            console.error('Error fetching daily stats:', err);
+            logger.error('Error fetching daily stats', { error: err.message, organizationId: req.params.organizationId });
             return res.status(500).json({ error: 'Failed to fetch daily statistics' });
           }
 
@@ -1764,7 +2186,7 @@ router.get('/:organizationId/audit-stats', requireAuth, async (req, res) => {
             WHERE organization_id = ? AND created_at >= ?
           `, [organizationId, startDate], (err, totals) => {
             if (err) {
-              console.error('Error fetching totals:', err);
+              logger.error('Error fetching totals', { error: err.message, organizationId: req.params.organizationId });
               return res.status(500).json({ error: 'Failed to fetch totals' });
             }
 
@@ -1786,7 +2208,7 @@ router.get('/:organizationId/audit-stats', requireAuth, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching audit statistics:', error);
+    logger.error('Error fetching audit statistics', { error: error.message, stack: error.stack, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Failed to fetch audit statistics' });
   }
 });
@@ -1834,7 +2256,7 @@ router.get('/:organizationId/audit-export', requireAuth, async (req, res) => {
 
     db.all(query, params, (err, logs) => {
       if (err) {
-        console.error('Error exporting audit logs:', err);
+        logger.error('Error exporting audit logs', { error: err.message, organizationId: req.params.organizationId });
         return res.status(500).json({ error: 'Failed to export audit logs' });
       }
 
@@ -1862,7 +2284,7 @@ router.get('/:organizationId/audit-export', requireAuth, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error exporting audit logs:', error);
+    logger.error('Error exporting audit logs', { error: error.message, stack: error.stack, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Failed to export audit logs' });
   }
 });
@@ -1909,13 +2331,37 @@ router.get('/:organizationId/analytics', requireAuth, async (req, res) => {
     // Get or create analytics record
     const periodKey = `${periodStart.toISOString().split('T')[0]}_${periodEnd.toISOString().split('T')[0]}`;
 
-    db.get('SELECT * FROM voting_analytics WHERE organization_id = ? AND period_start = ? AND period_end = ?',
-      [organizationId, periodStart.toISOString().split('T')[0], periodEnd.toISOString().split('T')[0]],
-      (err, existing) => {
-        if (err) {
-          console.error('Error fetching analytics:', err);
-          return res.status(500).json({ error: 'Failed to fetch analytics' });
-        }
+    // Ensure voting_analytics table exists
+    db.run(`CREATE TABLE IF NOT EXISTS voting_analytics (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      period_start TEXT NOT NULL,
+      period_end TEXT NOT NULL,
+      total_members INTEGER DEFAULT 0,
+      active_voters INTEGER DEFAULT 0,
+      total_votes_cast INTEGER DEFAULT 0,
+      average_votes_per_member REAL DEFAULT 0,
+      elections_held INTEGER DEFAULT 0,
+      average_election_turnout REAL DEFAULT 0,
+      quorum_achieved_percentage REAL DEFAULT 0,
+      total_decisions_made INTEGER DEFAULT 0,
+      decisions_passed INTEGER DEFAULT 0,
+      decisions_failed INTEGER DEFAULT 0,
+      average_decision_time_hours REAL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (organization_id) REFERENCES organizations(id)
+    )`, (createErr) => {
+      if (createErr && !createErr.message.includes('already exists')) {
+        logger.error('Error creating voting_analytics table', { error: createErr.message, organizationId: req.params.organizationId });
+      }
+      
+      db.get('SELECT * FROM voting_analytics WHERE organization_id = ? AND period_start = ? AND period_end = ?',
+        [organizationId, periodStart.toISOString().split('T')[0], periodEnd.toISOString().split('T')[0]],
+        (err, existing) => {
+          if (err) {
+            logger.error('Error fetching analytics', { error: err.message, organizationId: req.params.organizationId });
+            return res.status(500).json({ error: 'Failed to fetch analytics' });
+          }
 
         if (existing) {
           return res.json({ analytics: existing });
@@ -1943,7 +2389,7 @@ router.get('/:organizationId/analytics', requireAuth, async (req, res) => {
             analytics.averageDecisionTimeHours
           ], function(err) {
             if (err) {
-              console.error('Error saving analytics:', err);
+              logger.error('Error saving analytics', { error: err.message, organizationId: req.params.organizationId });
               return res.status(500).json({ error: 'Failed to save analytics' });
             }
 
@@ -1951,8 +2397,9 @@ router.get('/:organizationId/analytics', requireAuth, async (req, res) => {
           });
         });
       });
+    });
   } catch (error) {
-    console.error('Error fetching analytics:', error);
+    logger.error('Error fetching analytics', { error: error.message, stack: error.stack, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Failed to fetch analytics' });
   }
 });
@@ -2006,6 +2453,25 @@ function calculateVotingAnalytics(db, organizationId, startDate, endDate, callba
               const activeVoters = totalVotesCast > 0 ? Math.min(totalMembers, Math.ceil(totalVotesCast / totalDecisionsMade)) : 0;
               const averageVotesPerMember = totalMembers > 0 ? totalVotesCast / totalMembers : 0;
 
+              // Calculate average decision time from completed sessions
+              let averageDecisionTimeHours = 0;
+              const completedSessions = sessions.filter(s => 
+                s.status === 'completed' && 
+                s.voting_starts_at && 
+                s.completed_at
+              );
+
+              if (completedSessions.length > 0) {
+                let totalHours = 0;
+                completedSessions.forEach(session => {
+                  const startTime = new Date(session.voting_starts_at).getTime();
+                  const endTime = new Date(session.completed_at).getTime();
+                  const hours = (endTime - startTime) / (1000 * 60 * 60); // Convert ms to hours
+                  totalHours += hours;
+                });
+                averageDecisionTimeHours = totalHours / completedSessions.length;
+              }
+
               callback({
                 totalMembers,
                 activeVoters,
@@ -2017,7 +2483,7 @@ function calculateVotingAnalytics(db, organizationId, startDate, endDate, callba
                 totalDecisionsMade,
                 decisionsPassed,
                 decisionsFailed,
-                averageDecisionTimeHours: 0 // TODO: Calculate from session durations
+                averageDecisionTimeHours: Math.round(averageDecisionTimeHours * 10) / 10 // Round to 1 decimal
               });
             });
         });

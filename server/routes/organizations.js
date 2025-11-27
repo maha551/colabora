@@ -1,39 +1,11 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { metricsCollector } = require('../middleware/monitoring');
+const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { logger } = require('../middleware/logger');
+const { organizationValidation, paramValidation } = require('../middleware/validation');
 
 const router = express.Router();
-
-// Middleware to check authentication
-const requireAuth = (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  next();
-};
-
-// Middleware to check if user is admin (for organization creation)
-const requireAdmin = (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-
-  const db = req.app.locals.db;
-  db.get('SELECT role FROM users WHERE id = ?', [req.user.id], (err, user) => {
-    if (err) {
-      console.error('Error checking user role:', err);
-      return res.status(500).json({ error: 'Failed to verify permissions' });
-    }
-
-    if (!user || user.role !== 'admin') {
-      return res.status(403).json({
-        error: 'Admin privileges required to create organizations'
-      });
-    }
-
-    next();
-  });
-};
 
 // Helper function to check if user is representative of organization
 function isRepresentative(db, userId, organizationId) {
@@ -88,16 +60,10 @@ function logAudit(db, organizationId, actionType, performedByUserId, affectedUse
 
 
 // Create organization (admin only)
-router.post('/', requireAdmin, (req, res) => {
+router.post('/', requireAdmin, ...organizationValidation.create, (req, res) => {
   const db = req.app.locals.db;
   const { name, description, representatives, membershipPolicy, votingEnabled, votingThreshold } = req.body;
   const adminId = req.user.id;
-
-  if (!name || !representatives || representatives.length < 3) {
-    return res.status(400).json({
-      error: 'Organization name and at least 3 representatives required'
-    });
-  }
 
   const orgId = uuidv4();
   const repsJson = JSON.stringify(representatives);
@@ -105,7 +71,7 @@ router.post('/', requireAdmin, (req, res) => {
   // Use transaction to create organization and add representatives as members
   db.run('BEGIN TRANSACTION', (beginErr) => {
     if (beginErr) {
-      console.error('Error beginning transaction:', beginErr);
+      logger.error('Error beginning transaction', { error: beginErr.message });
       return res.status(500).json({ error: 'Failed to create organization' });
     }
 
@@ -116,7 +82,7 @@ router.post('/', requireAdmin, (req, res) => {
       membershipPolicy || 'invitation', votingEnabled ? 1 : 0, votingThreshold || 0.5, adminId
     ], function(orgErr) {
       if (orgErr) {
-        console.error('Error creating organization:', orgErr);
+        logger.error('Error creating organization', { error: orgErr.message });
         db.run('ROLLBACK', () => {});
         return res.status(500).json({ error: 'Failed to create organization' });
       }
@@ -129,7 +95,7 @@ router.post('/', requireAdmin, (req, res) => {
         // No representatives to add, commit and respond
         db.run('COMMIT', (commitErr) => {
           if (commitErr) {
-            console.error('Error committing transaction:', commitErr);
+            logger.error('Error committing transaction', { error: commitErr.message });
             db.run('ROLLBACK', () => {});
             return res.status(500).json({ error: 'Failed to create organization' });
           }
@@ -163,13 +129,13 @@ router.post('/', requireAdmin, (req, res) => {
           memberId, orgId, repId
         ], function(memberErr) {
           if (memberErr) {
-            console.error('Error adding representative as member:', memberErr);
+            logger.error('Error adding representative as member', { error: memberErr.message, representativeId: repId, organizationId: orgId });
             db.run('ROLLBACK', () => {});
             return res.status(500).json({ error: 'Failed to add organization members' });
           }
 
           membersAdded++;
-          console.log(`Added representative ${repId} as member of organization ${orgId}`);
+          logger.debug('Added representative as member', { representativeId: repId, organizationId: orgId });
 
           // Log audit event for member addition
           logAudit(db, orgId, 'member_added', adminId, repId, { role: 'representative' }, req);
@@ -178,7 +144,7 @@ router.post('/', requireAdmin, (req, res) => {
           if (membersAdded >= totalRepresentatives) {
             db.run('COMMIT', (commitErr) => {
               if (commitErr) {
-                console.error('Error committing transaction:', commitErr);
+                logger.error('Error committing transaction', { error: commitErr.message });
                 db.run('ROLLBACK', () => {});
                 return res.status(500).json({ error: 'Failed to create organization' });
               }
@@ -225,7 +191,7 @@ router.get('/', requireAuth, (req, res) => {
 
   db.all(query, [userId, userId, `%${userId}%`], (err, rows) => {
     if (err) {
-      console.error('Error fetching organizations:', err);
+      logger.error('Error fetching organizations', { error: err.message, userId: req.user.id });
       return res.status(500).json({ error: 'Failed to fetch organizations' });
     }
 
@@ -248,7 +214,7 @@ router.get('/', requireAuth, (req, res) => {
 });
 
 // Get specific organization details
-router.get('/:organizationId', requireAuth, async (req, res) => {
+router.get('/:organizationId', requireAuth, ...paramValidation.organizationId, async (req, res) => {
   const db = req.app.locals.db;
   const { organizationId } = req.params;
   const userId = req.user.id;
@@ -265,7 +231,7 @@ router.get('/:organizationId', requireAuth, async (req, res) => {
     // Get organization details
     db.get('SELECT * FROM organizations WHERE id = ?', [organizationId], (err, org) => {
       if (err) {
-        console.error('Error fetching organization:', err);
+        logger.error('Error fetching organization', { error: err.message, organizationId: req.params.organizationId });
         return res.status(500).json({ error: 'Failed to fetch organization' });
       }
 
@@ -282,7 +248,7 @@ router.get('/:organizationId', requireAuth, async (req, res) => {
         ORDER BY om.joined_at DESC
       `, [organizationId], (err, members) => {
         if (err) {
-          console.error('Error fetching members:', err);
+          logger.error('Error fetching members', { error: err.message, organizationId: req.params.organizationId });
           return res.status(500).json({ error: 'Failed to fetch members' });
         }
 
@@ -314,13 +280,13 @@ router.get('/:organizationId', requireAuth, async (req, res) => {
       });
     });
   } catch (error) {
-    console.error('Error in organization details:', error);
+    logger.error('Error in organization details', { error: error.message, stack: error.stack, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // Update organization (representatives only)
-router.put('/:organizationId', requireAuth, async (req, res) => {
+router.put('/:organizationId', requireAuth, ...paramValidation.organizationId, ...organizationValidation.update, async (req, res) => {
   const db = req.app.locals.db;
   const { organizationId } = req.params;
   const userId = req.user.id;
@@ -338,7 +304,7 @@ router.put('/:organizationId', requireAuth, async (req, res) => {
       name, description, membershipPolicy, votingThreshold, organizationId
     ], function(err) {
       if (err) {
-        console.error('Error updating organization:', err);
+        logger.error('Error updating organization', { error: err.message, organizationId: req.params.organizationId });
         return res.status(500).json({ error: 'Failed to update organization' });
       }
 
@@ -346,13 +312,13 @@ router.put('/:organizationId', requireAuth, async (req, res) => {
       res.json({ success: true });
     });
   } catch (error) {
-    console.error('Error updating organization:', error);
+    logger.error('Error updating organization', { error: error.message, stack: error.stack, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // Nominate new representative (representatives only)
-router.post('/:organizationId/representatives', requireAuth, async (req, res) => {
+router.post('/:organizationId/representatives', requireAuth, ...paramValidation.organizationId, ...organizationValidation.nominateRepresentative, async (req, res) => {
   const db = req.app.locals.db;
   const { organizationId } = req.params;
   const userId = req.user.id;
@@ -367,7 +333,7 @@ router.post('/:organizationId/representatives', requireAuth, async (req, res) =>
     // Get current representatives
     db.get('SELECT representatives FROM organizations WHERE id = ?', [organizationId], (err, row) => {
       if (err) {
-        console.error('Error fetching organization:', err);
+        logger.error('Error fetching organization', { error: err.message, organizationId: req.params.organizationId });
         return res.status(500).json({ error: 'Failed to fetch organization' });
       }
 
@@ -382,7 +348,7 @@ router.post('/:organizationId/representatives', requireAuth, async (req, res) =>
 
       db.run('UPDATE organizations SET representatives = ? WHERE id = ?', [updatedReps, organizationId], function(err) {
         if (err) {
-          console.error('Error updating representatives:', err);
+          logger.error('Error updating representatives', { error: err.message, organizationId: req.params.organizationId });
           return res.status(500).json({ error: 'Failed to add representative' });
         }
 
@@ -391,13 +357,13 @@ router.post('/:organizationId/representatives', requireAuth, async (req, res) =>
       });
     });
   } catch (error) {
-    console.error('Error nominating representative:', error);
+    logger.error('Error nominating representative', { error: error.message, stack: error.stack, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // Remove representative (requires 3/3 approval)
-router.delete('/:organizationId/representatives/:repId', requireAuth, async (req, res) => {
+router.delete('/:organizationId/representatives/:repId', requireAuth, ...paramValidation.organizationId, ...paramValidation.repId, async (req, res) => {
   const db = req.app.locals.db;
   const { organizationId, repId } = req.params;
   const userId = req.user.id;
@@ -411,7 +377,7 @@ router.delete('/:organizationId/representatives/:repId', requireAuth, async (req
     // Get current representatives
     db.get('SELECT representatives FROM organizations WHERE id = ?', [organizationId], (err, row) => {
       if (err) {
-        console.error('Error fetching organization:', err);
+        logger.error('Error fetching organization', { error: err.message, organizationId: req.params.organizationId });
         return res.status(500).json({ error: 'Failed to fetch organization' });
       }
 
@@ -431,7 +397,7 @@ router.delete('/:organizationId/representatives/:repId', requireAuth, async (req
 
       db.run('UPDATE organizations SET representatives = ? WHERE id = ?', [updatedRepsJson, organizationId], function(err) {
         if (err) {
-          console.error('Error removing representative:', err);
+          logger.error('Error removing representative', { error: err.message, organizationId: req.params.organizationId, repId: req.params.repId });
           return res.status(500).json({ error: 'Failed to remove representative' });
         }
 
@@ -440,13 +406,13 @@ router.delete('/:organizationId/representatives/:repId', requireAuth, async (req
       });
     });
   } catch (error) {
-    console.error('Error removing representative:', error);
+    logger.error('Error removing representative', { error: error.message, stack: error.stack, organizationId: req.params.organizationId, repId: req.params.repId });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // Invite members (representatives only)
-router.post('/:organizationId/members/invite', requireAuth, async (req, res) => {
+router.post('/:organizationId/members/invite', requireAuth, ...paramValidation.organizationId, ...organizationValidation.inviteMembers, async (req, res) => {
   const db = req.app.locals.db;
   const { organizationId } = req.params;
   const userId = req.user.id;
@@ -456,10 +422,6 @@ router.post('/:organizationId/members/invite', requireAuth, async (req, res) => 
     const isRep = await isRepresentative(db, userId, organizationId);
     if (!isRep) {
       return res.status(403).json({ error: 'Only representatives can invite members' });
-    }
-
-    if (!emails || !Array.isArray(emails)) {
-      return res.status(400).json({ error: 'Email list required' });
     }
 
     // For now, just log the invitations (in production, would send actual emails)
@@ -474,19 +436,27 @@ router.post('/:organizationId/members/invite', requireAuth, async (req, res) => 
     // Log bulk invitation
     logAudit(db, organizationId, 'member_bulk_invited', userId, null, { emailCount: emails.length, emails }, req);
 
+    // Broadcast WebSocket update
+    const webSocketManager = require('../modules/websocket');
+    webSocketManager.broadcastOrganizationUpdate(organizationId, 'member-invited', {
+      organizationId,
+      invitedBy: userId,
+      invitationCount: invitations.length
+    });
+
     res.json({
       success: true,
       invitations: invitations.length,
       message: `Invitations sent to ${invitations.length} email addresses`
     });
   } catch (error) {
-    console.error('Error inviting members:', error);
+    logger.error('Error inviting members', { error: error.message, stack: error.stack, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // Add member to organization
-router.post('/:organizationId/members', requireAuth, async (req, res) => {
+router.post('/:organizationId/members', requireAuth, ...paramValidation.organizationId, ...organizationValidation.addMember, async (req, res) => {
   const db = req.app.locals.db;
   const { organizationId } = req.params;
   const userId = req.user.id;
@@ -501,7 +471,7 @@ router.post('/:organizationId/members', requireAuth, async (req, res) => {
     // Check if user exists
     db.get('SELECT id, name, email FROM users WHERE id = ?', [memberUserId], (err, user) => {
       if (err) {
-        console.error('Error checking user:', err);
+        logger.error('Error checking user', { error: err.message, userId: req.body.userId });
         return res.status(500).json({ error: 'Failed to verify user' });
       }
 
@@ -512,7 +482,7 @@ router.post('/:organizationId/members', requireAuth, async (req, res) => {
       // Check if already a member
       db.get('SELECT id FROM organization_members WHERE organization_id = ? AND user_id = ?', [organizationId, memberUserId], (err, existing) => {
         if (err) {
-          console.error('Error checking membership:', err);
+          logger.error('Error checking membership', { error: err.message, userId: req.body.userId, organizationId: req.params.organizationId });
           return res.status(500).json({ error: 'Failed to check membership' });
         }
 
@@ -526,7 +496,7 @@ router.post('/:organizationId/members', requireAuth, async (req, res) => {
         // Use transaction to ensure member addition and collaborator setup are atomic
         db.run('BEGIN TRANSACTION', (beginErr) => {
           if (beginErr) {
-            console.error('Error beginning transaction:', beginErr);
+            logger.error('Error beginning transaction', { error: beginErr.message });
             return res.status(500).json({ error: 'Failed to add member' });
           }
 
@@ -535,7 +505,7 @@ router.post('/:organizationId/members', requireAuth, async (req, res) => {
             id, organization_id, user_id, invited_by_rep_id, status
           ) VALUES (?, ?, ?, ?, 'active')`, [membershipId, organizationId, memberUserId, userId], function(memberErr) {
             if (memberErr) {
-              console.error('Error adding member:', memberErr);
+              logger.error('Error adding member', { error: memberErr.message, userId: req.body.userId, organizationId: req.params.organizationId });
               db.run('ROLLBACK', () => {});
               return res.status(500).json({ error: 'Failed to add member' });
             }
@@ -543,7 +513,7 @@ router.post('/:organizationId/members', requireAuth, async (req, res) => {
             // Get all organizational documents for this organization
             db.all('SELECT id FROM documents WHERE organization_id = ? AND ownership_type = ?', [organizationId, 'organizational'], (docsErr, docs) => {
               if (docsErr) {
-                console.error('Error fetching organizational documents:', docsErr);
+                logger.error('Error fetching organizational documents', { error: docsErr.message, organizationId: req.params.organizationId });
                 db.run('ROLLBACK', () => {});
                 return res.status(500).json({ error: 'Failed to set up document access' });
               }
@@ -552,12 +522,21 @@ router.post('/:organizationId/members', requireAuth, async (req, res) => {
                 // No documents to add collaborators to, just commit
                 db.run('COMMIT', (commitErr) => {
                   if (commitErr) {
-                    console.error('Error committing transaction:', commitErr);
+                    logger.error('Error committing transaction', { error: commitErr.message });
                     db.run('ROLLBACK', () => {});
                     return res.status(500).json({ error: 'Failed to add member' });
                   }
 
                   logAudit(db, organizationId, 'member_added', userId, memberUserId, { autoCollaboratorSetup: true }, req);
+                  
+                  // Broadcast WebSocket update
+                  const webSocketManager = require('../modules/websocket');
+                  webSocketManager.broadcastOrganizationUpdate(organizationId, 'member-added', {
+                    organizationId,
+                    userId: memberUserId,
+                    addedBy: userId
+                  });
+                  
                   res.json({
                     membership: {
                       id: membershipId,
@@ -582,7 +561,7 @@ router.post('/:organizationId/members', requireAuth, async (req, res) => {
                   id, document_id, user_id
                 ) VALUES (?, ?, ?)`, [collabId, doc.id, memberUserId], function(collabErr) {
                   if (collabErr) {
-                    console.error('Error adding collaborator:', collabErr);
+                    logger.error('Error adding collaborator', { error: collabErr.message, documentId: doc.id, userId: memberUserId });
                     db.run('ROLLBACK', () => {});
                     return res.status(500).json({ error: 'Failed to set up document access' });
                   }
@@ -593,16 +572,25 @@ router.post('/:organizationId/members', requireAuth, async (req, res) => {
                   if (collaboratorsAdded >= totalDocuments) {
                     db.run('COMMIT', (commitErr) => {
                       if (commitErr) {
-                        console.error('Error committing transaction:', commitErr);
+                        logger.error('Error committing transaction', { error: commitErr.message });
                         db.run('ROLLBACK', () => {});
                         return res.status(500).json({ error: 'Failed to add member' });
                       }
 
-                      console.log(`Added member ${memberUserId} as collaborator to ${totalDocuments} organizational documents`);
+                      logger.debug('Added member as collaborator to organizational documents', { userId: memberUserId, documentCount: totalDocuments, organizationId: req.params.organizationId });
                       logAudit(db, organizationId, 'member_added', userId, memberUserId, {
                         autoCollaboratorSetup: true,
                         documentsAffected: totalDocuments
                       }, req);
+
+                      // Broadcast WebSocket update
+                      const webSocketManager = require('../modules/websocket');
+                      webSocketManager.broadcastOrganizationUpdate(organizationId, 'member-added', {
+                        organizationId,
+                        userId: memberUserId,
+                        addedBy: userId,
+                        documentsAffected: totalDocuments
+                      });
 
                       res.json({
                         membership: {
@@ -624,13 +612,13 @@ router.post('/:organizationId/members', requireAuth, async (req, res) => {
       });
     });
   } catch (error) {
-    console.error('Error adding member:', error);
+    logger.error('Error adding member', { error: error.message, stack: error.stack, userId: req.body.userId, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // Remove member from organization
-router.delete('/:organizationId/members/:memberUserId', requireAuth, async (req, res) => {
+router.delete('/:organizationId/members/:memberUserId', requireAuth, ...paramValidation.organizationId, ...paramValidation.memberUserId, async (req, res) => {
   const db = req.app.locals.db;
   const { organizationId, memberUserId } = req.params;
   const userId = req.user.id;
@@ -648,7 +636,7 @@ router.delete('/:organizationId/members/:memberUserId', requireAuth, async (req,
       new Date().toISOString(), organizationId, memberUserId
     ], function(err) {
       if (err) {
-        console.error('Error removing member:', err);
+        logger.error('Error removing member', { error: err.message, userId: req.params.userId, organizationId: req.params.organizationId });
         return res.status(500).json({ error: 'Failed to remove member' });
       }
 
@@ -657,10 +645,19 @@ router.delete('/:organizationId/members/:memberUserId', requireAuth, async (req,
       }
 
       logAudit(db, organizationId, 'member_left', userId, memberUserId, { initiatedBy: 'representative' }, req);
+      
+      // Broadcast WebSocket update
+      const webSocketManager = require('../modules/websocket');
+      webSocketManager.broadcastOrganizationUpdate(organizationId, 'member-removed', {
+        organizationId,
+        userId: memberUserId,
+        removedBy: userId
+      });
+      
       res.json({ success: true });
     });
   } catch (error) {
-    console.error('Error removing member:', error);
+    logger.error('Error removing member', { error: error.message, stack: error.stack, userId: req.params.userId, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -683,14 +680,14 @@ router.get('/:organizationId/votes', requireAuth, async (req, res) => {
       WHERE organization_id = ?
       ORDER BY created_at DESC`, [organizationId], (err, votes) => {
       if (err) {
-        console.error('Error fetching votes:', err);
+        logger.error('Error fetching votes', { error: err.message, organizationId: req.params.organizationId });
         return res.status(500).json({ error: 'Failed to fetch votes' });
       }
 
       res.json({ votes });
     });
   } catch (error) {
-    console.error('Error fetching votes:', error);
+    logger.error('Error fetching votes', { error: error.message, stack: error.stack, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -754,7 +751,7 @@ router.post('/:organizationId/votes', requireAuth, async (req, res) => {
       targetDocumentId
     ], function(err) {
       if (err) {
-        console.error('Error creating vote:', err);
+        logger.error('Error creating vote', { error: err.message, organizationId: req.params.organizationId });
         return res.status(500).json({ error: 'Failed to create vote' });
       }
 
@@ -776,7 +773,7 @@ router.post('/:organizationId/votes', requireAuth, async (req, res) => {
       });
     });
   } catch (error) {
-    console.error('Error creating vote:', error);
+    logger.error('Error creating vote', { error: error.message, stack: error.stack, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -799,7 +796,7 @@ router.post('/:organizationId/votes/:voteId/approve', requireAuth, async (req, r
       userId, new Date().toISOString(), voteId, organizationId
     ], function(err) {
       if (err) {
-        console.error('Error approving vote:', err);
+        logger.error('Error approving vote', { error: err.message, voteId: req.params.voteId, organizationId: req.params.organizationId });
         return res.status(500).json({ error: 'Failed to approve vote' });
       }
 
@@ -811,7 +808,7 @@ router.post('/:organizationId/votes/:voteId/approve', requireAuth, async (req, r
       res.json({ success: true });
     });
   } catch (error) {
-    console.error('Error approving vote:', error);
+    logger.error('Error approving vote', { error: error.message, stack: error.stack, voteId: req.params.voteId, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -835,7 +832,7 @@ router.post('/:organizationId/votes/:voteId/vote', requireAuth, async (req, res)
       voteId, organizationId
     ], (err, vote) => {
       if (err) {
-        console.error('Error fetching vote:', err);
+        logger.error('Error fetching vote', { error: err.message, voteId: req.params.voteId, organizationId: req.params.organizationId });
         return res.status(500).json({ error: 'Failed to fetch vote' });
       }
 
@@ -846,7 +843,7 @@ router.post('/:organizationId/votes/:voteId/vote', requireAuth, async (req, res)
       // Check if already voted
       db.get('SELECT id FROM vote_ballots WHERE vote_id = ? AND user_id = ?', [voteId, userId], (err, existing) => {
         if (err) {
-          console.error('Error checking existing vote:', err);
+          logger.error('Error checking existing vote', { error: err.message, voteId: req.params.voteId, userId: req.user.id });
           return res.status(500).json({ error: 'Failed to check existing vote' });
         }
 
@@ -862,7 +859,7 @@ router.post('/:organizationId/votes/:voteId/vote', requireAuth, async (req, res)
           ballotId, voteId, userId, choice
         ], function(err) {
           if (err) {
-            console.error('Error casting vote:', err);
+            logger.error('Error casting vote', { error: err.message, voteId: req.params.voteId, userId: req.user.id });
             return res.status(500).json({ error: 'Failed to cast vote' });
           }
 
@@ -876,7 +873,7 @@ router.post('/:organizationId/votes/:voteId/vote', requireAuth, async (req, res)
       });
     });
   } catch (error) {
-    console.error('Error casting vote:', error);
+    logger.error('Error casting vote', { error: error.message, stack: error.stack, voteId: req.params.voteId, userId: req.user.id });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -914,10 +911,7 @@ router.post('/:organizationId/document-proposals/:proposalId/vote', requireAuth,
     const isMember = await isActiveMember(db, userId, organizationId);
     const hasAccess = isRep || isMember;
 
-    console.log(`Document proposals access check for user ${userId} in org ${organizationId}:`);
-    console.log(`- Is representative: ${isRep}`);
-    console.log(`- Is active member: ${isMember}`);
-    console.log(`- Has access: ${hasAccess}`);
+    logger.debug('Document proposals access check', { userId, organizationId, isRepresentative: isRep, isActiveMember: isMember, hasAccess });
 
     if (!hasAccess) {
       return res.status(403).json({ error: 'Access denied' });
@@ -932,7 +926,7 @@ router.post('/:organizationId/document-proposals/:proposalId/vote', requireAuth,
       ORDER BY dp.created_at DESC
     `, [organizationId], (err, proposalRows) => {
       if (err) {
-        console.error('Error fetching document proposals:', err);
+        logger.error('Error fetching document proposals', { error: err.message, organizationId });
         return res.status(500).json({ error: 'Failed to fetch document proposals' });
       }
 
@@ -951,7 +945,7 @@ router.post('/:organizationId/document-proposals/:proposalId/vote', requireAuth,
         ORDER BY dpv.created_at ASC
       `, proposalIds, (err, voteRows) => {
         if (err) {
-          console.error('Error fetching proposal votes:', err);
+          logger.error('Error fetching proposal votes', { error: err.message, proposalId: proposal.id, organizationId });
           return res.status(500).json({ error: 'Failed to fetch proposal votes' });
         }
 
@@ -994,7 +988,7 @@ router.post('/:organizationId/document-proposals/:proposalId/vote', requireAuth,
             try {
               return row.document_options ? JSON.parse(row.document_options) : null;
             } catch (parseError) {
-              console.error('Error parsing documentOptions JSON:', parseError, 'Raw data:', row.document_options);
+              logger.error('Error parsing documentOptions JSON', { error: parseError.message, proposalId: row.id, organizationId });
               return null;
             }
           })(),
@@ -1002,7 +996,7 @@ router.post('/:organizationId/document-proposals/:proposalId/vote', requireAuth,
             try {
               return row.contributors ? JSON.parse(row.contributors) : [];
             } catch (parseError) {
-              console.error('Error parsing contributors JSON:', parseError, 'Raw data:', row.contributors);
+              logger.error('Error parsing contributors JSON', { error: parseError.message, proposalId: row.id, organizationId });
               return [];
             }
           })()
@@ -1012,7 +1006,7 @@ router.post('/:organizationId/document-proposals/:proposalId/vote', requireAuth,
       });
     });
   } catch (error) {
-    console.error('Error fetching document proposals:', error);
+    logger.error('Error fetching document proposals', { error: error.message, stack: error.stack, organizationId });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1046,7 +1040,7 @@ router.post('/:organizationId/document-proposals', requireAuth, async (req, res)
       userId, contributorsJson, optionsJson
     ], function(err) {
       if (err) {
-        console.error('Error creating document proposal:', err);
+        logger.error('Error creating document proposal', { error: err.message, organizationId, userId });
         return res.status(500).json({ error: 'Failed to create document proposal' });
       }
 
@@ -1058,7 +1052,7 @@ router.post('/:organizationId/document-proposals', requireAuth, async (req, res)
         WHERE dp.id = ?
       `, [proposalId], (err, row) => {
         if (err) {
-          console.error('Error fetching created proposal:', err);
+          logger.error('Error fetching created proposal', { error: err.message, proposalId, organizationId });
           return res.status(500).json({ error: 'Proposal created but failed to retrieve' });
         }
 
@@ -1087,7 +1081,7 @@ router.post('/:organizationId/document-proposals', requireAuth, async (req, res)
       });
     });
   } catch (error) {
-    console.error('Error creating document proposal:', error);
+    logger.error('Error creating document proposal', { error: error.message, stack: error.stack, organizationId, userId });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1113,7 +1107,7 @@ router.post('/:organizationId/document-proposals/:proposalId/vote', requireAuth,
     db.get('SELECT id, approved, applied FROM document_proposals WHERE id = ? AND organization_id = ?',
       [proposalId, organizationId], (err, proposal) => {
       if (err) {
-        console.error('Error fetching proposal:', err);
+        logger.error('Error fetching proposal', { error: err.message, proposalId, organizationId });
         return res.status(500).json({ error: 'Failed to fetch proposal' });
       }
 
@@ -1129,7 +1123,7 @@ router.post('/:organizationId/document-proposals/:proposalId/vote', requireAuth,
       db.get('SELECT id, vote FROM document_proposal_votes WHERE document_proposal_id = ? AND user_id = ?',
         [proposalId, userId], (err, existingVote) => {
         if (err) {
-          console.error('Error checking existing vote:', err);
+          logger.error('Error checking existing vote', { error: err.message, voteId: req.params.voteId, userId: req.user.id });
           return res.status(500).json({ error: 'Failed to check existing vote' });
         }
 
@@ -1143,7 +1137,7 @@ router.post('/:organizationId/document-proposals/:proposalId/vote', requireAuth,
         // Cast vote using a transaction to ensure atomicity
         db.run('BEGIN TRANSACTION', (err) => {
           if (err) {
-            console.error('Error starting vote transaction:', err);
+            logger.error('Error starting vote transaction', { error: err.message, proposalId, userId });
             return res.status(500).json({ error: 'Failed to start voting transaction' });
           }
 
@@ -1154,10 +1148,10 @@ router.post('/:organizationId/document-proposals/:proposalId/vote', requireAuth,
             voteId, proposalId, userId, vote
           ], function(err) {
             if (err) {
-              console.error('Error casting vote:', err);
+              logger.error('Error casting vote', { error: err.message, voteId: req.params.voteId, userId: req.user.id });
               db.run('ROLLBACK', (rollbackErr) => {
                 if (rollbackErr) {
-                  console.error('Error rolling back transaction:', rollbackErr);
+                  logger.error('Error rolling back transaction', { error: rollbackErr.message, proposalId, userId });
                 }
               });
               return res.status(500).json({ error: 'Failed to cast vote' });
@@ -1171,7 +1165,7 @@ router.post('/:organizationId/document-proposals/:proposalId/vote', requireAuth,
             checkProposalApproval(db, proposalId, organizationId, (approvalResult) => {
               db.run('COMMIT', (err) => {
                 if (err) {
-                  console.error('Error committing vote transaction:', err);
+                  logger.error('Error committing vote transaction', { error: err.message, proposalId, userId });
                   return res.status(500).json({ error: 'Failed to commit vote' });
                 }
                 res.json({
@@ -1186,7 +1180,7 @@ router.post('/:organizationId/document-proposals/:proposalId/vote', requireAuth,
       });
     });
   } catch (error) {
-    console.error('Error voting on proposal:', error);
+    logger.error('Error voting on proposal', { error: error.message, stack: error.stack, proposalId, organizationId, userId });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1209,7 +1203,7 @@ function checkProposalApproval(db, proposalId, organizationId, callback) {
 
   db.get(query, [proposalId, organizationId], (err, row) => {
     if (err) {
-      console.error('Error checking proposal approval:', err);
+      logger.error('Error checking proposal approval', { error: err.message, proposalId, organizationId });
       return callback();
     }
 
@@ -1233,7 +1227,7 @@ function checkProposalApproval(db, proposalId, organizationId, callback) {
       // Use a transaction for the approval process
       db.run('BEGIN TRANSACTION', (err) => {
         if (err) {
-          console.error('Error starting transaction:', err);
+          logger.error('Error starting transaction', { error: err.message, proposalId, organizationId });
           return callback();
         }
 
@@ -1241,10 +1235,10 @@ function checkProposalApproval(db, proposalId, organizationId, callback) {
         db.run('UPDATE document_proposals SET approved = 1, updated_at = ? WHERE id = ? AND approved = 0',
           [new Date().toISOString(), proposalId], function(err) {
           if (err) {
-            console.error('Error approving proposal:', err);
+            logger.error('Error approving proposal', { error: err.message, proposalId, organizationId });
             db.run('ROLLBACK', (rollbackErr) => {
               if (rollbackErr) {
-                console.error('Error rolling back transaction:', rollbackErr);
+                logger.error('Error rolling back transaction', { error: rollbackErr.message, proposalId, organizationId });
               }
             });
             return callback();
@@ -1254,7 +1248,7 @@ function checkProposalApproval(db, proposalId, organizationId, callback) {
             // Proposal was already approved by another process
             db.run('COMMIT', (commitErr) => {
               if (commitErr) {
-                console.error('Error committing transaction:', commitErr);
+                logger.error('Error committing transaction', { error: commitErr.message });
               }
             });
             return callback();
@@ -1267,16 +1261,16 @@ function checkProposalApproval(db, proposalId, organizationId, callback) {
           // Convert proposal to actual document
           convertProposalToDocument(db, proposalId, (success) => {
             if (success) {
-              console.log(`Document proposal ${proposalId} approved and converted to document`);
+              logger.info('Document proposal approved and converted to document', { proposalId, organizationId });
               db.run('COMMIT', (err) => {
-                if (err) console.error('Error committing transaction:', err);
+                if (err) logger.error('Error committing transaction', { error: err.message, proposalId, organizationId });
                 callback();
               });
             } else {
-              console.error('Failed to convert proposal to document, rolling back approval');
+              logger.error('Failed to convert proposal to document, rolling back approval', { proposalId, organizationId, documentId });
               db.run('UPDATE document_proposals SET approved = 0 WHERE id = ?', [proposalId], () => {
                 db.run('ROLLBACK', (err) => {
-                  if (err) console.error('Error rolling back transaction:', err);
+                  if (err) logger.error('Error rolling back transaction', { error: err.message, proposalId, organizationId, documentId });
                   callback();
                 });
               });
@@ -1302,18 +1296,18 @@ function convertProposalToDocument(db, proposalId, callback) {
 
   db.get(query, [proposalId], (err, result) => {
     if (err) {
-      console.error('Error fetching approved proposal:', err);
+      logger.error('Error fetching approved proposal', { error: err.message, proposalId, organizationId });
       return callback(false);
     }
 
     if (!result) {
-      console.error('Approved proposal not found:', proposalId);
+      logger.warn('Approved proposal not found', { proposalId, organizationId });
       return callback(false);
     }
 
     const proposal = result;
     if (proposal.applied) {
-      console.log('Proposal already applied:', proposalId);
+      logger.debug('Proposal already applied', { proposalId, organizationId });
       return callback(true); // Already applied, consider success
     }
 
@@ -1326,17 +1320,14 @@ function convertProposalToDocument(db, proposalId, callback) {
       const acceptanceThreshold = proposal.org_threshold || 75;
 
       // Get document proposal period from governance rules (default 1 year = 365 days)
-      db.get('SELECT document_proposal_period_days FROM organization_governance_rules WHERE organization_id = ?',
-        [proposal.organization_id], (govErr, govRules) => {
-        if (govErr) {
-          console.error('Error fetching governance rules for proposal period:', govErr);
-        }
-        
-        const proposalPeriodDays = govRules?.document_proposal_period_days || 365;
-        const proposalDeadline = new Date();
-        proposalDeadline.setDate(proposalDeadline.getDate() + proposalPeriodDays);
-        
-        // Create organizational document with standard governance settings
+      const governanceModule = require('./governance');
+      governanceModule.getGovernanceRules(db, proposal.organization_id)
+        .then((governanceRules) => {
+          const proposalPeriodDays = governanceRules?.documentProposalPeriodDays || 365;
+          const proposalDeadline = new Date();
+          proposalDeadline.setDate(proposalDeadline.getDate() + proposalPeriodDays);
+          
+          // Create organizational document with standard governance settings
         const documentId = uuidv4();
 
         // Extract parentId from documentOptions if provided
@@ -1346,7 +1337,7 @@ function convertProposalToDocument(db, proposalId, callback) {
           documentOptions = proposal.document_options ? JSON.parse(proposal.document_options) : null;
           parentId = documentOptions?.parentId || null;
         } catch (parseErr) {
-          console.error('Error parsing document_options for proposal:', proposalId, parseErr);
+          logger.error('Error parsing document_options for proposal', { error: parseErr.message, proposalId, organizationId });
           // Continue without parentId if parsing fails
         }
 
@@ -1372,31 +1363,38 @@ function convertProposalToDocument(db, proposalId, callback) {
           new Date().toISOString()
         ], function(err) {
           if (err) {
-            console.error('Error creating organizational document from proposal:', err);
+            logger.error('Error creating organizational document from proposal', { error: err.message, proposalId, organizationId, documentId });
             return callback(false);
           }
 
-          console.log(`Created organizational document ${documentId} from proposal ${proposalId}`);
-          console.log(`Document settings: threshold=${acceptanceThreshold}%, all org members are collaborators`);
+          logger.info('Created organizational document from proposal', { documentId, proposalId, organizationId, acceptanceThreshold });
 
           // Mark proposal as applied
           db.run('UPDATE document_proposals SET applied = 1, updated_at = ? WHERE id = ?',
             [new Date().toISOString(), proposalId], (err) => {
             if (err) {
-              console.error('Error marking proposal as applied:', err);
+              logger.error('Error marking proposal as applied', { error: err.message, proposalId, documentId, organizationId });
               // Document was created but proposal marking failed
               // This is a serious inconsistency - log it
-              console.error(`CRITICAL: Document ${documentId} created but proposal ${proposalId} not marked as applied`);
+              logger.error('CRITICAL: Document created but proposal not marked as applied', { documentId, proposalId, organizationId });
               return callback(false);
             }
 
-            console.log(`Proposal ${proposalId} marked as applied`);
+            logger.info('Proposal marked as applied', { proposalId, documentId, organizationId });
             callback(true);
           });
         });
-      });
+        })
+        .catch((govErr) => {
+          logger.error('Error fetching governance rules for proposal period', { error: govErr.message, organizationId });
+          // Use default if governance rules fetch fails
+          const proposalPeriodDays = 365;
+          const proposalDeadline = new Date();
+          proposalDeadline.setDate(proposalDeadline.getDate() + proposalPeriodDays);
+          // Continue with default values - callback will be called in the nested callbacks above
+        });
     } catch (error) {
-      console.error('Unexpected error converting proposal to document:', error);
+      logger.error('Unexpected error converting proposal to document', { error: error.message, stack: error.stack, proposalId, organizationId });
       callback(false);
     }
   });

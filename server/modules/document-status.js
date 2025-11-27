@@ -4,17 +4,40 @@
  */
 
 const { v4: uuidv4 } = require('uuid');
+const { logger } = require('../middleware/logger');
 
 class DocumentStatusManager {
   /**
    * Transition document from proposal to voting status
    */
   static async transitionToVoting(db, documentId, userId) {
-    console.log(`🎯 Transitioning document ${documentId} to voting status`);
+    logger.info('Transitioning document to voting status', { documentId, userId });
 
-    const votingPeriodDays = 7; // Configurable
+    // Get document's organization_id to fetch governance rules
+    const document = await new Promise((resolve, reject) => {
+      db.get('SELECT organization_id FROM documents WHERE id = ?', [documentId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    // Fetch governance rules to get defaultVotingDeadlineHours
+    let votingDeadlineHours = 168; // Default 7 days (168 hours)
+    if (document?.organization_id) {
+      try {
+        const governanceModule = require('../routes/governance');
+        const governanceRules = await governanceModule.getGovernanceRules(db, document.organization_id);
+        if (governanceRules?.defaultVotingDeadlineHours) {
+          votingDeadlineHours = governanceRules.defaultVotingDeadlineHours;
+        }
+      } catch (govErr) {
+        logger.warn('Could not fetch governance rules for voting deadline, using default', { error: govErr.message, documentId });
+      }
+    }
+
     const votingDeadline = new Date();
-    votingDeadline.setDate(votingDeadline.getDate() + votingPeriodDays);
+    votingDeadline.setHours(votingDeadline.getHours() + votingDeadlineHours);
+    logger.debug('Voting deadline set from governance rules', { documentId, votingDeadlineHours, days: (votingDeadlineHours / 24).toFixed(1) });
 
     // Update document status
     await new Promise((resolve, reject) => {
@@ -37,7 +60,16 @@ class DocumentStatusManager {
     // Send notifications to organization members
     await this.notifyStatusChange(db, documentId, 'proposal', 'voting');
 
-    console.log(`✅ Document ${documentId} transitioned to voting status`);
+    // Broadcast WebSocket update
+    const webSocketManager = require('./websocket');
+    webSocketManager.broadcastDocumentUpdate(documentId, 'document-status-changed', {
+      oldStatus: 'proposal',
+      newStatus: 'voting',
+      votingDeadline: votingDeadline.toISOString(),
+      reason: 'proposal_deadline_passed'
+    });
+
+    logger.info('Document transitioned to voting status', { documentId, userId: userId || 'system' });
     return { success: true, votingDeadline: votingDeadline.toISOString() };
   }
 
@@ -45,12 +77,14 @@ class DocumentStatusManager {
    * Transition document to agreed status
    */
   static async transitionToAgreed(db, documentId, userId) {
-    console.log(`🎉 Transitioning document ${documentId} to agreed status`);
+    logger.info('Transitioning document to agreed status', { documentId, userId: userId || 'system' });
 
     await new Promise((resolve, reject) => {
       db.run(`
         UPDATE documents
-        SET status = 'agreed', updated_at = CURRENT_TIMESTAMP
+        SET status = 'agreed', 
+            adopted_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `, [documentId], function(err) {
         if (err) reject(err);
@@ -61,7 +95,16 @@ class DocumentStatusManager {
     await this.logStatusChange(db, documentId, 'voting', 'agreed', userId || 'system', 'approval_threshold_met');
     await this.notifyStatusChange(db, documentId, 'voting', 'agreed');
 
-    console.log(`✅ Document ${documentId} marked as agreed`);
+    // Broadcast WebSocket update
+    const webSocketManager = require('./websocket');
+    webSocketManager.broadcastDocumentUpdate(documentId, 'document-status-changed', {
+      oldStatus: 'voting',
+      newStatus: 'agreed',
+      reason: 'approval_threshold_met',
+      adoptedAt: new Date().toISOString()
+    });
+
+    logger.info('Document marked as agreed', { documentId, userId: userId || 'system' });
     return { success: true };
   }
 
@@ -69,7 +112,7 @@ class DocumentStatusManager {
    * Transition document to rejected status
    */
   static async transitionToRejected(db, documentId, userId, reason = 'manual_rejection') {
-    console.log(`❌ Transitioning document ${documentId} to rejected status (reason: ${reason})`);
+    logger.info('Transitioning document to rejected status', { documentId, reason, userId: userId || 'system' });
 
     await new Promise((resolve, reject) => {
       db.run(`
@@ -85,7 +128,15 @@ class DocumentStatusManager {
     await this.logStatusChange(db, documentId, null, 'rejected', userId || 'system', reason);
     await this.notifyStatusChange(db, documentId, null, 'rejected');
 
-    console.log(`✅ Document ${documentId} marked as rejected`);
+    // Broadcast WebSocket update
+    const webSocketManager = require('./websocket');
+    webSocketManager.broadcastDocumentUpdate(documentId, 'document-status-changed', {
+      oldStatus: null,
+      newStatus: 'rejected',
+      reason: reason
+    });
+
+    logger.info('Document marked as rejected', { documentId, reason, userId: userId || 'system' });
     return { success: true, reason };
   }
 
@@ -93,7 +144,7 @@ class DocumentStatusManager {
    * Transition document to expired status
    */
   static async transitionToExpired(db, documentId, userId) {
-    console.log(`⏰ Transitioning document ${documentId} to expired status`);
+    logger.info('Transitioning document to expired status', { documentId, userId: userId || 'system' });
 
     await new Promise((resolve, reject) => {
       db.run(`
@@ -109,7 +160,15 @@ class DocumentStatusManager {
     await this.logStatusChange(db, documentId, 'proposal', 'expired', userId || 'system', 'proposal_timeout');
     await this.notifyStatusChange(db, documentId, 'proposal', 'expired');
 
-    console.log(`✅ Document ${documentId} marked as expired`);
+    // Broadcast WebSocket update
+    const webSocketManager = require('./websocket');
+    webSocketManager.broadcastDocumentUpdate(documentId, 'document-status-changed', {
+      oldStatus: 'proposal',
+      newStatus: 'expired',
+      reason: 'proposal_timeout'
+    });
+
+    logger.info('Document marked as expired', { documentId, userId: userId || 'system' });
     return { success: true };
   }
 
@@ -227,7 +286,7 @@ class DocumentStatusManager {
       });
     });
 
-    console.log(`📝 Logged status change: ${oldStatus || 'null'} → ${newStatus} (${reason}) by ${changedBy}`);
+    logger.debug('Logged status change', { documentId, oldStatus: oldStatus || 'null', newStatus, reason, changedBy });
   }
 
   /**
@@ -266,11 +325,8 @@ class DocumentStatusManager {
       recipients = members;
     }
 
-    // For now, just log the notification (email system can be added later)
-    console.log(`📧 Would notify ${recipients.length} users about status change: "${doc.title}" ${oldStatus || 'null'} → ${newStatus}`);
-
-    // TODO: Implement actual email notifications
-    // This could integrate with services like SendGrid, Mailgun, etc.
+    // Log notification (email notifications not implemented)
+    logger.debug('Would notify users about status change', { documentId, title: doc.title, recipientCount: recipients.length, oldStatus: oldStatus || 'null', newStatus });
   }
 
   /**

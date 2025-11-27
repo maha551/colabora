@@ -1,10 +1,10 @@
 import React from 'react';
-import { Document } from '../types';
+import { Document, User } from '../types';
 import { DocumentDashboard } from '../components/DocumentDashboard';
 
 interface DocumentsPageProps {
   documents: Document[];
-  currentUser: any;
+  currentUser: User | null;
   onSelectDocument: (document: Document) => void;
   onCreateDocument: (
     title: string,

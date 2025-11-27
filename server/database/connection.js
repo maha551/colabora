@@ -1,6 +1,7 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
+const { logger } = require('../middleware/logger');
 
 /**
  * Database Connection Manager
@@ -32,7 +33,7 @@ class DatabaseConnection {
           if (err) {
             reject(new Error(`Failed to connect to database: ${err.message}`));
           } else {
-            console.log(`✅ Connected to database: ${dbPath}`);
+            logger.info('Connected to database', { dbPath });
             this.isInitialized = true;
             resolve(this.db);
           }
@@ -40,7 +41,7 @@ class DatabaseConnection {
 
         // Set up error handling
         this.db.on('error', (err) => {
-          console.error('Database error:', err);
+          logger.error('Database error', { error: err.message, stack: err.stack });
         });
 
         // Enable foreign keys
@@ -79,7 +80,7 @@ class DatabaseConnection {
           if (err) {
             reject(new Error(`Failed to close database: ${err.message}`));
           } else {
-            console.log('✅ Database connection closed');
+            logger.info('Database connection closed');
             this.isInitialized = false;
             this.db = null;
             resolve();

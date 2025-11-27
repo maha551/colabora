@@ -1,6 +1,7 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
+const { logger } = require('../middleware/logger');
 
 // Database initialization and management
 class DatabaseManager {
@@ -17,55 +18,51 @@ class DatabaseManager {
         : this.config.DATABASE_URL;
 
       const dbDir = path.dirname(dbPath);
-      console.log(`📁 Database path: ${dbPath}`);
-      console.log(`📂 Database directory: ${dbDir}`);
+      logger.debug('Database path configuration', { dbPath, dbDir });
 
       try {
         if (!fs.existsSync(dbDir)) {
-          console.log('Creating database directory...');
+          logger.info('Creating database directory', { dbDir });
           fs.mkdirSync(dbDir, { recursive: true });
-          console.log('✅ Created database directory:', dbDir);
+          logger.info('Created database directory', { dbDir });
         } else {
-          console.log('✅ Database directory already exists');
+          logger.debug('Database directory already exists', { dbDir });
         }
       } catch (dirErr) {
-        console.error('❌ Error creating database directory:', dirErr.message);
-        console.error('Directory error details:', dirErr);
+        logger.error('Error creating database directory', { error: dirErr.message, stack: dirErr.stack, dbDir });
 
         // In production, try alternative database path if /data is not writable
         if (this.config.NODE_ENV === 'production') {
-          console.log('🔄 Production environment detected, trying alternative database path...');
+          logger.info('Production environment detected, trying alternative database path', { originalPath: dbPath });
           const altDbPath = path.join(__dirname, '../colabora.db');
           const altDbDir = path.dirname(altDbPath);
 
           try {
             if (!fs.existsSync(altDbDir)) {
               fs.mkdirSync(altDbDir, { recursive: true });
-              console.log('✅ Created alternative database directory:', altDbDir);
+              logger.info('Created alternative database directory', { altDbDir });
             }
             dbPath = altDbPath;
-            console.log('✅ Using alternative database path:', dbPath);
+            logger.info('Using alternative database path', { dbPath });
           } catch (altDirErr) {
-            console.error('❌ Failed to create alternative database directory:', altDirErr.message);
-            console.error('💥 Cannot create database directory in production. Exiting...');
+            logger.error('Failed to create alternative database directory', { error: altDirErr.message, stack: altDirErr.stack, altDbDir });
+            logger.error('Cannot create database directory in production. Exiting');
             process.exit(1);
           }
         } else {
           // In development, exit on directory creation failure
-          console.error('💥 Cannot create database directory. Exiting...');
+          logger.error('Cannot create database directory. Exiting', { dbDir, error: dirErr.message });
           process.exit(1);
         }
       }
 
-      console.log('🔌 Attempting to connect to database...');
+      logger.info('Attempting to connect to database', { dbPath });
       this.db = new sqlite3.Database(dbPath, (err) => {
         if (err) {
-          console.error('❌ Error opening database:', err.message);
-          console.error('Database path:', dbPath);
-          console.error('Database error details:', err);
+          logger.error('Error opening database', { error: err.message, stack: err.stack, dbPath });
           reject(err);
         } else {
-          console.log('✅ Connected to SQLite database at:', dbPath);
+          logger.info('Connected to SQLite database', { dbPath });
 
           // Enable foreign keys
           this.db.run('PRAGMA foreign_keys = ON');

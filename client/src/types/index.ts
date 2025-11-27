@@ -121,6 +121,18 @@ export interface DocumentOptions {
   voteChangeAllowed: boolean;         // true = flexible, false = locked
 }
 
+export interface DocumentVote {
+  id: string;
+  userId?: string;
+  vote: 'PRO' | 'NEUTRAL' | 'CONTRA';
+  createdAt: string;
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+  };
+}
+
 export interface Document {
   id: string;
   title: string;
@@ -129,8 +141,19 @@ export interface Document {
   createdAt: string;
   updatedAt: string;
   parentId?: string; // For hierarchical document structure
-  status?: 'proposal' | 'draft' | 'agreed'; // Document status: proposal (from approved proposal), draft, or agreed (deadline passed AND document-level votes reached threshold)
+  ownershipType?: 'personal' | 'shared' | 'organizational'; // Document ownership type
+  organizationId?: string; // Organization ID for organizational documents
+  status?: 'proposal' | 'draft' | 'agreed' | 'voting' | 'rejected' | 'expired'; // Document status
   proposalDeadline?: string; // Deadline for proposal period (default 1 year from creation, configurable via governance)
+  votingDeadline?: string; // Deadline for voting period
+  paragraphProposalsCutoff?: string; // When to disable new paragraph proposals
+  votingStartedAt?: string; // When voting period started
+  adoptedAt?: string; // When document was adopted
+  minVotersRequired?: number; // Minimum voters for quorum
+  deletionProposedAt?: string; // When deletion was proposed
+  deletionProposedBy?: string; // Who proposed deletion
+  deletionVoteDeadline?: string; // Deadline for deletion vote
+  structureProposalsEnabled?: boolean; // Whether structure proposals are enabled
   owner: {
     id: string;
     name: string;
@@ -139,10 +162,32 @@ export interface Document {
   collaborators: DocumentCollaborator[];
   paragraphs: Paragraph[];
   options?: DocumentOptions;
+  documentVotes?: DocumentVote[]; // Document-level votes for real-time updates
 }
 
 // Structure Proposal Types
 export type StructureOperationType = 'MOVE' | 'MERGE' | 'SPLIT' | 'DELETE' | 'RENAME_HEADING' | 'CHANGE_HEADING_LEVEL' | 'INSERT_NEW';
+
+// Operation-specific data types for complex operations
+export interface SplitOperationData {
+  splitAt: number; // Character position where to split
+  newParagraphs: Array<{
+    text: string;
+    order: number;
+    headingLevel?: HeadingLevel;
+  }>;
+}
+
+export interface MergeOperationData {
+  mergedText: string;
+  mergedHeadingLevel?: HeadingLevel;
+}
+
+// Union type for operation data - allows for future operation types
+export type OperationData = 
+  | SplitOperationData 
+  | MergeOperationData 
+  | Record<string, unknown>; // Fallback for other operation types or custom data
 
 export interface StructureOperation {
   id?: string;
@@ -154,7 +199,7 @@ export interface StructureOperation {
   newParentId?: string; // For nesting under headings
   newText?: string;
   newHeadingLevel?: HeadingLevel;
-  operationData?: any; // For complex operations like splits
+  operationData?: OperationData; // For complex operations like splits
   createdAt?: string;
 }
 
@@ -260,15 +305,34 @@ export interface StructureSnapshot {
   updatedAt: string;
 }
 
+// Structure change data types
+export interface ParagraphSnapshot {
+  id: string;
+  text: string;
+  title?: string;
+  order: number;
+  headingLevel?: HeadingLevel | null;
+  [key: string]: unknown; // Allow for additional fields
+}
+
+export interface StructureChangeMetadata {
+  operationType: StructureOperationType;
+  performedBy: string;
+  timestamp: string;
+  documentId?: string;
+  proposalId?: string;
+  [key: string]: unknown; // Allow for additional metadata fields
+}
+
 export interface StructureChange {
   id: string;
   operationType: StructureOperationType;
   paragraphId?: string;
   paragraphTitle?: string;
   currentText?: string;
-  oldData: any[];
-  newData: any;
-  metadata: any;
+  oldData: ParagraphSnapshot[]; // Array of paragraph snapshots before the change
+  newData: ParagraphSnapshot | Record<string, unknown>; // Paragraph snapshot or data after the change
+  metadata: StructureChangeMetadata; // Operation metadata
   createdAt: string;
 }
 
@@ -354,6 +418,9 @@ export interface OrganizationGovernanceRules {
   electionNoticeDays: number;
   defaultVotingDeadlineHours: number;
   defaultQuorumPercentage: number;
+  documentProposalPeriodDays: number;
+  thresholdCalculationMethod: 'all_votes' | 'all_members';
+  defaultAcceptanceThreshold: number;
   anonymousVotingEnabled: boolean;
   voteChangeAllowed: boolean;
   representativeCanCreateVotes: boolean;

@@ -38,7 +38,8 @@ const config = {
 
   // Rate Limiting
   RATE_LIMIT_WINDOW_MS: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  RATE_LIMIT_MAX_REQUESTS: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
+  RATE_LIMIT_MAX_REQUESTS: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 
+    (process.env.NODE_ENV === 'development' ? 1000 : 100), // Higher limit for development
 
   // Security Headers - Properly configured for React app
   SECURITY_HEADERS: {
@@ -122,21 +123,34 @@ const config = {
   }
 };
 
-// Validate critical configuration in production (with fallbacks)
+// Validate critical configuration in production
 if (config.NODE_ENV === 'production') {
-  // Log warnings for missing variables but don't crash
-  const recommendedVars = ['SESSION_SECRET', 'JWT_SECRET', 'DATABASE_URL'];
-  const missing = recommendedVars.filter(varName => !process.env[varName]);
+  const requiredVars = ['SESSION_SECRET', 'JWT_SECRET'];
+  const missing = requiredVars.filter(varName => !process.env[varName]);
 
   if (missing.length > 0) {
-    console.warn(`⚠️  Missing recommended environment variables in production: ${missing.join(', ')}`);
-    console.warn('⚠️  Using fallback values - please set these as secrets for security');
+    const errorMsg = `Missing required environment variables in production: ${missing.join(', ')}. Please set these as Fly.io secrets.`;
+    // Error will be thrown, no need to log here
+    throw new Error(errorMsg);
   }
 
-  // Warn about default values but don't crash
-  if (config.SESSION_SECRET.includes('fallback') ||
-      config.JWT_SECRET.includes('fallback')) {
-    console.warn('⚠️  Using fallback secrets - please set secure SESSION_SECRET and JWT_SECRET as Fly.io secrets');
+  // Validate secret strength
+  const validateSecret = (secret, name) => {
+    if (secret.length < 32) {
+      throw new Error(`${name} must be at least 32 characters long for production`);
+    }
+    // Check if it's the default/fallback value
+    if (secret === generateSecureSecret() || secret.includes('your-') || secret.includes('fallback')) {
+      throw new Error(`${name} appears to be a default/fallback value. Please set a secure ${name} as a Fly.io secret.`);
+    }
+  };
+
+  try {
+    validateSecret(config.SESSION_SECRET, 'SESSION_SECRET');
+    validateSecret(config.JWT_SECRET, 'JWT_SECRET');
+  } catch (validationError) {
+    // Error will be thrown, no need to log here
+    throw validationError;
   }
 }
 

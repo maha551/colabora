@@ -11,14 +11,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { Checkbox } from '../ui/checkbox';
 import { Vote, Users, Clock, Shield, Eye, CheckCircle, AlertTriangle } from 'lucide-react';
-import { Organization, RepresentativeElection, ElectionCandidate } from '../../types';
+import { Organization, RepresentativeElection, ElectionCandidate, User } from '../../types';
 import { governanceApi } from '../../lib/api';
 import { toast } from 'sonner';
 
 interface ElectionVotingInterfaceProps {
   organization: Organization;
   election: RepresentativeElection;
-  currentUser: any;
+  currentUser: User | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
@@ -108,7 +108,7 @@ export function ElectionVotingInterface({
 
     setVoting(true);
     try {
-      let voteData: any = {};
+      let voteData: Record<string, unknown> = {};
 
       if (election.votingMethod === 'ranked_choice') {
         voteData.candidateRanking = selectedCandidates;

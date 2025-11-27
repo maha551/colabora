@@ -1,13 +1,7 @@
 const express = require('express');
+const { requireAuth } = require('../middleware/auth');
+const { logger } = require('../middleware/logger');
 const router = express.Router({ mergeParams: true });
-
-// Middleware to check authentication
-const requireAuth = (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  next();
-};
 
 // GET /api/documents/:documentId/activity - Get recent activity for a document
 router.get('/', requireAuth, (req, res) => {
@@ -26,7 +20,7 @@ router.get('/', requireAuth, (req, res) => {
 
   db.get(checkAccessQuery, [documentId, userId, userId], (err, doc) => {
     if (err) {
-      console.error('Database error checking document access:', err);
+      logger.error('Database error checking document access', { error: err.message, documentId, userId });
       return res.status(500).json({ error: 'Database error' });
     }
 
@@ -37,7 +31,7 @@ router.get('/', requireAuth, (req, res) => {
     // Get document acceptance threshold
     db.get(`SELECT acceptance_threshold FROM documents WHERE id = ?`, [documentId], (docErr, document) => {
       if (docErr) {
-        console.error('Error fetching document threshold:', docErr);
+        logger.error('Error fetching document threshold', { error: docErr.message, documentId });
         return res.status(500).json({ error: 'Failed to fetch document threshold' });
       }
 
@@ -181,7 +175,7 @@ router.get('/', requireAuth, (req, res) => {
       [documentId, documentId, acceptanceThreshold, documentId, documentId, documentId, documentId],
       (err, activities) => {
         if (err) {
-          console.error('Error fetching activities:', err);
+          logger.error('Error fetching activities', { error: err.message, documentId });
           return res.status(500).json({ error: 'Failed to fetch activities' });
         }
 

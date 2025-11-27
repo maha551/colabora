@@ -49,6 +49,18 @@ interface DocumentEditorProps {
   ) => Promise<void> | void;
 }
 
+// Helper to check if proposals are disabled
+function isProposalCutoffPassed(document: Document): boolean {
+  if (!document.paragraphProposalsCutoff) return false;
+  return new Date(document.paragraphProposalsCutoff) < new Date();
+}
+
+// Helper to check if document is in proposal status
+function canAddProposals(document: Document): boolean {
+  if (document.status !== 'proposal') return false;
+  return !isProposalCutoffPassed(document);
+}
+
 type InsertContext = {
   targetParagraphId: string | null;
   position: 'before' | 'after' | 'end';

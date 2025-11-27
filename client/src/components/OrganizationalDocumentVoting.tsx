@@ -3,19 +3,33 @@
  * Displays voting status and allows users to cast votes on organizational documents
  */
 
-import React, { useState, useEffect } from 'react';
-import { documentsApi } from '../lib/api';
-import { formatDistanceToNow, format } from 'date-fns';
+import { useState, useEffect } from 'react';
+import { documentsApi, VotingStatusResponse } from '../lib/api';
+import { formatDistanceToNow } from 'date-fns';
+import { Document, User } from '../types';
 
-function OrganizationalDocumentVoting({ document, user, onVoteCast }) {
-  const [votingData, setVotingData] = useState(null);
+interface OrganizationalDocumentVotingProps {
+  document: Document;
+  user?: User | null; // Optional - currently not used but kept for API compatibility
+  onVoteCast?: (voteType: 'PRO' | 'NEUTRAL' | 'CONTRA') => void;
+}
+
+function OrganizationalDocumentVoting({ document, user: _user, onVoteCast }: OrganizationalDocumentVotingProps) {
+  // Safety check - return null if document is invalid
+  if (!document || !document.id || document.ownershipType !== 'organizational') {
+    return null;
+  }
+
+  const [votingData, setVotingData] = useState<VotingStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [castingVote, setCastingVote] = useState(false);
 
   useEffect(() => {
-    loadVotingData();
-  }, [document.id]);
+    if (document?.id) {
+      loadVotingData();
+    }
+  }, [document.id, document?.status]); // Reload when document status changes
 
   const loadVotingData = async () => {
     try {
@@ -31,7 +45,7 @@ function OrganizationalDocumentVoting({ document, user, onVoteCast }) {
     }
   };
 
-  const castVote = async (voteType) => {
+  const castVote = async (voteType: 'PRO' | 'NEUTRAL' | 'CONTRA') => {
     if (castingVote) return;
 
     try {
@@ -39,7 +53,7 @@ function OrganizationalDocumentVoting({ document, user, onVoteCast }) {
       setError(null);
 
       // Cast the vote using existing API
-      await documentsApi.castVote(document.id, voteType);
+      await documentsApi.voteOnDocument(document.id, voteType);
 
       // Reload voting data to show updated results
       await loadVotingData();
@@ -59,7 +73,7 @@ function OrganizationalDocumentVoting({ document, user, onVoteCast }) {
   const getStatusInfo = () => {
     if (!votingData) return null;
 
-    const { document: doc, voting } = votingData;
+    const { document: doc } = votingData;
 
     switch (doc.status) {
       case 'proposal':
@@ -156,6 +170,8 @@ function OrganizationalDocumentVoting({ document, user, onVoteCast }) {
   const { document: doc, voting } = votingData;
   const statusInfo = getStatusInfo();
   const progressPercentage = getProgressPercentage();
+
+  if (!statusInfo) return null;
 
   return (
     <div className="bg-white rounded-lg border shadow-sm">

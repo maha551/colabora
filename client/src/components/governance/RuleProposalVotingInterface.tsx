@@ -7,13 +7,13 @@ import { Label } from '../ui/label';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Separator } from '../ui/separator';
 import { Vote, Clock, Users, CheckCircle, AlertTriangle, ArrowLeft } from 'lucide-react';
-import { Organization } from '../../types';
+import { Organization, User } from '../../types';
 import { governanceApi } from '../../lib/api';
 import { toast } from 'sonner';
 
 interface RuleProposalVotingInterfaceProps {
   organization: Organization;
-  currentUser: any;
+  currentUser: User | null;
   proposalId: string;
   onBack?: () => void;
   onVoteComplete?: () => void;
@@ -70,7 +70,7 @@ export function RuleProposalVotingInterface({
       if (foundProposal) {
         setProposal(foundProposal);
         // Check if user already voted
-        const userVote = foundProposal.votes?.find(v => v.userId === currentUser.id);
+        const userVote = foundProposal.votes?.find((v: { userId: string; vote: string }) => v.userId === currentUser.id);
         if (userVote) {
           if (userVote.selectedOptionId) {
             setSelectedOption(userVote.selectedOptionId);
@@ -120,6 +120,18 @@ export function RuleProposalVotingInterface({
         label: 'Default Quorum',
         description: 'Minimum participation for non-election votes'
       },
+      defaultAcceptanceThreshold: {
+        label: 'Document Acceptance Threshold',
+        description: 'Percentage of PRO votes required for document proposals to be automatically accepted (1-100%)'
+      },
+      documentProposalPeriodDays: {
+        label: 'Document Proposal Period',
+        description: 'Number of days documents remain in proposal status before voting begins'
+      },
+      thresholdCalculationMethod: {
+        label: 'Threshold Calculation Method',
+        description: 'How approval percentage is calculated: "All Votes" uses percentage of votes cast, "All Members" uses percentage of all eligible members'
+      },
       anonymousVotingEnabled: {
         label: 'Anonymous Voting',
         description: 'Hide voter identities by default'
@@ -157,7 +169,7 @@ export function RuleProposalVotingInterface({
     return ruleLabels[field] || { label: field, description: '' };
   };
 
-  const getCurrentValueDisplay = (field: string, value: any) => {
+  const getCurrentValueDisplay = (field: string, value: string | number | boolean) => {
     if (value === null || value === undefined) return 'Not set';
 
     const numberFields = ['representativeTermMonths', 'representativeTermLimits', 'electionNoticeDays', 'defaultVotingDeadlineHours'];
@@ -167,16 +179,20 @@ export function RuleProposalVotingInterface({
     if (numberFields.includes(field)) {
       return `${value} ${field.includes('Hours') ? 'hours' : field.includes('Days') ? 'days' : 'months'}`;
     }
-    if (percentageFields.includes(field)) return `${Math.round(value * 100)}%`;
+    if (percentageFields.includes(field)) {
+      const numValue = typeof value === 'number' ? value : typeof value === 'string' ? parseFloat(value) : 0;
+      return `${Math.round(numValue * 100)}%`;
+    }
     if (booleanFields.includes(field)) return value ? 'Enabled' : 'Disabled';
     if (field === 'electionVotingMethod') {
-      return value.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+      const strValue = String(value);
+      return strValue.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
     }
 
     return String(value);
   };
 
-  const getProposedValueDisplay = (field: string, value: any) => {
+  const getProposedValueDisplay = (field: string, value: string | number | boolean) => {
     return getCurrentValueDisplay(field, value);
   };
 
@@ -185,7 +201,7 @@ export function RuleProposalVotingInterface({
 
     setVoting(true);
     try {
-      let voteData: any = {};
+      let voteData: { selectedOptionId?: string; voteChoice?: string } = {};
 
       if (proposal.options && proposal.options.length > 0) {
         // Multiple choice voting
@@ -286,8 +302,8 @@ export function RuleProposalVotingInterface({
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span>{proposal.title}</span>
-            <Badge variant={proposal.status === 'voting' ? 'default' : 'secondary'}>
-              {proposal.status === 'voting' ? 'Voting Active' : proposal.status}
+            <Badge variant={proposal.status === 'active' ? 'default' : 'secondary'}>
+              {proposal.status === 'active' ? 'Voting Active' : proposal.status}
             </Badge>
           </CardTitle>
           <CardDescription>

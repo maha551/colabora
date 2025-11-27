@@ -1,12 +1,31 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Document, OrganizationGovernanceRules, RepresentativeElection, VotingAnalytics } from '../types';
-import { organizationsApi, governanceApi, documentsApi } from '../lib/api';
+import { organizationsApi, governanceApi, documentsApi, RateLimitError } from '../lib/api';
 import { toast } from 'sonner';
+
+// Policy votes are deprecated - kept for backwards compatibility
+export interface PolicyVote {
+  id: string;
+  organizationId: string;
+  title: string;
+  description?: string;
+  documentId?: string;
+  status: 'draft' | 'active' | 'completed' | 'cancelled';
+  thresholdPercentage: number;
+  deadlineAt?: string;
+  anonymousVoting: boolean;
+  votesYes: number;
+  votesNo: number;
+  votesAbstain: number;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface OrganizationData {
   // Documents data
   documents: Document[];
-  policyVotes: any[];
+  policyVotes: PolicyVote[]; // Deprecated - always returns empty array
 
   // Governance data
   governanceRules: OrganizationGovernanceRules | null;
@@ -42,7 +61,13 @@ export interface OrganizationActions {
   // Governance actions
   refreshGovernance: () => Promise<void>;
   refreshElections: () => Promise<void>;
-  createElection: (electionData: any) => Promise<void>;
+    createElection: (electionData: {
+      title: string;
+      description?: string;
+      votingStartsAt: string;
+      votingEndsAt: string;
+      candidates: string[];
+    }) => Promise<void>;
 
   // Analytics actions
   refreshAnalytics: () => Promise<void>;
@@ -64,7 +89,7 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
 } {
   // Data state
   const [documents, setDocuments] = useState<Document[]>([]);
-  const [policyVotes, setPolicyVotes] = useState<any[]>([]);
+  const [policyVotes, setPolicyVotes] = useState<PolicyVote[]>([]);
   const [governanceRules, setGovernanceRules] = useState<OrganizationGovernanceRules | null>(null);
   const [elections, setElections] = useState<RepresentativeElection[]>([]);
   const [analytics, setAnalytics] = useState<VotingAnalytics | null>(null);
@@ -125,11 +150,11 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
       
       setDocuments(docs);
       documentsLoadedRef.current = true; // Mark as loaded
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to load organization documents:', error);
 
       // Handle rate limiting specifically
-      if (error.name === 'RateLimitError') {
+      if (error instanceof RateLimitError) {
         documentsRateLimitedRef.current = true;
         setErrorState('documents', error.message);
         // Reset rate limited state after 30 seconds so user can try again
@@ -149,23 +174,12 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
 
 
   const loadPolicyVotes = useCallback(async () => {
-    if (loading.policyVotes) return;
-
-    setLoadingState('policyVotes', true);
+    // Policy votes have been deprecated - use rule proposals instead
+    // This function is kept for backwards compatibility but does nothing
+    setLoadingState('policyVotes', false);
     setErrorState('policyVotes', null);
-
-    try {
-      // TODO: Implement policy votes API call
-      // const response = await governanceApi.getPolicyVotes(organizationId);
-      // setPolicyVotes(response.votes || []);
-      setPolicyVotes([]); // Placeholder
-    } catch (error) {
-      console.error('Failed to load policy votes:', error);
-      setErrorState('policyVotes', 'Failed to load policy votes');
-    } finally {
-      setLoadingState('policyVotes', false);
-    }
-  }, [organizationId, loading.policyVotes, setLoadingState, setErrorState]);
+    setPolicyVotes([]);
+  }, [setLoadingState, setErrorState]);
 
   // Governance actions
   const loadGovernanceRules = useCallback(async () => {
@@ -197,10 +211,10 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
       setElections(response.elections || []);
       electionsLoadedRef.current = true; // Mark as loaded
       // Note: Empty elections array is normal for new organizations
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to load elections:', error);
       // For rate limiting, don't set error state - let rate limiting handle it
-      if (error.name !== 'RateLimitError') {
+      if (!(error instanceof RateLimitError)) {
         setErrorState('elections', 'Failed to load elections');
         toast.error('Failed to load elections');
       }
@@ -318,9 +332,31 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
 
     refreshGovernance: loadGovernanceRules,
     refreshElections: loadElections,
-    createElection: async (electionData: any) => {
-      // TODO: Implement election creation
-      console.log('Creating election:', electionData);
+    createElection: async (electionData: {
+      title: string;
+      description?: string;
+      votingStartsAt: string;
+      votingEndsAt: string;
+      candidates: string[];
+    }) => {
+      try {
+        setErrorState('elections', null);
+        // Convert to API format (positionsAvailable from candidates length, termMonths optional)
+        await governanceApi.createElection(organizationId, {
+          title: electionData.title,
+          description: electionData.description,
+          positionsAvailable: electionData.candidates.length,
+        });
+        toast.success('Election created successfully');
+        // Refresh elections list
+        await loadElections();
+      } catch (error: unknown) {
+        console.error('Failed to create election:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Failed to create election';
+        setErrorState('elections', errorMessage);
+        toast.error(errorMessage);
+        throw error;
+      }
     },
 
     refreshAnalytics: loadAnalytics,

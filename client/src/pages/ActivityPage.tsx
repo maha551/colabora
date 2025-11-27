@@ -1,10 +1,11 @@
 import React from 'react';
-import { Document } from '../types';
+import { Document, User } from '../types';
 import { ActivityFeedView } from '../components/ActivityFeedView';
+import { DocumentUpdate } from '../hooks/useWebSocket';
 
 interface ActivityPageProps {
   documents: Document[];
-  currentUser: any;
+  currentUser: User | null;
   onNavigateToDocument: (documentId: string) => Promise<void>;
   onAddComment: (
     proposalId: string,
@@ -13,6 +14,7 @@ interface ActivityPageProps {
     text: string,
     parentId?: string
   ) => Promise<void>;
+  onWebSocketUpdate?: (handler: (update: DocumentUpdate) => void) => void;
 }
 
 export function ActivityPage({
@@ -20,6 +22,7 @@ export function ActivityPage({
   currentUser,
   onNavigateToDocument,
   onAddComment,
+  onWebSocketUpdate,
 }: ActivityPageProps) {
   return (
     <ActivityFeedView
@@ -27,6 +30,7 @@ export function ActivityPage({
       currentUser={currentUser}
       onNavigateToDocument={onNavigateToDocument}
       onAddComment={onAddComment}
+      onWebSocketUpdate={onWebSocketUpdate}
     />
   );
 }

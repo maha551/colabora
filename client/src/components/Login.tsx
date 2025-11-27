@@ -8,7 +8,7 @@ import { authApi } from '../lib/api';
 import { toast } from 'sonner';
 
 interface LoginProps {
-  onLogin: (user: any) => void;
+  onLogin: (user: User) => void;
 }
 
 export function Login({ onLogin }: LoginProps) {

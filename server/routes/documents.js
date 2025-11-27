@@ -3,6 +3,8 @@ const { v4: uuidv4 } = require('uuid');
 const { metricsCollector } = require('../middleware/monitoring');
 const { documentValidation } = require('../middleware/validation');
 const { requireAuth, requireDocumentAccess } = require('../middleware/auth');
+const webSocketManager = require('../modules/websocket');
+const { logger } = require('../middleware/logger');
 
 // Configuration constants
 const DOCUMENT_CONFIG = {
@@ -48,17 +50,12 @@ const ERROR_CODES = {
 // Structured logging helper
 function logDocumentEvent(level, event, data = {}) {
   const logEntry = {
-    timestamp: new Date().toISOString(),
-    level,
     event,
     service: 'document-service',
     ...data
   };
 
-  console.log(JSON.stringify(logEntry));
-
-  // In production, you might want to send to a logging service
-  // logService.send(logEntry);
+  logger.log(level, event, logEntry);
 }
 
 // Error logging helper
@@ -76,6 +73,23 @@ function logDocumentSuccess(event, context = {}) {
 }
 
 const router = express.Router();
+
+// Helper function to check if user is representative of organization
+async function isRepresentative(db, userId, organizationId) {
+  if (!organizationId) return false;
+  return new Promise((resolve, reject) => {
+    db.get('SELECT representatives FROM organizations WHERE id = ?', [organizationId], (err, row) => {
+      if (err) return reject(err);
+      if (!row) return resolve(false);
+      try {
+        const representatives = JSON.parse(row.representatives || '[]');
+        resolve(representatives.includes(userId));
+      } catch (e) {
+        resolve(false);
+      }
+    });
+  });
+}
 
 // Helper function to validate parent document comprehensively
 async function validateParentDocument(db, parentId, ownershipType, organizationId, userId) {
@@ -288,24 +302,24 @@ async function withTransaction(db, operation) {
     await new Promise((resolve, reject) => {
       db.run('PRAGMA foreign_keys = OFF', (err) => {
         if (err) {
-          console.error('❌ Failed to disable foreign keys:', err);
+          logger.error('Failed to disable foreign keys', { error: err.message });
           reject(err);
         } else {
-          console.log('✅ Foreign key constraints disabled');
+          logger.debug('Foreign key constraints disabled');
           resolve();
         }
       });
     });
 
-    console.log('🏦 Starting transaction...');
+    logger.debug('Starting transaction');
     await new Promise((resolve, reject) => {
       db.run('BEGIN TRANSACTION', (err) => {
         if (err) {
-          console.error('❌ Failed to begin transaction:', err);
+          logger.error('Failed to begin transaction', { error: err.message });
           reject(err);
         } else {
           transactionStarted = true;
-          console.log('✅ Transaction started successfully');
+          logger.debug('Transaction started successfully');
           resolve();
         }
       });
@@ -313,14 +327,14 @@ async function withTransaction(db, operation) {
 
     const result = await operation();
 
-    console.log('💾 Committing transaction...');
+    logger.debug('Committing transaction');
     await new Promise((resolve, reject) => {
       db.run('COMMIT', (err) => {
         if (err) {
-          console.error('❌ Failed to commit transaction:', err);
+          logger.error('Failed to commit transaction', { error: err.message });
           reject(err);
         } else {
-          console.log('✅ Transaction committed successfully');
+          logger.debug('Transaction committed successfully');
           resolve();
         }
       });
@@ -330,9 +344,9 @@ async function withTransaction(db, operation) {
     await new Promise((resolve, reject) => {
       db.run('PRAGMA foreign_keys = ON', (err) => {
         if (err) {
-          console.error('❌ Failed to re-enable foreign keys:', err);
+          logger.error('Failed to re-enable foreign keys', { error: err.message });
         } else {
-          console.log('✅ Foreign key constraints re-enabled');
+          logger.debug('Foreign key constraints re-enabled');
         }
         // Don't reject here since transaction is already committed
         resolve();
@@ -342,23 +356,23 @@ async function withTransaction(db, operation) {
     return result;
 
   } catch (error) {
-    console.error('❌ Transaction operation failed:', error);
+    logger.error('Transaction operation failed', { error: error.message, stack: error.stack });
 
     if (transactionStarted) {
-      console.log('🔄 Rolling back transaction...');
+      logger.debug('Rolling back transaction');
       try {
         await new Promise((resolve) => {
           db.run('ROLLBACK', (err) => {
             if (err) {
-              console.error('❌ Rollback failed:', err);
+              logger.error('Rollback failed', { error: err.message });
             } else {
-              console.log('✅ Transaction rolled back successfully');
+              logger.debug('Transaction rolled back successfully');
             }
             resolve(); // Always resolve to avoid blocking
           });
         });
       } catch (rollbackError) {
-        console.error('❌ Critical: Rollback operation failed:', rollbackError);
+        logger.error('Critical: Rollback operation failed', { error: rollbackError.message, stack: rollbackError.stack });
       }
 
       // Re-enable foreign key constraints
@@ -366,15 +380,15 @@ async function withTransaction(db, operation) {
         await new Promise((resolve) => {
           db.run('PRAGMA foreign_keys = ON', (err) => {
             if (err) {
-              console.error('❌ Failed to re-enable foreign keys after rollback:', err);
+              logger.error('Failed to re-enable foreign keys after rollback', { error: err.message });
             } else {
-              console.log('✅ Foreign key constraints re-enabled after rollback');
+              logger.debug('Foreign key constraints re-enabled after rollback');
             }
             resolve();
           });
         });
       } catch (fkError) {
-        console.error('❌ Critical: Failed to re-enable foreign keys:', fkError);
+        logger.error('Critical: Failed to re-enable foreign keys', { error: fkError.message, stack: fkError.stack });
       }
     }
 
@@ -383,8 +397,8 @@ async function withTransaction(db, operation) {
 }
 
 // Helper function to build document creation SQL and parameters
-function buildDocumentInsertSQL(ownershipType, organizationId, options, documentId, trimmedTitle, trimmedDescription, userId, parentId) {
-  console.log('🔨 Building document INSERT SQL for type:', ownershipType);
+async function buildDocumentInsertSQL(db, ownershipType, organizationId, options, documentId, trimmedTitle, trimmedDescription, userId, parentId) {
+  logger.debug('Building document INSERT SQL', { ownershipType, documentId });
 
   // Parse options with defaults
   const acceptanceThreshold = options?.acceptanceThreshold !== undefined
@@ -412,45 +426,84 @@ function buildDocumentInsertSQL(ownershipType, organizationId, options, document
       acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
     ];
   } else if (ownershipType === 'organizational') {
-    console.log('🏢 Building organizational document SQL');
+    logger.debug('Building organizational document SQL', { organizationId, documentId });
+    
+    // Fetch governance rules to apply defaults if options not provided
+    let governanceRules = null;
+    try {
+      const governanceModule = require('./governance');
+      governanceRules = await governanceModule.getGovernanceRules(db, organizationId);
+    } catch (govErr) {
+      logger.warn('Could not fetch governance rules, using defaults', { error: govErr.message, organizationId });
+    }
+    
+    // For organizational documents, always use governance rules (no overrides allowed)
+    // This ensures consistency across all organizational documents
+    const finalAcceptanceThreshold = governanceRules?.defaultAcceptanceThreshold || DOCUMENT_CONFIG.DEFAULT_ACCEPTANCE_THRESHOLD;
+    const finalVotingAnonymous = governanceRules?.anonymousVotingEnabled ? 1 : 0;
+    const finalVoteChangeAllowed = governanceRules?.voteChangeAllowed ? 1 : 0;
+    
+    // Use governance rule for proposal period, or default
+    const proposalPeriodDays = governanceRules?.documentProposalPeriodDays || DOCUMENT_CONFIG.DEFAULT_PROPOSAL_PERIOD_DAYS;
+    
     // For organizational documents, set organization_id and start as proposal
     const proposalDeadline = new Date();
-    proposalDeadline.setDate(proposalDeadline.getDate() + DOCUMENT_CONFIG.DEFAULT_PROPOSAL_PERIOD_DAYS);
-    console.log('📅 Proposal deadline:', proposalDeadline.toISOString());
+    proposalDeadline.setDate(proposalDeadline.getDate() + proposalPeriodDays);
+    logger.debug('Proposal deadline calculated', { deadline: proposalDeadline.toISOString(), days: proposalPeriodDays });
 
     // Ensure proposalDeadline is valid
     if (isNaN(proposalDeadline.getTime())) {
       throw new Error('Failed to generate valid proposal deadline');
     }
 
-    // Calculate min_voters_required based on organization size (default 30% of members)
+    // Calculate paragraph_proposals_cutoff (7 days before proposal deadline by default)
+    const cutoffDays = 7;
+    const paragraphProposalsCutoff = new Date(proposalDeadline);
+    paragraphProposalsCutoff.setDate(paragraphProposalsCutoff.getDate() - cutoffDays);
+
+    // Calculate min_voters_required based on organization size and governance rules
     let minVotersRequired = 0;
     try {
-      // We'll need to calculate this after organization member count is known
-      // For now, set to 0 and let the scheduler handle it
-      minVotersRequired = 0; // Will be updated by scheduler when transitioning to voting
+      // Get organization member count
+      const memberCount = await new Promise((resolve, reject) => {
+        db.get(`SELECT COUNT(*) as count FROM organization_members WHERE organization_id = ? AND status = 'active'`, 
+          [organizationId], (err, row) => {
+            if (err) reject(err);
+            else resolve(row?.count || 0);
+          });
+      });
+      // Use governance rule defaultQuorumPercentage if available, otherwise default to 30%
+      const quorumPercentage = governanceRules?.defaultQuorumPercentage || 0.3;
+      // Set to quorum percentage of members, minimum 1
+      minVotersRequired = Math.max(1, Math.ceil(memberCount * quorumPercentage));
+      logger.debug('Calculated min_voters_required', { minVotersRequired, quorumPercentage: quorumPercentage * 100, memberCount });
     } catch (error) {
-      console.warn('⚠️ Could not calculate min_voters_required, using 0:', error.message);
+      logger.warn('Could not calculate min_voters_required, using 0', { error: error.message, organizationId });
+      minVotersRequired = 0;
     }
 
     sql = `
       INSERT INTO documents (
         id, title, description, owner_id, ownership_type, creator_ids, organization_id, parent_id, status, proposal_deadline,
-        acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed,
+        paragraph_proposals_cutoff, acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed,
         structure_proposals_enabled, min_voters_required, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     `;
-    // Ensure acceptanceThreshold is valid
-    const finalAcceptanceThreshold = (typeof acceptanceThreshold === 'number' && !isNaN(acceptanceThreshold))
-      ? acceptanceThreshold : DOCUMENT_CONFIG.DEFAULT_ACCEPTANCE_THRESHOLD;
+    // Ensure finalAcceptanceThreshold is valid (already calculated above from governance rules)
+    const validatedAcceptanceThreshold = (typeof finalAcceptanceThreshold === 'number' && !isNaN(finalAcceptanceThreshold))
+      ? finalAcceptanceThreshold : DOCUMENT_CONFIG.DEFAULT_ACCEPTANCE_THRESHOLD;
 
+    // For organizational documents, structure proposals are always enabled by default
+    // This can be overridden by governance rules in the future if needed
+    const finalStructureProposalsEnabled = structureProposalsEnabled; // Keep user preference if provided, but typically always enabled for org docs
+    
     params = [
       documentId, trimmedTitle, trimmedDescription, userId, ownershipType, null, organizationId, parentId || null,
-      'proposal', proposalDeadline.toISOString(),
-      finalAcceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled,
+      'proposal', proposalDeadline.toISOString(), paragraphProposalsCutoff.toISOString(),
+      validatedAcceptanceThreshold, finalVotingAnonymous, votingAnonymityLocked, finalVoteChangeAllowed, finalStructureProposalsEnabled,
       minVotersRequired
     ];
-    console.log('📋 Organizational SQL params built successfully');
+    logger.debug('Organizational SQL params built successfully', { documentId });
   } else {
     // For personal documents (default)
     sql = `
@@ -466,41 +519,72 @@ function buildDocumentInsertSQL(ownershipType, organizationId, options, document
     ];
   }
 
-  return { sql, params, acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled };
+  // Return the final values used (for organizational docs, these may have been overridden by governance rules)
+  const finalValues = ownershipType === 'organizational' 
+    ? {
+        acceptanceThreshold: validatedAcceptanceThreshold,
+        votingAnonymous: finalVotingAnonymous,
+        votingAnonymityLocked: votingAnonymityLocked,
+        voteChangeAllowed: finalVoteChangeAllowed,
+        structureProposalsEnabled: structureProposalsEnabled
+      }
+    : {
+        acceptanceThreshold,
+        votingAnonymous,
+        votingAnonymityLocked,
+        voteChangeAllowed,
+        structureProposalsEnabled
+      };
+  
+  return { sql, params, ...finalValues };
 }
 
-// Helper function to create initial title paragraph
-async function createInitialParagraph(db, documentId, title, description) {
-  console.log('📝 Creating initial title paragraph for document:', documentId);
+// Helper function to create initial title paragraph as a suggestion
+async function createInitialParagraph(db, documentId, title, description, userId) {
+  logger.debug('Creating initial title paragraph as suggestion', { documentId, title });
 
   // First check if document exists
   return new Promise((resolve, reject) => {
     const paragraphId = uuidv4();
-    const paragraphTitle = title;
-    const paragraphText = description || title;
-
-    // Try to insert paragraph directly - temporarily use NULL for document_id to bypass FK
-      console.log('🔧 Attempting paragraph insert with document_id:', documentId);
-      db.run(`
+    
+    // Create empty paragraph (title will be a proposal/suggestion, not directly set)
+    // Use order_index = 1 for the title paragraph (positive number, but we'll mark it as title via isDocumentTitle logic)
+    // Set title = null and text = '' so it's empty until proposals are approved
+    db.run(`
         INSERT INTO paragraphs (
-          id, document_id, title, text, order_index, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      `, [paragraphId, documentId, paragraphTitle, paragraphText, 1], function(err) {
+          id, document_id, title, text, order_index, heading_level, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `, [paragraphId, documentId, null, '', 1, 'h1'], function(err) {
       if (err) {
-        console.error('❌ Error creating title paragraph:', err);
+        logger.error('Error creating title paragraph', { error: err.message, documentId, paragraphId });
 
         // If foreign key fails, let's check what documents exist
         db.all('SELECT id, title FROM documents LIMIT 10', [], (checkErr, rows) => {
           if (checkErr) {
-            console.error('❌ Error checking documents:', checkErr);
+            logger.error('Error checking documents', { error: checkErr.message });
           } else {
-            console.log('📋 Existing documents:', rows);
+            logger.debug('Existing documents', { count: rows.length });
           }
           reject(new Error(`Failed to create title paragraph: ${err.message}`));
         });
       } else {
-        console.log('✅ Title paragraph created successfully, ID:', paragraphId);
-        resolve(paragraphId);
+        logger.debug('Title paragraph created successfully', { paragraphId, documentId });
+        
+        // Create a TITLE proposal for the document title (as a suggestion that needs voting)
+        const titleProposalId = uuidv4();
+        db.run(`
+          INSERT INTO proposals (id, paragraph_id, user_id, text, type, heading_level, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        `, [titleProposalId, paragraphId, userId, title, 'TITLE', 'h1'], function(titleProposalErr) {
+          if (titleProposalErr) {
+            logger.error('Error creating title proposal', { error: titleProposalErr.message, paragraphId, titleProposalId });
+            reject(new Error(`Failed to create title proposal: ${titleProposalErr.message}`));
+          } else {
+            logger.debug('Title proposal created successfully', { titleProposalId, paragraphId });
+            // Description is not added to the document - it's just metadata
+            resolve(paragraphId);
+          }
+        });
       }
     });
   });
@@ -508,7 +592,7 @@ async function createInitialParagraph(db, documentId, title, description) {
 
 // Helper function to add collaborators sequentially
 async function addCollaborators(db, documentId, ownershipType, organizationId, userId, creatorIds) {
-  console.log('👥 Adding collaborators for document:', documentId);
+  logger.debug('Adding collaborators for document', { documentId, ownershipType, organizationId });
 
   if (ownershipType === 'shared' && creatorIds) {
     // Add creators as collaborators (excluding document owner)
@@ -522,10 +606,10 @@ async function addCollaborators(db, documentId, ownershipType, organizationId, u
           VALUES (?, ?, ?)
         `, [collabId, documentId, creatorId], function(err) {
           if (err) {
-            console.error('❌ Error adding collaborator:', creatorId, err);
+            logger.error('Error adding collaborator', { error: err.message, creatorId, documentId });
             reject(new Error(`Failed to add collaborator ${creatorId}: ${err.message}`));
           } else {
-            console.log('✅ Added collaborator:', creatorId);
+            logger.debug('Added collaborator', { creatorId, documentId });
             resolve();
           }
         });
@@ -551,25 +635,25 @@ async function addCollaborators(db, documentId, ownershipType, organizationId, u
           VALUES (?, ?, ?)
         `, [collabId, documentId, member.user_id], function(err) {
           if (err) {
-            console.error('❌ Error adding organizational collaborator:', member.user_id, err);
+            logger.error('Error adding organizational collaborator', { error: err.message, userId: member.user_id, documentId });
             reject(new Error(`Failed to add organizational collaborator ${member.user_id}: ${err.message}`));
           } else {
-            console.log('✅ Added organizational collaborator:', member.user_id);
+            logger.debug('Added organizational collaborator', { userId: member.user_id, documentId });
             resolve();
           }
         });
       });
     }
 
-    console.log(`✅ Added ${members.length} organizational collaborators`);
+    logger.debug('Added organizational collaborators', { count: members.length, documentId });
   }
 
-  console.log('✅ Collaborator addition completed');
+  logger.debug('Collaborator addition completed', { documentId });
 }
 
 // Helper function to build document response
 async function buildDocumentResponse(db, documentId, trimmedTitle, trimmedDescription, userId, ownershipType, organizationId, parentId, options) {
-  console.log('📋 Building document response for:', documentId);
+  logger.debug('Building document response', { documentId, ownershipType });
 
   // Get user details for owner information
   const user = await new Promise((resolve, reject) => {
@@ -580,13 +664,25 @@ async function buildDocumentResponse(db, documentId, trimmedTitle, trimmedDescri
     });
   });
 
+  // Get document details including deadlines for organizational documents
+  const docDetails = await new Promise((resolve, reject) => {
+    db.get(`
+      SELECT proposal_deadline, paragraph_proposals_cutoff, voting_deadline, 
+             voting_started_at, min_voters_required, adopted_at, status
+      FROM documents WHERE id = ?
+    `, [documentId], (err, row) => {
+      if (err) reject(err);
+      else resolve(row || {});
+    });
+  });
+
   const result = {
     id: documentId,
     title: trimmedTitle,
     description: trimmedDescription,
     ownerId: userId,
     parentId: parentId || undefined,
-    status: ownershipType === 'organizational' ? 'proposal' : 'draft',
+    status: docDetails.status || (ownershipType === 'organizational' ? 'proposal' : 'draft'),
     owner: {
       id: userId,
       name: user.name,
@@ -599,7 +695,17 @@ async function buildDocumentResponse(db, documentId, trimmedTitle, trimmedDescri
     updatedAt: new Date().toISOString()
   };
 
-  console.log('✅ Document response built successfully');
+  // Add deadlines for organizational documents
+  if (ownershipType === 'organizational') {
+    if (docDetails.proposal_deadline) result.proposalDeadline = docDetails.proposal_deadline;
+    if (docDetails.paragraph_proposals_cutoff) result.paragraphProposalsCutoff = docDetails.paragraph_proposals_cutoff;
+    if (docDetails.voting_deadline) result.votingDeadline = docDetails.voting_deadline;
+    if (docDetails.voting_started_at) result.votingStartedAt = docDetails.voting_started_at;
+    if (docDetails.min_voters_required) result.minVotersRequired = docDetails.min_voters_required;
+    if (docDetails.adopted_at) result.adoptedAt = docDetails.adopted_at;
+  }
+
+  logger.debug('Document response built successfully', { documentId });
   return result;
 }
 
@@ -767,17 +873,16 @@ router.get('/', requireAuth, (req, res) => {
     ORDER BY d.updated_at DESC
   `;
 
-  console.log('Executing documents query for user:', userId);
-  console.log('Query:', query);
+  logger.debug('Executing documents query', { userId });
 
   // Execute main documents query first
   db.all(query, [userId, userId, userId], (err, documents) => {
     if (err) {
-      console.error('Error fetching documents:', err);
+      logger.error('Error fetching documents', { error: err.message, userId });
       return res.status(500).json({ error: 'Failed to fetch documents' });
     }
 
-    console.log('Found', documents.length, 'documents for user');
+    logger.debug('Found documents for user', { count: documents.length, userId });
 
     // Now we can use the documents to build other queries
     const documentIds = documents.map(doc => doc.id);
@@ -938,6 +1043,7 @@ router.get('/', requireAuth, (req, res) => {
 
       return {
               ...doc,
+              title: doc.title, // Explicitly include title to ensure it's preserved
               parentId: doc.parent_id || undefined,
               status: doc.status || 'draft',
               proposalDeadline: doc.proposal_deadline || undefined,
@@ -964,7 +1070,7 @@ router.get('/', requireAuth, (req, res) => {
 
       res.json({ documents: processedDocuments });
     }).catch(err => {
-      console.error('Error fetching document data:', err);
+      logger.error('Error fetching document data', { error: err.message, stack: err.stack });
       return res.status(500).json({ error: 'Failed to fetch documents' });
     });
   });
@@ -987,7 +1093,7 @@ router.get('/organization/:organizationId', requireAuth, (req, res) => {
 
   db.get(membershipQuery, [organizationId, userId], (err, membership) => {
     if (err) {
-      console.error('Error checking organization membership:', err);
+      logger.error('Error checking organization membership', { error: err.message, organizationId, userId });
       return res.status(500).json({ error: 'Failed to verify organization access' });
     }
 
@@ -1012,14 +1118,14 @@ router.get('/organization/:organizationId', requireAuth, (req, res) => {
 
     db.all(documentsQuery, [organizationId], (err, documents) => {
       if (err) {
-        console.error('Error fetching organization documents:', err);
+        logger.error('Error fetching organization documents', { error: err.message, organizationId });
         return res.status(500).json({
           error: 'Failed to fetch organization documents',
           details: err.message
         });
       }
 
-      console.log(`Found ${documents ? documents.length : 0} documents for organization ${organizationId}`);
+      logger.debug('Found organization documents', { count: documents ? documents.length : 0, organizationId });
 
       // Process documents with collaborators (for organizational docs, all org members are auto-collaborators)
       const documentsWithCollaborators = documents.map(doc => {
@@ -1038,7 +1144,7 @@ router.get('/organization/:organizationId', requireAuth, (req, res) => {
               ORDER BY u.name
             `, [doc.organization_id], (err, collaborators) => {
               if (err) {
-                console.error('Error fetching organization members for document:', doc.id, err);
+                logger.error('Error fetching organization members for document', { error: err.message, documentId: doc.id });
                 return resolve({
                   ...doc,
                   parentId: doc.parent_id || undefined,
@@ -1103,7 +1209,8 @@ router.get('/organization/:organizationId', requireAuth, (req, res) => {
               WHERE dc.document_id = ?
             `, [doc.id], (err, collaborators) => {
               if (err) {
-                console.error('Error fetching collaborators for document:', doc.id, err);
+                logger.error('Error fetching document collaborators', { error: err.message, documentId: doc.id });
+                // Already logged above
                 return resolve({
                   ...doc,
                   parentId: doc.parent_id || undefined,
@@ -1168,7 +1275,7 @@ router.get('/organization/:organizationId', requireAuth, (req, res) => {
           organizationId: organizationId
         });
       }).catch(err => {
-        console.error('Error processing documents:', err);
+        logger.error('Error processing documents', { error: err.message, stack: err.stack, organizationId });
         res.status(500).json({ error: 'Failed to process documents' });
       });
     });
@@ -1181,19 +1288,27 @@ router.get('/:id', requireAuth, (req, res) => {
   const documentId = req.params.id;
   const userId = req.user.id;
 
+  // Access query: check ownership, direct collaboration, OR organizational membership
   const accessQuery = `
     SELECT d.*,
            u.name as owner_name,
            u.email as owner_email
     FROM documents d
     JOIN users u ON d.owner_id = u.id
-    LEFT JOIN document_collaborators dc ON d.id = dc.document_id
-    WHERE d.id = ? AND (d.owner_id = ? OR dc.user_id = ?)
+    LEFT JOIN document_collaborators dc ON d.id = dc.document_id AND dc.user_id = ?
+    LEFT JOIN organization_members om ON d.organization_id = om.organization_id AND om.user_id = ? AND om.status = 'active'
+    LEFT JOIN organizations o ON d.organization_id = o.id AND o.is_active = 1
+    WHERE d.id = ? 
+      AND (
+        d.owner_id = ? 
+        OR dc.user_id = ?
+        OR (d.ownership_type = 'organizational' AND om.user_id IS NOT NULL AND o.is_active = 1)
+      )
   `;
 
-  db.get(accessQuery, [documentId, userId, userId], (err, document) => {
+  db.get(accessQuery, [userId, userId, documentId, userId, userId], (err, document) => {
     if (err) {
-      console.error('Error fetching document:', err);
+      logger.error('Error fetching document', { error: err.message, documentId, userId });
       return res.status(500).json({ error: 'Failed to fetch document' });
     }
 
@@ -1202,243 +1317,277 @@ router.get('/:id', requireAuth, (req, res) => {
     }
 
 
-    const paragraphsQuery = `
-      SELECT p.*
+    // Optimized single query using JSON aggregation (replaces N+1 queries)
+    // Get document voting_anonymous setting first
+    const isAnonymous = document.voting_anonymous === 1;
+
+    // Use subqueries to avoid cartesian product from joining proposals and history
+    const optimizedParagraphsQuery = `
+      SELECT
+        p.*,
+        (
+          SELECT json_group_array(
+            json_object(
+              'id', pr.id,
+              'user_id', pr.user_id,
+              'text', pr.text,
+              'type', pr.type,
+              'heading_level', pr.heading_level,
+              'created_at', pr.created_at,
+              'updated_at', pr.updated_at,
+              'user_name', pu.name,
+              'user_email', pu.email,
+              'votes', (
+                SELECT json_group_array(
+                  json_object(
+                    'id', v.id,
+                    'user_id', v.user_id,
+                    'vote', v.vote,
+                    'created_at', v.created_at,
+                    'user_name', vu.name,
+                    'user_email', vu.email
+                  )
+                )
+                FROM votes v
+                LEFT JOIN users vu ON v.user_id = vu.id
+                WHERE v.proposal_id = pr.id
+                ORDER BY v.created_at ASC
+              ),
+              'comments', (
+                SELECT json_group_array(
+                  json_object(
+                    'id', c.id,
+                    'user_id', c.user_id,
+                    'text', c.text,
+                    'parent_id', c.parent_id,
+                    'created_at', c.created_at,
+                    'updated_at', c.updated_at,
+                    'user_name', cu.name,
+                    'user_email', cu.email,
+                    'parent_user_id', pc.user_id,
+                    'parent_user_name', pcu.name
+                  )
+                )
+                FROM comments c
+                LEFT JOIN users cu ON c.user_id = cu.id
+                LEFT JOIN comments pc ON c.parent_id = pc.id
+                LEFT JOIN users pcu ON pc.user_id = pcu.id
+                WHERE c.proposal_id = pr.id
+                ORDER BY c.created_at ASC
+              )
+            )
+          )
+          FROM proposals pr
+          LEFT JOIN users pu ON pr.user_id = pu.id
+          WHERE pr.paragraph_id = p.id
+          ORDER BY pr.created_at ASC
+        ) as proposals_json,
+        (
+          SELECT json_group_array(
+            json_object(
+              'id', h.id,
+              'paragraph_id', h.paragraph_id,
+              'user_id', h.user_id,
+              'old_text', h.old_text,
+              'new_text', h.new_text,
+              'approval_percentage', h.approval_percentage,
+              'proposal_id', h.proposal_id,
+              'created_at', h.created_at,
+              'heading_level', h.heading_level,
+              'user_name', hu.name,
+              'user_email', hu.email,
+              'proposal_type', pr_h.type
+            )
+          )
+          FROM history h
+          LEFT JOIN users hu ON h.user_id = hu.id
+          LEFT JOIN proposals pr_h ON h.proposal_id = pr_h.id
+          WHERE h.paragraph_id = p.id
+          ORDER BY h.created_at DESC
+        ) as history_json
       FROM paragraphs p
       WHERE p.document_id = ?
-      ORDER BY p.order_index
+      ORDER BY p.order_index ASC, p.created_at ASC
     `;
 
-    db.all(paragraphsQuery, [documentId], (err, paragraphs) => {
+    db.all(optimizedParagraphsQuery, [documentId], (err, rows) => {
       if (err) {
-        console.error('Error fetching paragraphs:', err);
+        logger.error('Error fetching paragraphs', { error: err.message, documentId });
         return res.status(500).json({ error: 'Failed to fetch document content' });
       }
 
-      const buildParagraphData = (para) => {
-        return new Promise((resolve) => {
-          const proposalsQuery = `
-            SELECT pr.*,
-                   u.name as user_name,
-                   u.email as user_email
-            FROM proposals pr
-            LEFT JOIN users u ON pr.user_id = u.id
-            WHERE pr.paragraph_id = ?
-            ORDER BY pr.created_at ASC
-          `;
+      // Parse JSON and transform data to match expected format
+      const paragraphData = rows.map(row => {
+        // Parse proposals JSON
+        let proposals = [];
+        if (row.proposals_json && row.proposals_json !== '[null]' && row.proposals_json !== 'null') {
+          let rawProposals;
+          try {
+            rawProposals = typeof row.proposals_json === 'string' ? JSON.parse(row.proposals_json) : row.proposals_json;
+          } catch (e) {
+            logger.warn('Failed to parse proposals_json for paragraph', { paragraphId: row.id, error: e.message, documentId });
+            rawProposals = [];
+          }
+          // Filter out null values
+          proposals = (Array.isArray(rawProposals) ? rawProposals : []).filter(prop => prop !== null && prop.id !== null).map(prop => {
+            // Parse votes JSON - handle both string and object formats
+            let votes = [];
+            if (prop.votes) {
+              let rawVotes;
+              try {
+                rawVotes = typeof prop.votes === 'string' ? JSON.parse(prop.votes) : prop.votes;
+              } catch (e) {
+                logger.warn('Failed to parse votes JSON for proposal', { proposalId: prop.id, error: e.message, documentId });
+                rawVotes = [];
+              }
+              votes = (Array.isArray(rawVotes) ? rawVotes : []).map(vote => {
+                const voteData = {
+                  id: vote.id,
+                  proposalId: prop.id,
+                  vote: vote.vote,
+                  createdAt: vote.created_at,
+                  created_at: vote.created_at
+                };
 
-          db.all(proposalsQuery, [para.id], (proposalErr, proposals) => {
-            if (proposalErr) {
-              console.error('Error fetching proposals:', proposalErr);
-              return resolve({
-                ...para,
-                order: para.order_index,
-                heading_level: para.heading_level,
-                proposals: [],
-                suggestions: [],
-                history: []
+                // Handle anonymous voting
+                if (!isAnonymous) {
+                  voteData.userId = vote.user_id;
+                  voteData.user = {
+                    id: vote.user_id,
+                    name: vote.user_name,
+                    email: vote.user_email
+                  };
+                } else {
+                  // In anonymous mode, only include userId for the current user's own vote
+                  if (vote.user_id === userId) {
+                    voteData.userId = vote.user_id;
+                  }
+                }
+
+                return voteData;
               });
             }
 
-            const enrichProposal = (prop) => {
-              return new Promise((resolveProposal) => {
-                // Get document voting_anonymous setting
-                db.get(`SELECT voting_anonymous FROM documents WHERE id = ?`, [documentId], (docErr, doc) => {
-                  const isAnonymous = doc?.voting_anonymous === 1;
-
-                  const votesQuery = `
-                    SELECT v.*,
-                           u.name as user_name,
-                           u.email as user_email
-                    FROM votes v
-                    LEFT JOIN users u ON v.user_id = u.id
-                    WHERE v.proposal_id = ?
-                    ORDER BY v.created_at ASC
-                  `;
-
-                  const commentsQuery = `
-                    SELECT c.*,
-                           u.name as user_name,
-                           u.email as user_email,
-                           pc.user_id as parent_user_id,
-                           pu.name as parent_user_name
-                    FROM comments c
-                    LEFT JOIN users u ON c.user_id = u.id
-                    LEFT JOIN comments pc ON c.parent_id = pc.id
-                    LEFT JOIN users pu ON pc.user_id = pu.id
-                    WHERE c.proposal_id = ?
-                    ORDER BY c.created_at ASC
-                  `;
-
-                  const historyQuery = `
-                    SELECT 
-                      h.id,
-                      h.paragraph_id,
-                      h.user_id,
-                      h.old_text,
-                      h.new_text,
-                      h.approval_percentage,
-                      h.proposal_id,
-                      h.created_at,
-                      h.heading_level,
-                      u.name as user_name,
-                      u.email as user_email,
-                      pr.type as proposal_type
-                    FROM history h
-                    JOIN users u ON h.user_id = u.id
-                    LEFT JOIN proposals pr ON h.proposal_id = pr.id
-                    WHERE h.paragraph_id = ?
-                    ORDER BY h.created_at DESC
-                  `;
-
-                  const fetchVotes = new Promise((resolveVotes) => {
-                    db.all(votesQuery, [prop.id], (votesErr, voteRows) => {
-                      if (votesErr) {
-                        console.error('Error fetching votes:', votesErr);
-                        return resolveVotes([]);
-                      }
-
-                      const votes = (voteRows || []).map((vote) => {
-                        const voteData = {
-                          ...vote,
-                          proposalId: vote.proposal_id,
-                          vote: vote.vote
-                        };
-
-                        // Hide user info if voting is anonymous
-                        if (!isAnonymous) {
-                          voteData.userId = vote.user_id;
-                          voteData.user = {
-                            id: vote.user_id,
-                            name: vote.user_name,
-                            email: vote.user_email
-                          };
-                        } else {
-                          // In anonymous mode, only include userId for the current user's own vote
-                          // This allows users to see their own vote while hiding others
-                          if (vote.user_id === userId) {
-                            voteData.userId = vote.user_id;
-                          }
-                          // Don't include user object or userId for other users
-                        }
-
-                        return voteData;
-                      });
-
-                      resolveVotes(votes);
-                    });
-                  });
-
-                const fetchComments = new Promise((resolveComments) => {
-                  db.all(commentsQuery, [prop.id], (commentsErr, commentRows) => {
-                    if (commentsErr) {
-                      console.error('Error fetching comments:', commentsErr);
-                      return resolveComments([]);
-                    }
-
-                    const comments = (commentRows || []).map((comment) => ({
-                      ...comment,
-                      user: {
-                        id: comment.user_id,
-                        name: comment.user_name,
-                        email: comment.user_email
-                      },
-                      parent: comment.parent_id ? {
-                        id: comment.parent_id,
-                        user: {
-                          id: comment.parent_user_id,
-                          name: comment.parent_user_name
-                        }
-                      } : null,
-                      replies: []
-                    }));
-
-                    resolveComments(comments);
-                  });
-                });
-
-                  Promise.all([fetchVotes, fetchComments]).then(([votes, comments]) => {
-                    resolveProposal({
-                      ...prop,
-                      heading_level: prop.heading_level,
-                      user: {
-                        id: prop.user_id,
-                        name: prop.user_name,
-                        email: prop.user_email
-                      },
-                      votes,
-                      comments
-                    });
-                  });
-                });
-              });
-            };
-
-            Promise.all(proposals.map(enrichProposal)).then((enrichedProposals) => {
-              db.all(
-                `
-                SELECT 
-                  h.id,
-                  h.paragraph_id,
-                  h.user_id,
-                  h.old_text,
-                  h.new_text,
-                  h.approval_percentage,
-                  h.proposal_id,
-                  h.created_at,
-                  h.heading_level,
-                  u.name as user_name,
-                  u.email as user_email,
-                  pr.type as proposal_type
-                FROM history h
-                JOIN users u ON h.user_id = u.id
-                LEFT JOIN proposals pr ON h.proposal_id = pr.id
-                WHERE h.paragraph_id = ?
-                ORDER BY h.created_at DESC
-              `,
-                [para.id],
-                (historyErr, historyRows) => {
-                  if (historyErr) {
-                    console.error('Error fetching history:', historyErr);
+            // Parse comments JSON - handle both string and object formats
+            let comments = [];
+            if (prop.comments) {
+              let rawComments;
+              try {
+                rawComments = typeof prop.comments === 'string' ? JSON.parse(prop.comments) : prop.comments;
+              } catch (e) {
+                logger.warn('Failed to parse comments JSON for proposal', { proposalId: prop.id, error: e.message, documentId });
+                rawComments = [];
+              }
+              comments = (Array.isArray(rawComments) ? rawComments : []).map(comment => ({
+                id: comment.id,
+                userId: comment.user_id,
+                user_id: comment.user_id,
+                text: comment.text,
+                parentId: comment.parent_id,
+                parent_id: comment.parent_id,
+                createdAt: comment.created_at,
+                created_at: comment.created_at,
+                updatedAt: comment.updated_at,
+                updated_at: comment.updated_at,
+                user: {
+                  id: comment.user_id,
+                  name: comment.user_name,
+                  email: comment.user_email
+                },
+                parent: comment.parent_id ? {
+                  id: comment.parent_id,
+                  user: {
+                    id: comment.parent_user_id,
+                    name: comment.parent_user_name
                   }
+                } : null,
+                replies: []
+              }));
+            }
 
-                  const historyEntries = (historyRows || []).map((entry) => ({
-                    id: entry.id,
-                    paragraph_id: entry.paragraph_id,
-                    paragraphId: entry.paragraph_id,
-                    userId: entry.user_id,
-                    oldText: entry.old_text,
-                    newText: entry.new_text,
-                    text: entry.new_text,
-                    approvalPercentage: entry.approval_percentage != null ? Number(entry.approval_percentage) : 100,
-                    proposalId: entry.proposal_id,
-                    acceptedAt: entry.created_at,
-                    createdAt: entry.created_at,
-                    type: entry.proposal_type || 'BODY',
-                    heading_level: entry.heading_level,
-                    user: {
-                      id: entry.user_id,
-                      name: entry.user_name,
-                      email: entry.user_email
-                    }
-                  }));
-
-                  resolve({
-                    ...para,
-                    order: para.order_index,
-                    heading_level: para.heading_level,
-                    proposals: enrichedProposals,
-                    suggestions: enrichedProposals,
-                    history: historyEntries
-                  });
-                }
-              );
-            });
+            return {
+              id: prop.id,
+              userId: prop.user_id,
+              user_id: prop.user_id,
+              paragraphId: row.id,
+              paragraph_id: row.id,
+              text: prop.text,
+              type: prop.type,
+              headingLevel: prop.heading_level,
+              heading_level: prop.heading_level,
+              createdAt: prop.created_at,
+              created_at: prop.created_at,
+              updatedAt: prop.updated_at,
+              updated_at: prop.updated_at,
+              user: {
+                id: prop.user_id,
+                name: prop.user_name,
+                email: prop.user_email
+              },
+              votes,
+              comments
+            };
           });
-        });
-      };
+        }
 
-      Promise.all(paragraphs.map(buildParagraphData)).then((paragraphData) => {
+        // Parse history JSON
+        let history = [];
+        if (row.history_json && row.history_json !== '[null]' && row.history_json !== 'null') {
+          let rawHistory;
+          try {
+            rawHistory = typeof row.history_json === 'string' ? JSON.parse(row.history_json) : row.history_json;
+          } catch (e) {
+            logger.warn('Failed to parse history_json for paragraph', { paragraphId: row.id, error: e.message, documentId });
+            rawHistory = [];
+          }
+          // Filter out null values
+          history = (Array.isArray(rawHistory) ? rawHistory : []).filter(entry => entry !== null && entry.id !== null).map(entry => ({
+            id: entry.id,
+            paragraph_id: entry.paragraph_id,
+            paragraphId: entry.paragraph_id,
+            userId: entry.user_id,
+            oldText: entry.old_text,
+            newText: entry.new_text,
+            text: entry.new_text,
+            approvalPercentage: entry.approval_percentage != null ? Number(entry.approval_percentage) : 100,
+            proposalId: entry.proposal_id,
+            acceptedAt: entry.created_at,
+            createdAt: entry.created_at,
+            type: entry.proposal_type || 'BODY',
+            heading_level: entry.heading_level,
+            user: {
+              id: entry.user_id,
+              name: entry.user_name,
+              email: entry.user_email
+            }
+          }));
+        }
+
+        return {
+          ...row,
+          order: row.order_index,
+          heading_level: row.heading_level,
+          proposals,
+          suggestions: proposals, // Alias for compatibility
+          history
+        };
+      });
+
+      // Fetch collaborators (this is already optimized, keeping as is)
+      const collabQuery = `
+        SELECT 
+          dc.id as collaborator_id,
+          dc.document_id,
+          dc.user_id,
+          dc.created_at,
+          u.name as user_name,
+          u.email as user_email
+        FROM document_collaborators dc
+        JOIN users u ON dc.user_id = u.id
+        WHERE dc.document_id = ?
+      `;
+
+      db.all(collabQuery, [documentId], (collabErr, collaborators) => {
         const collabQuery = `
           SELECT 
             dc.id as collaborator_id,
@@ -1454,7 +1603,7 @@ router.get('/:id', requireAuth, (req, res) => {
 
         db.all(collabQuery, [documentId], (collabErr, collaborators) => {
           if (collabErr) {
-            console.error('Error fetching collaborators:', collabErr);
+            logger.error('Error fetching collaborators', { error: collabErr.message, documentId });
             return res.status(500).json({ error: 'Failed to fetch collaborators' });
           }
 
@@ -1516,7 +1665,13 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
   if (!inputValidation.valid) {
     logDocumentError('DOC_VALIDATION_FAILED', 'Document creation input validation failed', {
       userId,
-      errors: inputValidation.errors
+      errors: inputValidation.errors,
+      requestBody: { title, description, options, ownershipType, organizationId, creatorIds, parentId }
+    });
+    logger.error('Document creation validation failed', { 
+      userId, 
+      errors: inputValidation.errors, 
+      requestBody: { title, description, options, ownershipType, organizationId, creatorIds, parentId } 
     });
     return res.status(400).json({
       error: 'Invalid input parameters',
@@ -1573,12 +1728,13 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
         logDocumentSuccess('organization_membership_verified', { userId, organizationId });
 
         try {
-          await createDocument(db, ownershipType, organizationId, options, userId, title, description, creatorIds, parentId);
+          const result = await createDocument(db, ownershipType, organizationId, options, userId, title, description, creatorIds, parentId);
           logDocumentSuccess('organizational_document_created', {
             userId,
             organizationId,
             title: title.substring(0, 50)
           });
+          return res.status(201).json({ document: result });
         } catch (error) {
           logDocumentError('DOC_CREATION_FAILED', 'Error in organizational document creation', {
             userId,
@@ -1676,37 +1832,32 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
   })();
 });
   async function createDocument(db, ownershipType, organizationId, options, userId, title, description, creatorIds, parentId) {
-    console.log('🚀 Starting createDocument function');
-    console.log('Input params:', { ownershipType, organizationId, userId, title, description, parentId });
+    logger.debug('Starting createDocument function', { ownershipType, organizationId, userId, title: title.substring(0, 50), parentId });
 
     const documentId = uuidv4();
     const trimmedTitle = title.trim();
     const trimmedDescription = description ? description.trim() : null;
 
-    console.log('📄 Generated document ID:', documentId);
-    console.log('📝 Title:', trimmedTitle);
-    console.log('🏷️  Ownership type:', ownershipType);
+    logger.debug('Generated document ID', { documentId, ownershipType });
 
     // Build the SQL query and parameters using the helper function
     const { sql, params, acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled } =
-      buildDocumentInsertSQL(ownershipType, organizationId, options, documentId, trimmedTitle, trimmedDescription, userId, parentId);
+      await buildDocumentInsertSQL(db, ownershipType, organizationId, options, documentId, trimmedTitle, trimmedDescription, userId, parentId);
 
-    console.log('💾 Executing document INSERT...');
-    console.log('📝 Final SQL:', sql);
-    console.log('📊 Final params length:', params.length);
+    logger.debug('Executing document INSERT', { documentId, paramsLength: params.length });
 
   const result = await withTransaction(db, async () => {
     // First verify that the user exists
     await new Promise((resolve, reject) => {
       db.get('SELECT id FROM users WHERE id = ?', [userId], (err, row) => {
         if (err) {
-          console.error('❌ Error checking user existence:', err);
+          logger.error('Error checking user existence', { error: err.message, userId });
           reject(new Error(`User verification failed: ${err.message}`));
         } else if (!row) {
-          console.error('❌ User does not exist:', userId);
+          logger.error('User does not exist', { userId });
           reject(new Error(`User ${userId} does not exist`));
         } else {
-          console.log('✅ User verified in database:', row);
+          logger.debug('User verified in database', { userId });
           resolve();
         }
       });
@@ -1716,29 +1867,29 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
     await new Promise((resolve, reject) => {
         db.run(sql, params, function(err) {
           if (err) {
-            console.error('❌ Error creating document:', err);
+            logger.error('Error creating document', { error: err.message, documentId, userId });
             reject(new Error(`Document creation failed: ${err.message}`));
           } else {
-            console.log('✅ Document insert completed, changes:', this.changes, 'lastID:', this.lastID);
+            logger.debug('Document insert completed', { documentId, changes: this.changes, lastID: this.lastID });
 
             // Verify document was actually inserted
             db.get('SELECT id, title, owner_id FROM documents WHERE id = ?', [documentId], (checkErr, row) => {
               if (checkErr) {
-                console.error('❌ Error verifying document insert:', checkErr);
+                logger.error('Error verifying document insert', { error: checkErr.message, documentId });
                 reject(new Error(`Document verification failed: ${checkErr.message}`));
               } else if (!row) {
-                console.error('❌ Document was not found after insert:', documentId);
+                logger.error('Document was not found after insert', { documentId });
                 // Check what documents do exist
                 db.all('SELECT id, title FROM documents ORDER BY created_at DESC LIMIT 5', [], (allErr, rows) => {
                   if (allErr) {
-                    console.error('❌ Error listing recent documents:', allErr);
+                    logger.error('Error listing recent documents', { error: allErr.message });
                   } else {
-                    console.log('📋 Recent documents:', rows);
+                    logger.debug('Recent documents', { count: rows.length });
                   }
                   reject(new Error(`Document ${documentId} not found after insert`));
                 });
               } else {
-                console.log('✅ Document verified in database:', row);
+                logger.debug('Document verified in database', { documentId });
                 resolve();
               }
             });
@@ -1746,8 +1897,8 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
         });
       });
 
-      // Create initial title paragraph
-      await createInitialParagraph(db, documentId, trimmedTitle, trimmedDescription);
+      // Create initial title paragraph (as a suggestion)
+      await createInitialParagraph(db, documentId, trimmedTitle, trimmedDescription, userId);
 
       // Add collaborators
       await addCollaborators(db, documentId, ownershipType, organizationId, userId, creatorIds);
@@ -1774,11 +1925,11 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
         organizationId: ownershipType === 'organizational' ? organizationId : null
       });
     } catch (metricsErr) {
-      console.error('Error recording metrics:', metricsErr);
+      logger.error('Error recording metrics', { error: metricsErr.message });
       // Don't fail the request if metrics fail
     }
 
-    console.log('✅ Document created successfully:', { id: documentId, title: trimmedTitle });
+    logger.info('Document created successfully', { documentId, title: trimmedTitle.substring(0, 50) });
     return result;
   }
 
@@ -1798,7 +1949,7 @@ router.put('/:id', requireAuth, (req, res) => {
     SELECT owner_id FROM documents WHERE id = ?
   `, [documentId], (err, document) => {
     if (err) {
-      console.error('Error fetching document:', err);
+      logger.error('Error fetching document', { error: err.message, documentId, userId });
       return res.status(500).json({ error: 'Failed to update document' });
     }
 
@@ -1814,7 +1965,7 @@ router.put('/:id', requireAuth, (req, res) => {
       UPDATE documents SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
     `, [title.trim(), documentId], function(err) {
       if (err) {
-        console.error('Error updating document:', err);
+        logger.error('Error updating document', { error: err.message, documentId, userId });
         return res.status(500).json({ error: 'Failed to update document' });
       }
 
@@ -1834,7 +1985,7 @@ router.delete('/:id', requireAuth, (req, res) => {
     SELECT owner_id FROM documents WHERE id = ?
   `, [documentId], (err, document) => {
     if (err) {
-      console.error('Error fetching document:', err);
+      logger.error('Error fetching document', { error: err.message, documentId, userId });
       return res.status(500).json({ error: 'Failed to delete document' });
     }
 
@@ -1849,7 +2000,7 @@ router.delete('/:id', requireAuth, (req, res) => {
     // Delete document and all related data (cascade delete)
     db.run('DELETE FROM documents WHERE id = ?', [documentId], function(err) {
       if (err) {
-        console.error('Error deleting document:', err);
+        logger.error('Error deleting document', { error: err.message, documentId, userId });
         return res.status(500).json({ error: 'Failed to delete document' });
       }
 
@@ -1860,8 +2011,7 @@ router.delete('/:id', requireAuth, (req, res) => {
 
 // Add collaborator to document
 router.post('/:id/collaborators', requireAuth, (req, res) => {
-  console.log(`[${new Date().toISOString()}] POST /api/documents/${req.params.id}/collaborators - Adding collaborator`);
-  console.log('Current user:', req.user.id, 'Adding user:', req.body.userId);
+  logger.debug('Adding collaborator', { documentId: req.params.id, currentUserId: req.user.id, targetUserId: req.body.userId });
 
   const db = req.app.locals.db;
   const documentId = req.params.id;
@@ -1877,7 +2027,7 @@ router.post('/:id/collaborators', requireAuth, (req, res) => {
     SELECT owner_id FROM documents WHERE id = ?
   `, [documentId], (err, document) => {
     if (err) {
-      console.error('Error fetching document:', err);
+      logger.error('Error fetching document', { error: err.message, documentId, userId });
       return res.status(500).json({ error: 'Failed to add collaborator' });
     }
 
@@ -1894,7 +2044,7 @@ router.post('/:id/collaborators', requireAuth, (req, res) => {
       SELECT id, name, email FROM users WHERE id = ?
     `, [userId], (err, user) => {
       if (err) {
-        console.error('Error fetching user:', err);
+        logger.error('Error fetching user', { error: err.message, userId: req.body.userId });
         return res.status(500).json({ error: 'Failed to add collaborator' });
       }
 
@@ -1911,7 +2061,7 @@ router.post('/:id/collaborators', requireAuth, (req, res) => {
         SELECT id FROM document_collaborators WHERE document_id = ? AND user_id = ?
       `, [documentId, userId], (err, existing) => {
         if (err) {
-          console.error('Error checking existing collaborator:', err);
+          logger.error('Error checking existing collaborator', { error: err.message, documentId, userId: req.body.userId });
           return res.status(500).json({ error: 'Failed to add collaborator' });
         }
 
@@ -1926,7 +2076,7 @@ router.post('/:id/collaborators', requireAuth, (req, res) => {
           VALUES (?, ?, ?)
         `, [collaboratorId, documentId, userId], function(err) {
           if (err) {
-            console.error('Error adding collaborator:', err);
+            logger.error('Error adding collaborator', { error: err.message, documentId, userId: req.body.userId });
             return res.status(500).json({ error: 'Failed to add collaborator' });
           }
 
@@ -1935,11 +2085,11 @@ router.post('/:id/collaborators', requireAuth, (req, res) => {
             UPDATE documents SET updated_at = CURRENT_TIMESTAMP WHERE id = ?
           `, [documentId], function(err) {
             if (err) {
-              console.error('Error updating document timestamp:', err);
+              logger.error('Error updating document timestamp', { error: err.message, documentId });
             }
           });
 
-          console.log('Collaborator added successfully:', userId, 'to document:', documentId);
+          logger.info('Collaborator added successfully', { userId, documentId });
           res.status(201).json({
             collaborator: {
               id: collaboratorId,
@@ -1961,8 +2111,7 @@ router.post('/:id/collaborators', requireAuth, (req, res) => {
 
 // Remove collaborator from document
 router.delete('/:id/collaborators/:userId', requireAuth, (req, res) => {
-  console.log(`[${new Date().toISOString()}] DELETE /api/documents/${req.params.id}/collaborators/${req.params.userId} - Removing collaborator`);
-  console.log('Current user:', req.user.id, 'Removing user:', req.params.userId);
+  logger.debug('Removing collaborator', { documentId: req.params.id, currentUserId: req.user.id, targetUserId: req.params.userId });
 
   const db = req.app.locals.db;
   const documentId = req.params.id;
@@ -1974,7 +2123,7 @@ router.delete('/:id/collaborators/:userId', requireAuth, (req, res) => {
     SELECT owner_id FROM documents WHERE id = ?
   `, [documentId], (err, document) => {
     if (err) {
-      console.error('Error fetching document:', err);
+      logger.error('Error fetching document', { error: err.message, documentId, userId });
       return res.status(500).json({ error: 'Failed to remove collaborator' });
     }
 
@@ -1996,7 +2145,7 @@ router.delete('/:id/collaborators/:userId', requireAuth, (req, res) => {
       DELETE FROM document_collaborators WHERE document_id = ? AND user_id = ?
     `, [documentId, collaboratorUserId], function(err) {
       if (err) {
-        console.error('Error removing collaborator:', err);
+        logger.error('Error removing collaborator', { error: err.message, documentId, userId: req.params.userId });
         return res.status(500).json({ error: 'Failed to remove collaborator' });
       }
 
@@ -2009,11 +2158,11 @@ router.delete('/:id/collaborators/:userId', requireAuth, (req, res) => {
         UPDATE documents SET updated_at = CURRENT_TIMESTAMP WHERE id = ?
       `, [documentId], function(err) {
         if (err) {
-          console.error('Error updating document timestamp:', err);
+          logger.error('Error updating document timestamp', { error: err.message, documentId });
         }
       });
 
-      console.log('Collaborator removed successfully:', collaboratorUserId, 'from document:', documentId);
+      logger.info('Collaborator removed successfully', { userId: collaboratorUserId, documentId });
       res.json({ message: 'Collaborator removed successfully' });
     });
   });
@@ -2032,9 +2181,9 @@ router.post('/:id/vote', requireAuth, requireDocumentAccess, (req, res) => {
   }
 
   // Check if document exists and user has access
-  db.get(`SELECT id, vote_change_allowed, status FROM documents WHERE id = ?`, [documentId], (err, document) => {
+  db.get(`SELECT id, vote_change_allowed, status, ownership_type, voting_deadline FROM documents WHERE id = ?`, [documentId], (err, document) => {
     if (err) {
-      console.error('Error fetching document:', err);
+      logger.error('Error fetching document', { error: err.message, documentId, userId });
       return res.status(500).json({ error: 'Failed to fetch document' });
     }
 
@@ -2042,11 +2191,33 @@ router.post('/:id/vote', requireAuth, requireDocumentAccess, (req, res) => {
       return res.status(404).json({ error: 'Document not found' });
     }
 
+    // For organizational documents, only allow voting when status is 'voting'
+    if (document.ownership_type === 'organizational' && document.status !== 'voting') {
+      return res.status(403).json({ 
+        error: 'Document-level voting is only available during the voting period. Current status: ' + document.status 
+      });
+    }
+
+    // Check if voting deadline has passed
+    if (document.voting_deadline && new Date() > new Date(document.voting_deadline)) {
+      return res.status(403).json({ 
+        error: 'Voting deadline has passed for this document',
+        deadline: document.voting_deadline
+      });
+    }
+
+    // Prevent voting on finalized documents
+    if (document.status === 'agreed' || document.status === 'rejected') {
+      return res.status(403).json({ 
+        error: 'Cannot vote on documents that have been finalized. Status: ' + document.status 
+      });
+    }
+
     // Check if user already voted
     db.get(`SELECT id, vote FROM document_votes WHERE document_id = ? AND user_id = ?`, 
       [documentId, userId], (err, existingVote) => {
       if (err) {
-        console.error('Error checking existing vote:', err);
+        logger.error('Error checking existing vote', { error: err.message, documentId, userId });
         return res.status(500).json({ error: 'Failed to check existing vote' });
       }
 
@@ -2062,12 +2233,47 @@ router.post('/:id/vote', requireAuth, requireDocumentAccess, (req, res) => {
         db.run(`UPDATE document_votes SET vote = ?, updated_at = CURRENT_TIMESTAMP WHERE document_id = ? AND user_id = ?`,
           [vote, documentId, userId], function(err) {
           if (err) {
-            console.error('Error updating vote:', err);
+            logger.error('Error updating vote', { error: err.message, documentId, userId });
             return res.status(500).json({ error: 'Failed to update vote' });
           }
 
-          // Check if document should be marked as agreed
-          checkDocumentAgreementStatus(db, documentId);
+          // Check if document should be marked as agreed (async, don't wait)
+          checkDocumentAgreementStatus(db, documentId).catch(err => {
+            logger.error('Error in checkDocumentAgreementStatus', { error: err.message, documentId });
+          });
+
+          // Fetch all document votes and broadcast via WebSocket
+          db.all(`SELECT dv.*, u.name as user_name, u.email as user_email 
+                  FROM document_votes dv 
+                  LEFT JOIN users u ON dv.user_id = u.id 
+                  WHERE dv.document_id = ? 
+                  ORDER BY dv.created_at ASC`, [documentId], (voteErr, votes) => {
+            if (!voteErr && votes) {
+              // Get document to check voting anonymity
+              db.get(`SELECT voting_anonymous FROM documents WHERE id = ?`, [documentId], (docErr, doc) => {
+                const isAnonymous = doc?.voting_anonymous === 1;
+                
+                const formattedVotes = votes.map(v => {
+                  if (isAnonymous && v.user_id !== userId) {
+                    return { id: v.id, vote: v.vote, createdAt: v.created_at };
+                  }
+                  return {
+                    id: v.id,
+                    userId: v.user_id,
+                    vote: v.vote,
+                    createdAt: v.created_at,
+                    user: { id: v.user_id, name: v.user_name, email: v.user_email }
+                  };
+                });
+
+                webSocketManager.broadcastDocumentUpdate(documentId, 'document-vote', {
+                  documentId,
+                  votes: formattedVotes,
+                  action: 'updated'
+                });
+              });
+            }
+          });
 
           res.json({ message: 'Vote updated successfully' });
         });
@@ -2076,15 +2282,50 @@ router.post('/:id/vote', requireAuth, requireDocumentAccess, (req, res) => {
         const { v4: uuidv4 } = require('uuid');
         const voteId = uuidv4();
         
-        db.run(`INSERT INTO document_votes (id, document_id, user_id, vote) VALUES (?, ?, ?, ?)`,
+        db.run(`INSERT INTO document_votes (id, document_id, user_id, vote, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
           [voteId, documentId, userId, vote], function(err) {
           if (err) {
-            console.error('Error casting vote:', err);
+            logger.error('Error casting vote', { error: err.message, documentId, userId });
             return res.status(500).json({ error: 'Failed to cast vote' });
           }
 
-          // Check if document should be marked as agreed
-          checkDocumentAgreementStatus(db, documentId);
+          // Check if document should be marked as agreed (async, don't wait)
+          checkDocumentAgreementStatus(db, documentId).catch(err => {
+            logger.error('Error in checkDocumentAgreementStatus', { error: err.message, documentId });
+          });
+
+          // Fetch all document votes and broadcast via WebSocket
+          db.all(`SELECT dv.*, u.name as user_name, u.email as user_email 
+                  FROM document_votes dv 
+                  LEFT JOIN users u ON dv.user_id = u.id 
+                  WHERE dv.document_id = ? 
+                  ORDER BY dv.created_at ASC`, [documentId], (voteErr, votes) => {
+            if (!voteErr && votes) {
+              // Get document to check voting anonymity
+              db.get(`SELECT voting_anonymous FROM documents WHERE id = ?`, [documentId], (docErr, doc) => {
+                const isAnonymous = doc?.voting_anonymous === 1;
+                
+                const formattedVotes = votes.map(v => {
+                  if (isAnonymous && v.user_id !== userId) {
+                    return { id: v.id, vote: v.vote, createdAt: v.created_at };
+                  }
+                  return {
+                    id: v.id,
+                    userId: v.user_id,
+                    vote: v.vote,
+                    createdAt: v.created_at,
+                    user: { id: v.user_id, name: v.user_name, email: v.user_email }
+                  };
+                });
+
+                webSocketManager.broadcastDocumentUpdate(documentId, 'document-vote', {
+                  documentId,
+                  votes: formattedVotes,
+                  action: 'cast'
+                });
+              });
+            }
+          });
 
           res.json({ message: 'Vote recorded successfully', voteId });
         });
@@ -2102,7 +2343,7 @@ router.get('/:id/votes', requireAuth, requireDocumentAccess, (req, res) => {
   // Get document to check voting anonymity
   db.get(`SELECT voting_anonymous FROM documents WHERE id = ?`, [documentId], (docErr, doc) => {
     if (docErr) {
-      console.error('Error fetching document:', docErr);
+      logger.error('Error fetching document', { error: docErr.message, documentId });
       return res.status(500).json({ error: 'Failed to fetch document' });
     }
 
@@ -2117,7 +2358,7 @@ router.get('/:id/votes', requireAuth, requireDocumentAccess, (req, res) => {
 
     db.all(votesQuery, [documentId], (err, votes) => {
       if (err) {
-        console.error('Error fetching votes:', err);
+        logger.error('Error fetching votes', { error: err.message, documentId });
         return res.status(500).json({ error: 'Failed to fetch votes' });
       }
 
@@ -2151,86 +2392,161 @@ router.get('/:id/votes', requireAuth, requireDocumentAccess, (req, res) => {
 });
 
 // Helper function to check if document-level votes reach agreement threshold
-function checkDocumentAgreementStatus(db, documentId) {
-  // Get document acceptance threshold, status, and proposal deadline
-  db.get(`SELECT acceptance_threshold, status, proposal_deadline FROM documents WHERE id = ?`, [documentId], (docErr, doc) => {
-    if (docErr) {
-      console.error('Error getting document threshold:', docErr);
-      return;
-    }
-
-    if (!doc || doc.status === 'agreed') {
-      // Already agreed or document not found
-      return;
-    }
-
-    // Only check for agreement if document is in 'proposal' status
-    if (doc.status !== 'proposal') {
-      return;
-    }
-
-    // Check if proposal deadline has passed
-    if (doc.proposal_deadline) {
-      const deadline = new Date(doc.proposal_deadline);
-      const now = new Date();
-      if (now < deadline) {
-        // Deadline has not passed yet - cannot agree
-        return;
-      }
-    }
-
-    const acceptanceThreshold = doc?.acceptance_threshold || 75.0;
-
-    // Get total collaborators
-    const collabQuery = `
-      SELECT COUNT(*) as total_users
-      FROM (
-        SELECT owner_id as user_id FROM documents WHERE id = ?
-        UNION
-        SELECT user_id FROM document_collaborators WHERE document_id = ?
-      )
-    `;
-
-    db.get(collabQuery, [documentId, documentId], (err, result) => {
-      if (err) {
-        console.error('Error getting user count:', err);
-        return;
-      }
-
-      const totalUsers = result.total_users || 1;
-
-      // Get document-level votes
-      db.all(`SELECT vote FROM document_votes WHERE document_id = ?`, [documentId], (err, votes) => {
-        if (err) {
-          console.error('Error getting document votes:', err);
-          return;
-        }
-
-        if (!votes || votes.length === 0) {
-          // No votes yet
-          return;
-        }
-
-        // Count PRO votes
-        const proVotes = votes.filter(v => v.vote === 'PRO').length;
-        const approvalPercentage = totalUsers > 0 ? (proVotes / totalUsers) * 100 : 0;
-
-        // Check if agreement threshold is met (quorum reached)
-        if (approvalPercentage >= acceptanceThreshold) {
-          // Update document status to 'agreed' (deadline passed AND quorum reached)
-          db.run(`UPDATE documents SET status = 'agreed', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-            [documentId], (updateErr) => {
-            if (updateErr) {
-              console.error('Error updating document status to agreed:', updateErr);
-            } else {
-              console.log(`Document ${documentId} status updated to 'agreed' - deadline passed and document-level votes reached threshold`);
-            }
-          });
-        }
+async function checkDocumentAgreementStatus(db, documentId) {
+  try {
+    // Get document info including status, threshold, and voting settings
+    const doc = await new Promise((resolve, reject) => {
+      db.get(`
+        SELECT 
+          id, status, acceptance_threshold, proposal_deadline, voting_deadline,
+          min_voters_required, organization_id, ownership_type,
+          threshold_calculation_method
+        FROM documents WHERE id = ?
+      `, [documentId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
       });
     });
-  });
-    } // End of continueExecution function
+
+    if (!doc || doc.status === 'agreed' || doc.status === 'rejected') {
+      // Already finalized or document not found
+      return;
+    }
+
+    // Only check for agreement if document is in 'voting' or 'proposal' status
+    if (doc.status !== 'voting' && doc.status !== 'proposal') {
+      return;
+    }
+
+    // For organizational documents in 'proposal' status, wait until voting starts
+    if (doc.status === 'proposal' && doc.ownership_type === 'organizational') {
+      // Check if proposal deadline has passed (should transition to voting first)
+      if (doc.proposal_deadline) {
+        const deadline = new Date(doc.proposal_deadline);
+        const now = new Date();
+        if (now < deadline) {
+          // Deadline has not passed yet - cannot agree
+          return;
+        }
+      }
+    }
+
+    // For documents in 'voting' status, check voting deadline
+    if (doc.status === 'voting' && doc.voting_deadline) {
+      const deadline = new Date(doc.voting_deadline);
+      const now = new Date();
+      if (now < deadline) {
+        // Voting deadline has not passed yet - can still vote
+        // But we can still check if threshold is met early
+      }
+    }
+
+    const acceptanceThreshold = doc.acceptance_threshold || 75.0;
+
+    // Get eligible voters count using VoterManager (handles both org and personal docs)
+    const VoterManager = require('../modules/voting');
+    const eligibleVoters = await VoterManager.getEligibleVoters(db, documentId);
+    const totalEligible = eligibleVoters.length;
+
+    if (totalEligible === 0) {
+      logger.warn('Document has no eligible voters', { documentId });
+      return;
+    }
+
+    // Get document-level votes
+    const votes = await new Promise((resolve, reject) => {
+      db.all(`SELECT vote FROM document_votes WHERE document_id = ?`, [documentId], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    if (!votes || votes.length === 0) {
+      // No votes yet
+      return;
+    }
+
+    const actualVotes = votes.length;
+    const proVotes = votes.filter(v => v.vote === 'PRO').length;
+    const contraVotes = votes.filter(v => v.vote === 'CONTRA').length;
+
+    // Check quorum - use stored min_voters_required if available, otherwise calculate from governance rules
+    let quorumRequired;
+    if (doc.min_voters_required && doc.min_voters_required > 0) {
+      quorumRequired = doc.min_voters_required;
+    } else {
+      // Get governance rules to use defaultQuorumPercentage
+      let quorumPercentage = 0.3; // Default 30%
+      if (doc.organization_id) {
+        try {
+          const governanceModule = require('./governance');
+          const governanceRules = await governanceModule.getGovernanceRules(db, doc.organization_id);
+          if (governanceRules?.defaultQuorumPercentage) {
+            quorumPercentage = governanceRules.defaultQuorumPercentage;
+          }
+        } catch (govErr) {
+          logger.warn('Could not fetch governance rules for quorum, using default 30%', { error: govErr.message, organizationId });
+        }
+      }
+      quorumRequired = Math.max(1, Math.ceil(totalEligible * quorumPercentage));
+    }
+    const quorumMet = actualVotes >= quorumRequired;
+
+    if (!quorumMet) {
+      logger.debug('Quorum not met', { documentId, actualVotes, quorumRequired });
+      return;
+    }
+
+    // Calculate approval percentage based on thresholdCalculationMethod
+    let approvalPercentage;
+    if (doc.ownership_type === 'organizational' && doc.organization_id) {
+      // Get governance rules for calculation method
+      let calculationMethod = 'all_votes';
+      try {
+        const governanceModule = require('./governance');
+        const governanceRules = await governanceModule.getGovernanceRules(db, doc.organization_id);
+        calculationMethod = governanceRules?.thresholdCalculationMethod || 'all_votes';
+      } catch (govErr) {
+        logger.warn('Could not fetch governance rules for threshold calculation, using default', { error: govErr.message, documentId: doc.id });
+      }
+      
+      if (calculationMethod === 'all_members') {
+        // Calculate as percentage of all eligible members
+        approvalPercentage = totalEligible > 0 ? (proVotes / totalEligible) * 100 : 0;
+      } else {
+        // Calculate as percentage of actual votes cast (all_votes)
+        approvalPercentage = actualVotes > 0 ? (proVotes / actualVotes) * 100 : 0;
+      }
+    } else {
+      // For personal/shared documents, use all_votes method
+      approvalPercentage = actualVotes > 0 ? (proVotes / actualVotes) * 100 : 0;
+    }
+
+    logger.debug('Document voting status', { documentId, proVotes, actualVotes, approvalPercentage, totalEligible, quorumMet });
+
+    // Check if agreement threshold is met
+    if (approvalPercentage >= acceptanceThreshold) {
+      // Use DocumentStatusManager for proper status transition
+      const DocumentStatusManager = require('../modules/document-status');
+      await DocumentStatusManager.transitionToAgreed(db, documentId, null);
+      
+      // Broadcast status change via WebSocket
+      const webSocketManager = require('../modules/websocket');
+      webSocketManager.broadcastDocumentUpdate(documentId, 'document-status-changed', {
+        documentId,
+        oldStatus: doc.status,
+        newStatus: 'agreed',
+        reason: 'approval_threshold_met'
+      });
+      
+      logger.info('Document status updated to agreed - threshold met', { documentId, approvalPercentage, acceptanceThreshold });
+    } else {
+      logger.debug('Threshold not met', { documentId, approvalPercentage, acceptanceThreshold });
+    }
+  } catch (error) {
+    logger.error('Error checking document agreement status', { error: error.message, stack: error.stack, documentId });
+  }
+}
 
 /**
  * GET /api/documents/:id/voting-status
@@ -2292,14 +2608,25 @@ router.get('/:id/voting-status', requireAuth, requireDocumentAccess, async (req,
 
     const voteBreakdown = { PRO: 0, NEUTRAL: 0, CONTRA: 0 };
     votes.forEach(v => {
-      voteBreakdown[v.vote] = v.count;
+      // SQLite COUNT(*) returns as 'count' column - handle both number and string
+      const count = typeof v.count === 'number' ? v.count : (parseInt(v.count, 10) || 0);
+      if (v.vote && ['PRO', 'NEUTRAL', 'CONTRA'].includes(v.vote)) {
+        voteBreakdown[v.vote] = count;
+      }
     });
 
     const totalVotes = Object.values(voteBreakdown).reduce((sum, count) => sum + count, 0);
     const approvalRate = totalVotes > 0 ? (voteBreakdown.PRO / totalVotes) * 100 : 0;
 
     // Get eligible voters count
-    const eligibleVoters = await VoterManager.getEligibleVoters(db, documentId);
+    let eligibleVoters = [];
+    try {
+      eligibleVoters = await VoterManager.getEligibleVoters(db, documentId);
+    } catch (voterError) {
+      logger.error('Error getting eligible voters', { error: voterError.message, documentId });
+      // Continue with empty array if this fails
+      eligibleVoters = [];
+    }
 
     res.json({
       document: {
@@ -2328,8 +2655,11 @@ router.get('/:id/voting-status', requireAuth, requireDocumentAccess, async (req,
     });
 
   } catch (error) {
-    console.error('Error getting voting status:', error);
-    res.status(500).json({ error: 'Failed to get voting status' });
+    logger.error('Error getting voting status', { error: error.message, stack: error.stack, documentId });
+    res.status(500).json({ 
+      error: 'Failed to get voting status',
+      details: error.message 
+    });
   }
 });
 
@@ -2348,7 +2678,7 @@ router.get('/:id/status-history', requireAuth, requireDocumentAccess, async (req
     res.json({ history });
 
   } catch (error) {
-    console.error('Error getting status history:', error);
+    logger.error('Error getting status history', { error: error.message, stack: error.stack, documentId });
     res.status(500).json({ error: 'Failed to get status history' });
   }
 });
@@ -2363,9 +2693,9 @@ router.post('/:id/start-voting', requireAuth, requireDocumentAccess, async (req,
   const userId = req.user.id;
 
   try {
-    // Check if user has admin privileges or is document owner
+    // Get document with organization_id to check representative status
     const document = await new Promise((resolve, reject) => {
-      db.get('SELECT owner_id, status FROM documents WHERE id = ?', [documentId], (err, row) => {
+      db.get('SELECT owner_id, status, organization_id FROM documents WHERE id = ?', [documentId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -2375,9 +2705,17 @@ router.post('/:id/start-voting', requireAuth, requireDocumentAccess, async (req,
       return res.status(404).json({ error: 'Document not found' });
     }
 
-    if (document.owner_id !== userId) {
-      // TODO: Check for admin role when user roles are implemented
-      return res.status(403).json({ error: 'Only document owner can start voting' });
+    // Check permissions: owner, admin, or representative (for org documents)
+    const isOwner = document.owner_id === userId;
+    const isAdmin = req.user.role === 'admin';
+    const isRep = document.organization_id 
+      ? await isRepresentative(db, userId, document.organization_id)
+      : false;
+
+    if (!isOwner && !isAdmin && !isRep) {
+      return res.status(403).json({ 
+        error: 'Only document owner, organization representative, or admin can perform this action' 
+      });
     }
 
     if (document.status !== 'proposal') {
@@ -2393,7 +2731,7 @@ router.post('/:id/start-voting', requireAuth, requireDocumentAccess, async (req,
     });
 
   } catch (error) {
-    console.error('Error starting voting:', error);
+    logger.error('Error starting voting', { error: error.message, stack: error.stack, documentId });
     res.status(500).json({ error: 'Failed to start voting period' });
   }
 });
@@ -2408,9 +2746,9 @@ router.post('/:id/finalize-voting', requireAuth, requireDocumentAccess, async (r
   const userId = req.user.id;
 
   try {
-    // Check if user has admin privileges or is document owner
+    // Get document with organization_id to check representative status
     const document = await new Promise((resolve, reject) => {
-      db.get('SELECT owner_id, status FROM documents WHERE id = ?', [documentId], (err, row) => {
+      db.get('SELECT owner_id, status, organization_id FROM documents WHERE id = ?', [documentId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -2420,9 +2758,17 @@ router.post('/:id/finalize-voting', requireAuth, requireDocumentAccess, async (r
       return res.status(404).json({ error: 'Document not found' });
     }
 
-    if (document.owner_id !== userId) {
-      // TODO: Check for admin role when user roles are implemented
-      return res.status(403).json({ error: 'Only document owner can finalize voting' });
+    // Check permissions: owner, admin, or representative (for org documents)
+    const isOwner = document.owner_id === userId;
+    const isAdmin = req.user.role === 'admin';
+    const isRep = document.organization_id 
+      ? await isRepresentative(db, userId, document.organization_id)
+      : false;
+
+    if (!isOwner && !isAdmin && !isRep) {
+      return res.status(403).json({ 
+        error: 'Only document owner, organization representative, or admin can perform this action' 
+      });
     }
 
     if (document.status !== 'voting') {
@@ -2454,8 +2800,405 @@ router.post('/:id/finalize-voting', requireAuth, requireDocumentAccess, async (r
     res.json({ message: 'Voting finalized successfully' });
 
   } catch (error) {
-    console.error('Error finalizing voting:', error);
+    logger.error('Error finalizing voting', { error: error.message, stack: error.stack, documentId });
     res.status(500).json({ error: 'Failed to finalize voting' });
+  }
+});
+
+// Propose document deletion (representatives only for organizational documents)
+router.post('/:id/propose-deletion', requireAuth, requireDocumentAccess, async (req, res) => {
+  const db = req.app.locals.db;
+  const documentId = req.params.id;
+  const userId = req.user.id;
+
+  try {
+    // Get document info
+    const document = await new Promise((resolve, reject) => {
+      db.get(`
+        SELECT id, title, organization_id, ownership_type, deletion_proposed_at
+        FROM documents WHERE id = ?
+      `, [documentId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (!document) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    // Check if deletion already proposed
+    if (document.deletion_proposed_at) {
+      return res.status(400).json({ error: 'Deletion already proposed for this document' });
+    }
+
+    // For organizational documents, check if user is a representative
+    if (document.ownership_type === 'organizational' && document.organization_id) {
+      const isRepresentative = await new Promise((resolve, reject) => {
+        db.get(`
+          SELECT COUNT(*) as count FROM organization_representatives
+          WHERE organization_id = ? AND user_id = ? AND status = 'active'
+        `, [document.organization_id, userId], (err, row) => {
+          if (err) reject(err);
+          else resolve((row?.count || 0) > 0);
+        });
+      });
+
+      if (!isRepresentative) {
+        return res.status(403).json({ error: 'Only representatives can propose deletion of organizational documents' });
+      }
+    } else {
+      // For personal/shared documents, only owner can propose deletion
+      if (document.owner_id !== userId) {
+        return res.status(403).json({ error: 'Only the document owner can propose deletion' });
+      }
+    }
+
+    // Get governance rules for deletion vote deadline
+    let voteDeadlineDays = 7; // Default
+    if (document.organization_id) {
+      try {
+        const governanceModule = require('./governance');
+        const governanceRules = await governanceModule.getGovernanceRules(db, document.organization_id);
+        if (governanceRules?.defaultVotingDeadlineHours) {
+          voteDeadlineDays = Math.ceil(governanceRules.defaultVotingDeadlineHours / 24);
+        }
+      } catch (govErr) {
+        logger.warn('Could not fetch governance rules for deletion vote deadline, using default', { error: govErr.message, documentId: document.id });
+      }
+    }
+
+    const voteDeadline = new Date();
+    voteDeadline.setDate(voteDeadline.getDate() + voteDeadlineDays);
+
+    // Update document with deletion proposal
+    await new Promise((resolve, reject) => {
+      db.run(`
+        UPDATE documents
+        SET deletion_proposed_at = CURRENT_TIMESTAMP,
+            deletion_proposed_by = ?,
+            deletion_vote_deadline = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `, [userId, voteDeadline.toISOString(), documentId], function(err) {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    // Log status change
+    const DocumentStatusManager = require('../modules/document-status');
+    await DocumentStatusManager.logStatusChange(db, documentId, document.status, document.status, userId, 'deletion_proposed');
+
+    // Broadcast WebSocket update
+    webSocketManager.broadcastDocumentUpdate(documentId, 'deletion-proposed', {
+      documentId,
+      proposedBy: userId,
+      voteDeadline: voteDeadline.toISOString()
+    });
+
+    res.json({
+      message: 'Deletion proposal created successfully',
+      voteDeadline: voteDeadline.toISOString()
+    });
+
+  } catch (error) {
+    logger.error('Error proposing deletion', { error: error.message, stack: error.stack, documentId });
+    res.status(500).json({ error: 'Failed to propose deletion' });
+  }
+});
+
+// Vote on document deletion
+router.post('/:id/vote-deletion', requireAuth, requireDocumentAccess, async (req, res) => {
+  const db = req.app.locals.db;
+  const documentId = req.params.id;
+  const userId = req.user.id;
+  const { vote } = req.body;
+
+  if (!['PRO', 'NEUTRAL', 'CONTRA'].includes(vote)) {
+    return res.status(400).json({ error: 'Invalid vote type. Must be PRO, NEUTRAL, or CONTRA' });
+  }
+
+  try {
+    // Check if deletion is proposed
+    const document = await new Promise((resolve, reject) => {
+      db.get(`
+        SELECT id, deletion_proposed_at, deletion_vote_deadline, organization_id, ownership_type
+        FROM documents WHERE id = ?
+      `, [documentId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (!document) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    if (!document.deletion_proposed_at) {
+      return res.status(400).json({ error: 'Deletion not proposed for this document' });
+    }
+
+    // Check if deadline passed
+    if (document.deletion_vote_deadline && new Date() > new Date(document.deletion_vote_deadline)) {
+      return res.status(403).json({ error: 'Deletion vote deadline has passed' });
+    }
+
+    // Check if user is eligible to vote (organization member for org docs)
+    if (document.ownership_type === 'organizational' && document.organization_id) {
+      const isMember = await new Promise((resolve, reject) => {
+        db.get(`
+          SELECT COUNT(*) as count FROM organization_members
+          WHERE organization_id = ? AND user_id = ? AND status = 'active'
+        `, [document.organization_id, userId], (err, row) => {
+          if (err) reject(err);
+          else resolve((row?.count || 0) > 0);
+        });
+      });
+
+      if (!isMember) {
+        return res.status(403).json({ error: 'Only organization members can vote on deletion' });
+      }
+    }
+
+    // Check if user already voted
+    const existingVote = await new Promise((resolve, reject) => {
+      db.get(`
+        SELECT id, vote FROM document_deletion_votes
+        WHERE document_id = ? AND user_id = ?
+      `, [documentId, userId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (existingVote) {
+      // Update existing vote
+      await new Promise((resolve, reject) => {
+        db.run(`
+          UPDATE document_deletion_votes
+          SET vote = ?, created_at = CURRENT_TIMESTAMP
+          WHERE document_id = ? AND user_id = ?
+        `, [vote, documentId, userId], function(err) {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+    } else {
+      // Insert new vote
+      const voteId = uuidv4();
+      await new Promise((resolve, reject) => {
+        db.run(`
+          INSERT INTO document_deletion_votes (id, document_id, user_id, vote)
+          VALUES (?, ?, ?, ?)
+        `, [voteId, documentId, userId, vote], function(err) {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+    }
+
+    // Get all deletion votes for broadcast
+    const votes = await new Promise((resolve, reject) => {
+      db.all(`
+        SELECT ddv.*, u.name as user_name
+        FROM document_deletion_votes ddv
+        LEFT JOIN users u ON ddv.user_id = u.id
+        WHERE ddv.document_id = ?
+        ORDER BY ddv.created_at ASC
+      `, [documentId], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    // Broadcast WebSocket update
+    webSocketManager.broadcastDocumentUpdate(documentId, 'deletion-vote', {
+      documentId,
+      votes: votes.map(v => ({
+        id: v.id,
+        userId: v.user_id,
+        vote: v.vote,
+        userName: v.user_name,
+        createdAt: v.created_at
+      })),
+      action: existingVote ? 'updated' : 'cast'
+    });
+
+    res.json({ message: existingVote ? 'Vote updated successfully' : 'Vote cast successfully' });
+
+  } catch (error) {
+    logger.error('Error voting on deletion', { error: error.message, stack: error.stack, documentId });
+    res.status(500).json({ error: 'Failed to cast deletion vote' });
+  }
+});
+
+// Cancel deletion proposal (only by proposer or representative)
+router.post('/:id/cancel-deletion', requireAuth, requireDocumentAccess, async (req, res) => {
+  const db = req.app.locals.db;
+  const documentId = req.params.id;
+  const userId = req.user.id;
+
+  try {
+    const document = await new Promise((resolve, reject) => {
+      db.get(`
+        SELECT id, deletion_proposed_by, organization_id, ownership_type
+        FROM documents WHERE id = ?
+      `, [documentId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (!document) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    if (!document.deletion_proposed_by) {
+      return res.status(400).json({ error: 'No deletion proposal exists for this document' });
+    }
+
+    // Check if user can cancel (proposer or representative for org docs)
+    let canCancel = false;
+    if (document.deletion_proposed_by === userId) {
+      canCancel = true;
+    } else if (document.ownership_type === 'organizational' && document.organization_id) {
+      const isRepresentative = await new Promise((resolve, reject) => {
+        db.get(`
+          SELECT COUNT(*) as count FROM organization_representatives
+          WHERE organization_id = ? AND user_id = ? AND status = 'active'
+        `, [document.organization_id, userId], (err, row) => {
+          if (err) reject(err);
+          else resolve((row?.count || 0) > 0);
+        });
+      });
+      canCancel = isRepresentative;
+    }
+
+    if (!canCancel) {
+      return res.status(403).json({ error: 'Only the proposer or a representative can cancel deletion' });
+    }
+
+    // Cancel deletion proposal
+    await new Promise((resolve, reject) => {
+      db.run(`
+        UPDATE documents
+        SET deletion_proposed_at = NULL,
+            deletion_proposed_by = NULL,
+            deletion_vote_deadline = NULL,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `, [documentId], function(err) {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    // Delete all deletion votes
+    await new Promise((resolve, reject) => {
+      db.run(`DELETE FROM document_deletion_votes WHERE document_id = ?`, [documentId], function(err) {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    // Broadcast WebSocket update
+    webSocketManager.broadcastDocumentUpdate(documentId, 'deletion-cancelled', {
+      documentId,
+      cancelledBy: userId
+    });
+
+    res.json({ message: 'Deletion proposal cancelled successfully' });
+
+  } catch (error) {
+    logger.error('Error cancelling deletion', { error: error.message, stack: error.stack, documentId });
+    res.status(500).json({ error: 'Failed to cancel deletion proposal' });
+  }
+});
+
+// Get deletion status
+router.get('/:id/deletion-status', requireAuth, requireDocumentAccess, async (req, res) => {
+  const db = req.app.locals.db;
+  const documentId = req.params.id;
+
+  try {
+    const document = await new Promise((resolve, reject) => {
+      db.get(`
+        SELECT deletion_proposed_at, deletion_proposed_by, deletion_vote_deadline,
+               organization_id, ownership_type
+        FROM documents WHERE id = ?
+      `, [documentId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (!document) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    if (!document.deletion_proposed_at) {
+      return res.json({ proposed: false });
+    }
+
+    // Get votes
+    const votes = await new Promise((resolve, reject) => {
+      db.all(`
+        SELECT vote, COUNT(*) as count
+        FROM document_deletion_votes
+        WHERE document_id = ?
+        GROUP BY vote
+      `, [documentId], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    const voteBreakdown = { PRO: 0, NEUTRAL: 0, CONTRA: 0 };
+    votes.forEach(v => {
+      // SQLite COUNT(*) returns as 'count' column - handle both number and string
+      const count = typeof v.count === 'number' ? v.count : (parseInt(v.count, 10) || 0);
+      if (v.vote && ['PRO', 'NEUTRAL', 'CONTRA'].includes(v.vote)) {
+        voteBreakdown[v.vote] = count;
+      }
+    });
+
+    const totalVotes = voteBreakdown.PRO + voteBreakdown.NEUTRAL + voteBreakdown.CONTRA;
+    const approvalRate = totalVotes > 0 ? (voteBreakdown.PRO / totalVotes) * 100 : 0;
+
+    // Get eligible voters count
+    let eligibleVoters = 0;
+    if (document.organization_id) {
+      const memberCount = await new Promise((resolve, reject) => {
+        db.get(`
+          SELECT COUNT(*) as count FROM organization_members
+          WHERE organization_id = ? AND status = 'active'
+        `, [document.organization_id], (err, row) => {
+          if (err) reject(err);
+          else resolve(row?.count || 0);
+        });
+      });
+      eligibleVoters = memberCount;
+    }
+
+    res.json({
+      proposed: true,
+      proposedAt: document.deletion_proposed_at,
+      proposedBy: document.deletion_proposed_by,
+      voteDeadline: document.deletion_vote_deadline,
+      votes: {
+        total: totalVotes,
+        breakdown: voteBreakdown,
+        approvalRate: Math.round(approvalRate * 10) / 10
+      },
+      eligibleVoters,
+      quorumRequired: Math.max(1, Math.ceil(eligibleVoters * 0.3)),
+      quorumMet: totalVotes >= Math.max(1, Math.ceil(eligibleVoters * 0.3))
+    });
+
+  } catch (error) {
+    logger.error('Error getting deletion status', { error: error.message, stack: error.stack, documentId });
+    res.status(500).json({ error: 'Failed to get deletion status' });
   }
 });
 

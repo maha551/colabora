@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { User } from '../types';
+import { User, Proposal } from '../types';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
@@ -8,7 +8,7 @@ import { SuggestionCard } from './SuggestionCard';
 import { ChevronUp, ChevronDown, X } from 'lucide-react';
 
 interface InlineExpandedViewProps {
-  proposal: any;
+  proposal: Proposal;
   currentUser: User;
   totalUsers: number;
   onVote: (proposalId: string, documentId: string, paragraphId: string, voteType: 'PRO' | 'NEUTRAL' | 'CONTRA') => void;

@@ -2,7 +2,7 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { body, validationResult } = require('express-validator');
 const { requireAuth, requireAdmin, generateToken, hashPassword, verifyPassword } = require('../middleware/auth');
-const { securityLogger } = require('../middleware/logger');
+const { securityLogger, logger } = require('../middleware/logger');
 const { metricsCollector } = require('../middleware/monitoring');
 const config = require('../config');
 const demoUsers = require('../demoUsers');
@@ -24,67 +24,95 @@ router.post('/login', [
   const ip = req.ip || req.connection.remoteAddress;
   const userAgent = req.get('User-Agent') || 'unknown';
 
+  // Check if database is available
+  if (!db) {
+    logger.error('Database not available during login', { userId: req.body.email });
+    return res.status(500).json({ error: 'Authentication service unavailable' });
+  }
+
   try {
-    // Find user by email
-    db.get('SELECT id, name, email, password_hash, avatar, bio, role FROM users WHERE email = ?', [email], async (err, user) => {
+    // Find user by email (handle missing bio column gracefully)
+    db.get('SELECT id, name, email, password_hash, avatar, COALESCE(bio, "") as bio, role FROM users WHERE email = ?', [email], async (err, user) => {
+      // Handle database errors
       if (err) {
-        console.error('Database error during login:', err);
+        logger.error('Database error during login', { error: err.message, stack: err.stack, email: req.body.email });
         securityLogger.authFailure(email, 'database_error', ip, userAgent);
         return res.status(500).json({ error: 'Authentication failed' });
       }
 
+      // Handle user not found
       if (!user) {
         securityLogger.authFailure(email, 'user_not_found', ip, userAgent);
         metricsCollector.recordAuthEvent('login_attempt', false, { reason: 'user_not_found' });
         return res.status(401).json({ error: 'Invalid credentials' });
       }
 
-      // Verify password
-      const isValidPassword = await verifyPassword(password, user.password_hash);
-      if (!isValidPassword) {
-        securityLogger.authFailure(email, 'invalid_password', ip, userAgent);
-        metricsCollector.recordAuthEvent('login_attempt', false, { reason: 'invalid_password', userId: user.id });
-        return res.status(401).json({ error: 'Invalid credentials' });
+      // Verify password (wrap in try-catch for async errors)
+      try {
+        if (!user.password_hash) {
+          logger.warn('User has no password_hash', { email: user.email, userId: user.id });
+          securityLogger.authFailure(email, 'no_password_hash', ip, userAgent);
+          return res.status(500).json({ error: 'Authentication failed' });
+        }
+
+        const isValidPassword = await verifyPassword(password, user.password_hash);
+        if (!isValidPassword) {
+          securityLogger.authFailure(email, 'invalid_password', ip, userAgent);
+          metricsCollector.recordAuthEvent('login_attempt', false, { reason: 'invalid_password', userId: user.id });
+          return res.status(401).json({ error: 'Invalid credentials' });
+        }
+
+        // Generate JWT token
+        let token;
+        try {
+          token = generateToken({
+            id: user.id,
+            name: user.name,
+            email: user.email
+          });
+        } catch (tokenError) {
+          logger.error('Token generation error', { error: tokenError.message, stack: tokenError.stack, userId: user.id });
+          securityLogger.authFailure(email, 'token_generation_error', ip, userAgent);
+          return res.status(500).json({ error: 'Authentication failed' });
+        }
+
+        // Update session for backward compatibility
+        if (req.session) {
+          req.session.userId = user.id;
+          req.session.user = {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            avatar: user.avatar,
+            bio: user.bio
+          };
+        }
+
+        // Log successful authentication and record metrics
+        securityLogger.authAttempt(email, true, ip, userAgent);
+        metricsCollector.recordAuthEvent('login_attempt', true, { userId: user.id });
+
+        res.json({
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            avatar: user.avatar,
+            bio: user.bio,
+            role: user.role || 'user'
+          },
+          token,
+          message: 'Login successful'
+        });
+      } catch (passwordError) {
+        logger.error('Password verification error', { error: passwordError.message, stack: passwordError.stack, email: req.body.email });
+        securityLogger.authFailure(email, 'password_verification_error', ip, userAgent);
+        metricsCollector.recordAuthEvent('login_attempt', false, { error: passwordError.message });
+        return res.status(500).json({ error: 'Authentication failed' });
       }
-
-      // Generate JWT token
-      const token = generateToken({
-        id: user.id,
-        name: user.name,
-        email: user.email
-      });
-
-      // Update session for backward compatibility
-      if (req.session) {
-        req.session.userId = user.id;
-        req.session.user = {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          avatar: user.avatar,
-          bio: user.bio
-        };
-      }
-
-      // Log successful authentication and record metrics
-      securityLogger.authAttempt(email, true, ip, userAgent);
-      metricsCollector.recordAuthEvent('login_attempt', true, { userId: user.id });
-
-      res.json({
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          avatar: user.avatar,
-          bio: user.bio,
-          role: user.role || 'user'
-        },
-        token,
-        message: 'Login successful'
-      });
     });
   } catch (error) {
-    console.error('Login error:', error);
+    logger.error('Login error', { error: error.message, stack: error.stack, email: req.body.email });
     securityLogger.authFailure(email, 'system_error', ip, userAgent);
     metricsCollector.recordAuthEvent('login_attempt', false, { error: error.message });
     res.status(500).json({ error: 'Authentication failed' });
@@ -125,7 +153,7 @@ router.post('/register', [
     // Check if user already exists
     db.get('SELECT id FROM users WHERE email = ?', [email], async (err, existingUser) => {
       if (err) {
-        console.error('Database error during registration check:', err);
+        logger.error('Database error during registration check', { error: err.message, email: req.body.email });
         return res.status(500).json({ error: 'Registration failed' });
       }
 
@@ -142,7 +170,7 @@ router.post('/register', [
         [userId, name, email, passwordHash],
         function(err) {
           if (err) {
-            console.error('Database error during user creation:', err);
+            logger.error('Database error during user creation', { error: err.message, email: req.body.email });
             return res.status(500).json({ error: 'Registration failed' });
           }
 
@@ -180,7 +208,7 @@ router.post('/register', [
       );
     });
   } catch (error) {
-    console.error('Registration error:', error);
+    logger.error('Registration error', { error: error.message, stack: error.stack, email: req.body.email });
     res.status(500).json({ error: 'Registration failed' });
   }
 });
@@ -245,7 +273,7 @@ router.put('/profile', (req, res) => {
     [email, userId],
     (err, existingUser) => {
       if (err) {
-        console.error('Error checking email:', err);
+        logger.error('Error checking email', { error: err.message, email: req.body.email });
         return res.status(500).json({ error: 'Database error' });
       }
 
@@ -264,17 +292,17 @@ router.put('/profile', (req, res) => {
         [name, email, bio || null, finalAvatar, userId],
         function(err) {
           if (err) {
-            console.error('Error updating user:', err);
+            logger.error('Error updating user', { error: err.message, userId: req.user.id });
             return res.status(500).json({ error: 'Failed to update profile' });
           }
 
           // Fetch updated user data
           db.get(
-            'SELECT id, name, email, bio, avatar FROM users WHERE id = ?',
+            'SELECT id, name, email, COALESCE(bio, "") as bio, avatar FROM users WHERE id = ?',
             [userId],
             (err, updatedUser) => {
               if (err) {
-                console.error('Error fetching updated user:', err);
+                logger.error('Error fetching updated user', { error: err.message, userId: req.user.id });
                 return res.status(500).json({ error: 'Failed to fetch updated profile' });
               }
 
@@ -306,7 +334,7 @@ router.post('/promote-admin/:userId', requireAuth, requireAdmin, (req, res) => {
   // Verify target user exists
   db.get('SELECT id, name, email, role FROM users WHERE id = ?', [userId], (err, user) => {
     if (err) {
-      console.error('Error checking user:', err);
+      logger.error('Error checking user', { error: err.message, userId: req.user.id });
       return res.status(500).json({ error: 'Failed to verify user' });
     }
 
@@ -320,7 +348,7 @@ router.post('/promote-admin/:userId', requireAuth, requireAdmin, (req, res) => {
 
     db.run('UPDATE users SET role = ? WHERE id = ?', ['admin', userId], function(err) {
       if (err) {
-        console.error('Error promoting user to admin:', err);
+        logger.error('Error promoting user to admin', { error: err.message, targetUserId: req.params.userId, userId: req.user.id });
         return res.status(500).json({ error: 'Failed to promote user' });
       }
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Document, User } from "../types";
+import { Document, User, DocumentCollaborator } from "../types";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -84,15 +84,16 @@ export function CollaboratorManagement({
       if (onCollaboratorAdded) {
         onCollaboratorAdded(userToInvite);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to add collaborator:', error);
-      toast.error(error.message || "Failed to add collaborator");
+      const errorMessage = error instanceof Error ? error.message : "Failed to add collaborator";
+      toast.error(errorMessage);
     } finally {
       setIsInviting(false);
     }
   };
 
-  const handleRemoveCollaborator = async (collaborator: any) => {
+  const handleRemoveCollaborator = async (collaborator: DocumentCollaborator) => {
     console.log('handleRemoveCollaborator called with collaborator:', collaborator?.user.name);
 
     // Use browser confirm dialog instead of AlertDialog for reliability
@@ -113,14 +114,15 @@ export function CollaboratorManagement({
       if (onCollaboratorRemoved) {
         onCollaboratorRemoved(collaborator.user.id);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to remove collaborator:', error);
-      toast.error(error.message || "Failed to remove collaborator");
+      const errorMessage = error instanceof Error ? error.message : "Failed to remove collaborator";
+      toast.error(errorMessage);
     }
   };
 
   const CollaboratorItem = ({ collaborator, isOwner: collabIsOwner, canRemove }: {
-    collaborator: any;
+    collaborator: DocumentCollaborator;
     isOwner: boolean;
     canRemove: boolean;
   }) => (

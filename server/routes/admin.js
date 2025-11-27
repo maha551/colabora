@@ -2,7 +2,7 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { body, validationResult } = require('express-validator');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
-const { securityLogger } = require('../middleware/logger');
+const { securityLogger, logger } = require('../middleware/logger');
 
 const router = express.Router();
 
@@ -34,7 +34,7 @@ router.get('/dashboard', requireAdmin, (req, res) => {
 
     db.get(queries[index], (err, row) => {
       if (err) {
-        console.error('Error getting admin stats:', err);
+        logger.error('Error getting admin stats', { error: err.message, userId: req.user.id });
         return res.status(500).json({ error: 'Failed to fetch admin statistics' });
       }
 
@@ -66,8 +66,7 @@ router.post('/organizations', requireAdmin, [
 ], (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    console.log('Organization creation validation errors:', errors.array());
-    console.log('Request body:', req.body);
+    logger.warn('Organization creation validation errors', { errors: errors.array(), userId: req.user.id });
     return res.status(400).json({ error: 'Invalid input', details: errors.array() });
   }
 
@@ -104,8 +103,12 @@ router.post('/organizations', requireAdmin, [
       VALUES (?, ?, ?, ?, ?, ?, 1, ?)
     `, [organizationId, name, description, JSON.stringify(representatives), membershipPolicy, votingThreshold, req.user.id], function(err) {
       if (err) {
-        console.error('Error creating organization:', err);
-        return res.status(500).json({ error: 'Failed to create organization' });
+        logger.error('Error creating organization', { error: err.message, code: err.code, organizationId, name, description, representatives, membershipPolicy, votingThreshold, createdBy: req.user.id });
+        return res.status(500).json({ 
+          error: 'Failed to create organization',
+          details: err.message,
+          code: err.code
+        });
       }
 
       // Create governance rules for the organization
@@ -135,8 +138,8 @@ router.post('/organizations', requireAdmin, [
           default_quorum_percentage, document_proposal_period_days, anonymous_voting_enabled,
           vote_change_allowed, representative_can_create_votes, representative_can_invite_members,
           representative_can_manage_documents, representative_approval_required,
-          tamper_proof_enabled, audit_trail_enabled
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          tamper_proof_enabled, audit_trail_enabled, threshold_calculation_method, default_acceptance_threshold
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         rulesId, organizationId,
         defaultRules.representativeTermMonths,
@@ -153,14 +156,45 @@ router.post('/organizations', requireAdmin, [
         defaultRules.representativeCanManageDocuments ? 1 : 0,
         defaultRules.representativeApprovalRequired ? 1 : 0,
         defaultRules.tamperProofEnabled ? 1 : 0,
-        defaultRules.auditTrailEnabled ? 1 : 0
+        defaultRules.auditTrailEnabled ? 1 : 0,
+        'all_votes', // threshold_calculation_method default
+        75.0 // default_acceptance_threshold default
       ], function(err) {
         if (err) {
-          console.error('Error creating governance rules:', err);
-          // Don't fail the whole operation, just log the error
-          securityLogger.error('Failed to create governance rules for new organization', {
-            organizationId,
-            error: err.message
+          logger.error('Error creating governance rules', { error: err.message, code: err.code, organizationId, sql: `
+            INSERT INTO organization_governance_rules (
+              id, organization_id, representative_term_months, election_voting_method,
+              election_quorum_percentage, election_notice_days, default_voting_deadline_hours,
+              default_quorum_percentage, document_proposal_period_days, anonymous_voting_enabled,
+              vote_change_allowed, representative_can_create_votes, representative_can_invite_members,
+              representative_can_manage_documents, representative_approval_required,
+              tamper_proof_enabled, audit_trail_enabled, threshold_calculation_method, default_acceptance_threshold
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `});
+          
+          // Check if columns exist
+          db.all('PRAGMA table_info(organization_governance_rules)', (pragmaErr, columns) => {
+            if (pragmaErr) {
+              logger.error('Error getting table info', { error: pragmaErr.message, organizationId });
+            } else {
+              logger.debug('organization_governance_rules columns', { columns: columns.map(c => c.name).join(', '), organizationId });
+              const hasThresholdMethod = columns.some(c => c.name === 'threshold_calculation_method');
+              const hasAcceptanceThreshold = columns.some(c => c.name === 'default_acceptance_threshold');
+              logger.debug('Table schema check', { hasThresholdMethod, hasAcceptanceThreshold, organizationId });
+            }
+          });
+          
+          // Rollback organization creation if governance rules fail
+          db.run('DELETE FROM organizations WHERE id = ?', [organizationId], (deleteErr) => {
+            if (deleteErr) {
+              logger.error('Error rolling back organization creation', { error: deleteErr.message, organizationId });
+            }
+          });
+          return res.status(500).json({ 
+            error: 'Failed to create governance rules',
+            details: err.message,
+            code: err.code,
+            hint: 'The organization_governance_rules table may be missing columns. Run the migration: node server/migrations/organization-features-migration.js'
           });
         }
 
@@ -200,7 +234,7 @@ router.post('/organizations', requireAdmin, [
             }
           });
         }).catch(err => {
-          console.error('Error adding representatives to organization:', err);
+          logger.error('Error adding representatives to organization', { error: err.message, organizationId, representatives });
           // Organization is created, but representatives couldn't be added
           securityLogger.error('Failed to add representatives to new organization', {
             organizationId,
@@ -228,7 +262,7 @@ router.post('/organizations', requireAdmin, [
       });
     });
   }).catch(err => {
-    console.error('Error verifying representatives:', err);
+    logger.error('Error verifying representatives', { error: err.message, stack: err.stack });
     res.status(500).json({ error: 'Failed to verify representatives' });
   });
 });
@@ -237,27 +271,69 @@ router.post('/organizations', requireAdmin, [
 router.get('/organizations', requireAdmin, (req, res) => {
   const db = req.app.locals.db;
 
+  // Use SELECT * to get all columns, then process them
   db.all(`
-    SELECT
-      o.*,
-      u.name as created_by_name,
+    SELECT o.*,
       (SELECT COUNT(*) FROM organization_members om WHERE om.organization_id = o.id AND om.status = 'active') as member_count,
       (SELECT COUNT(*) FROM documents d WHERE d.organization_id = o.id) as document_count
     FROM organizations o
-    LEFT JOIN users u ON o.created_by_admin_id = u.id
     ORDER BY o.created_at DESC
   `, (err, organizations) => {
     if (err) {
-      console.error('Error fetching organizations:', err);
-      return res.status(500).json({ error: 'Failed to fetch organizations' });
+      logger.error('Error fetching organizations', { error: err.message, code: err.code, userId: req.user.id });
+      
+      // Try to get table info to debug
+      db.all('PRAGMA table_info(organizations)', (pragmaErr, columns) => {
+        if (pragmaErr) {
+          logger.error('Error getting table info', { error: pragmaErr.message });
+        } else {
+          logger.debug('Organizations table columns', { columns: columns.map(c => c.name).join(', ') });
+        }
+      });
+      
+      return res.status(500).json({ 
+        error: 'Failed to fetch organizations',
+        details: err.message,
+        code: err.code
+      });
     }
 
-    const processedOrganizations = organizations.map(org => ({
-      ...org,
-      representatives: JSON.parse(org.representatives || '[]'),
-      memberCount: org.member_count,
-      documentCount: org.document_count
-    }));
+    if (!organizations || organizations.length === 0) {
+      return res.json({
+        success: true,
+        organizations: []
+      });
+    }
+
+    // Process organizations
+    const processedOrganizations = organizations.map(org => {
+      let representatives = [];
+      try {
+        if (org.representatives) {
+          representatives = typeof org.representatives === 'string' 
+            ? JSON.parse(org.representatives) 
+            : org.representatives;
+        }
+      } catch (parseError) {
+        logger.error('Error parsing representatives for org', { error: parseError.message, organizationId: org.id });
+        representatives = [];
+      }
+      
+      return {
+        id: org.id,
+        name: org.name,
+        description: org.description || null,
+        representatives,
+        membershipPolicy: org.membership_policy || 'invitation',
+        votingEnabled: org.voting_enabled === 1 || org.voting_enabled === true,
+        votingThreshold: org.voting_threshold || 0.5,
+        isActive: org.is_active === 1 || org.is_active === true || org.is_active === undefined,
+        createdByAdminId: org.created_by_admin_id || null,
+        createdAt: org.created_at || null,
+        memberCount: org.member_count || 0,
+        documentCount: org.document_count || 0
+      };
+    });
 
     res.json({
       success: true,
@@ -281,7 +357,7 @@ router.patch('/organizations/:id/status', requireAdmin, [
 
   db.run('UPDATE organizations SET is_active = ? WHERE id = ?', [isActive ? 1 : 0, id], function(err) {
     if (err) {
-      console.error('Error updating organization status:', err);
+      logger.error('Error updating organization status', { error: err.message, organizationId: id, userId: req.user.id });
       return res.status(500).json({ error: 'Failed to update organization status' });
     }
 
@@ -312,7 +388,7 @@ router.get('/users', requireAdmin, (req, res) => {
     ORDER BY created_at DESC
   `, (err, users) => {
     if (err) {
-      console.error('Error fetching users:', err);
+      logger.error('Error fetching users', { error: err.message, userId: req.user.id });
       return res.status(500).json({ error: 'Failed to fetch users' });
     }
 
@@ -334,7 +410,7 @@ router.post('/promote-admin/:userId', requireAdmin, (req, res) => {
   // Verify target user exists
   db.get('SELECT id, name, email, role FROM users WHERE id = ?', [userId], (err, user) => {
     if (err) {
-      console.error('Error checking user:', err);
+      logger.error('Error checking user', { error: err.message, targetUserId: userId, userId: req.user.id });
       return res.status(500).json({ error: 'Failed to verify user' });
     }
 
@@ -348,7 +424,7 @@ router.post('/promote-admin/:userId', requireAdmin, (req, res) => {
 
     db.run('UPDATE users SET role = ? WHERE id = ?', ['admin', userId], function(err) {
       if (err) {
-        console.error('Error promoting user to admin:', err);
+        logger.error('Error promoting user to admin', { error: err.message, targetUserId: userId, userId: req.user.id });
         return res.status(500).json({ error: 'Failed to promote user' });
       }
 

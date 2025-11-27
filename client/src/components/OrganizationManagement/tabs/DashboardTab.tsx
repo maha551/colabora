@@ -3,27 +3,170 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Button } from '../../ui/button';
 import { Avatar, AvatarFallback } from '../../ui/avatar';
 import { Badge } from '../../ui/badge';
-import { Users, Vote, Clock } from 'lucide-react';
-import { Organization, RepresentativeElection, OrganizationGovernanceRules } from '../../../types';
+import { Users, Vote, Clock, FileText, TrendingUp, Calendar } from 'lucide-react';
+import { Organization, RepresentativeElection, OrganizationGovernanceRules, Document, User } from '../../../types';
 import { OrganizationPermissions } from '../../../hooks/useOrganizationPermissions';
+import { OrganizationStats } from '../shared/OrganizationStats';
+import { OrganizationStatusBadge, VotingStatusBadge } from '../shared/StatusBadges';
 
 interface DashboardTabProps {
   organization: Organization;
+  currentUser: User;
   permissions: OrganizationPermissions;
   elections: RepresentativeElection[];
   governanceRules: OrganizationGovernanceRules | null;
+  documents?: Document[];
   onCreateElection: () => void;
+  onNavigateToDocuments?: () => void;
+  onNavigateToMembers?: () => void;
+  onNavigateToGovernance?: () => void;
 }
 
 export function DashboardTab({
   organization,
+  currentUser,
   permissions,
   elections,
   governanceRules,
-  onCreateElection
+  documents = [],
+  onCreateElection,
+  onNavigateToDocuments,
+  onNavigateToMembers,
+  onNavigateToGovernance
 }: DashboardTabProps) {
+  // Calculate statistics
+  const activeDocuments = documents.filter(d => d.status === 'voting' || d.status === 'proposal').length;
+  const totalDocuments = documents.length;
+  const activeElections = elections.filter(e => e.status === 'active').length;
+  const upcomingElections = elections.filter(e => e.status === 'upcoming' || e.status === 'scheduled').length;
+
+  // Get next election date
+  const nextElection = elections
+    .filter(e => e.status === 'scheduled' || e.status === 'upcoming')
+    .sort((a, b) => {
+      const dateA = a.startDate ? new Date(a.startDate).getTime() : Infinity;
+      const dateB = b.startDate ? new Date(b.startDate).getTime() : Infinity;
+      return dateA - dateB;
+    })[0];
+
   return (
     <div className="space-y-6">
+      {/* Organization Summary */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <CardTitle className="text-2xl">{organization.name}</CardTitle>
+              {organization.description && (
+                <CardDescription className="mt-2 text-base">
+                  {organization.description}
+                </CardDescription>
+              )}
+            </div>
+            <div className="flex gap-2 ml-4">
+              <OrganizationStatusBadge isActive={organization.isActive} />
+              <VotingStatusBadge votingEnabled={organization.votingEnabled} />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div>
+              <span className="text-gray-600">Membership Policy:</span>
+              <span className="font-medium ml-2 capitalize">{organization.membershipPolicy}</span>
+            </div>
+            <div>
+              <span className="text-gray-600">Vote Threshold:</span>
+              <span className="font-medium ml-2">{Math.round((organization.votingThreshold || 0.5) * 100)}%</span>
+            </div>
+            <div>
+              <span className="text-gray-600">Created:</span>
+              <span className="font-medium ml-2">{new Date(organization.createdAt).toLocaleDateString()}</span>
+            </div>
+            <div>
+              <span className="text-gray-600">Representatives:</span>
+              <span className="font-medium ml-2">{organization.representatives?.length || 0}</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Key Statistics */}
+      <OrganizationStats organization={organization} />
+
+      {/* Documents & Activity Summary */}
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Documents
+            </CardTitle>
+            <CardDescription>
+              Organization documents and policies
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="text-2xl font-bold text-blue-600">{totalDocuments}</div>
+                  <div className="text-sm text-gray-600">Total Documents</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-orange-600">{activeDocuments}</div>
+                  <div className="text-sm text-gray-600">Active Votes</div>
+                </div>
+              </div>
+              {onNavigateToDocuments && (
+                <Button variant="outline" className="w-full" onClick={onNavigateToDocuments}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  View All Documents
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Vote className="h-5 w-5" />
+              Elections
+            </CardTitle>
+            <CardDescription>
+              Representative elections
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="text-2xl font-bold text-purple-600">{activeElections}</div>
+                  <div className="text-sm text-gray-600">Active</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-yellow-600">{upcomingElections}</div>
+                  <div className="text-sm text-gray-600">Upcoming</div>
+                </div>
+              </div>
+              {nextElection && (
+                <div className="text-sm text-gray-600">
+                  <Calendar className="h-4 w-4 inline mr-1" />
+                  Next: {nextElection.startDate ? new Date(nextElection.startDate).toLocaleDateString() : 'TBD'}
+                </div>
+              )}
+              {onNavigateToGovernance && (
+                <Button variant="outline" className="w-full" onClick={onNavigateToGovernance}>
+                  <Vote className="h-4 w-4 mr-2" />
+                  View Elections
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Current Representatives Section */}
       <Card>
         <CardHeader>
@@ -53,7 +196,14 @@ export function DashboardTab({
             </div>
             <div>
               <span className="text-gray-600">Next Election:</span>
-              <span className="font-medium ml-2">Dec 2024</span>
+              <span className="font-medium ml-2">
+                {nextElection?.startDate 
+                  ? new Date(nextElection.startDate).toLocaleDateString()
+                  : governanceRules?.representativeTermMonths 
+                    ? `Every ${governanceRules.representativeTermMonths} months`
+                    : 'TBD'
+                }
+              </span>
             </div>
           </div>
         </CardContent>

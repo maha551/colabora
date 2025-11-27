@@ -22,13 +22,13 @@ import {
   UserMinus,
   Crown
 } from 'lucide-react';
-import { Organization } from '../../types';
+import { Organization, User } from '../../types';
 import { governanceApi } from '../../lib/api';
 import { toast } from 'sonner';
 
 interface PublicGovernanceDashboardProps {
   organization: Organization;
-  currentUser: any;
+  currentUser: User | null;
 }
 
 interface AuditLogEntry {
@@ -145,7 +145,7 @@ export function PublicGovernanceDashboard({ organization, currentUser }: PublicG
     const groups: { [key: string]: AuditLogEntry[] } = {};
 
     logs.forEach(log => {
-      const date = new Date(log.created_at).toLocaleDateString();
+      const date = new Date(log.createdAt || log.created_at).toLocaleDateString();
       if (!groups[date]) {
         groups[date] = [];
       }
@@ -159,7 +159,7 @@ export function PublicGovernanceDashboard({ organization, currentUser }: PublicG
     const now = new Date();
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    return auditLogs.filter(log => new Date(log.created_at) >= sevenDaysAgo);
+    return auditLogs.filter(log => new Date(log.createdAt || log.created_at) >= sevenDaysAgo);
   };
 
   const getGovernanceStats = () => {
@@ -269,7 +269,7 @@ export function PublicGovernanceDashboard({ organization, currentUser }: PublicG
                           {getActionDescription(log.action_type, log.performed_by_name, log.affected_user_name)}
                         </div>
                         <div className="text-xs text-gray-500 mt-1">
-                          {new Date(log.created_at).toLocaleString()}
+                          {new Date(log.createdAt || log.created_at).toLocaleString()}
                         </div>
                       </div>
                     </div>
@@ -321,7 +321,7 @@ export function PublicGovernanceDashboard({ organization, currentUser }: PublicG
                                 {getActionDescription(log.action_type, log.performed_by_name, log.affected_user_name)}
                               </div>
                               <div className="text-xs text-gray-500 mt-1">
-                                {new Date(log.created_at).toLocaleTimeString()}
+                                {new Date(log.createdAt || log.created_at).toLocaleTimeString()}
                               </div>
                             </div>
                           </div>

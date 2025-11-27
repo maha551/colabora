@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { Paragraph, User, HeadingLevel, Document } from "../types";
+import { Paragraph, User, HeadingLevel, Document, Proposal } from "../types";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { SuggestionCard } from "./SuggestionCard";
@@ -66,11 +66,11 @@ export function ParagraphWithSuggestions({
   const [filterBy, setFilterBy] = useState('all' as 'all' | 'accepted' | 'pending' | 'needsVotes');
 
   // State for enhanced diff view
-  const [enhancedDiffSuggestion, setEnhancedDiffSuggestion] = useState<any>(null);
+  const [enhancedDiffSuggestion, setEnhancedDiffSuggestion] = useState<Proposal | null>(null);
 
   // State for double-click editing
   const [editCursorPosition, setEditCursorPosition] = useState<number | null>(null);
-  const [similarSuggestions, setSimilarSuggestions] = useState<any[]>([]);
+  const [similarSuggestions, setSimilarSuggestions] = useState<Proposal[]>([]);
   const [showSimilarityWarning, setShowSimilarityWarning] = useState(false);
 
   const acceptedBodyProposal = bodySuggestions.find((s) => s.approved);
@@ -81,6 +81,12 @@ export function ParagraphWithSuggestions({
 
   const acceptedHeadingText = acceptedTitleProposal ? acceptedTitleProposal.text : fallbackHeading;
   const acceptedBodyText = acceptedBodyProposal ? acceptedBodyProposal.text : fallbackBody;
+
+  // Check if proposal cutoff has passed for organizational documents
+  const proposalCutoffPassed = document.paragraphProposalsCutoff 
+    ? new Date(document.paragraphProposalsCutoff) < new Date()
+    : false;
+  const canAddProposals = document.status === 'proposal' && !proposalCutoffPassed;
 
   const defaultSuggestionType: 'BODY' | 'TITLE' = isDocumentTitle ? 'TITLE' : 'BODY';
   const acceptedHeadingLevel: HeadingLevel = (acceptedTitleProposal?.headingLevel as HeadingLevel)
@@ -251,7 +257,7 @@ export function ParagraphWithSuggestions({
     return matrix[str2.length][str1.length];
   };
 
-  const findSimilarSuggestions = (newText: string): any[] => {
+  const findSimilarSuggestions = (newText: string): Proposal[] => {
     const threshold = 0.8; // 80% similarity threshold
     return suggestions.filter(suggestion => {
       const similarity = calculateSimilarity(newText, suggestion.text);
@@ -519,7 +525,16 @@ export function ParagraphWithSuggestions({
               }
             />
             <div className="flex gap-2 justify-end">
-              <Button size="sm" onClick={handleSubmitSuggestion}>
+              {!canAddProposals && (
+                <p className="text-sm text-orange-600 mr-auto">
+                  Proposal cutoff has passed. New proposals are disabled.
+                </p>
+              )}
+              <Button 
+                size="sm" 
+                onClick={handleSubmitSuggestion}
+                disabled={!canAddProposals}
+              >
                 <PlusCircle className="h-4 w-4 mr-1" />
                 Submit Suggestion
               </Button>
@@ -548,7 +563,7 @@ export function ParagraphWithSuggestions({
             <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center gap-2">
                 <Filter className="h-4 w-4 text-muted-foreground" />
-                <Select value={filterBy} onValueChange={(value: any) => setFilterBy(value)}>
+                <Select value={filterBy} onValueChange={(value: 'all' | 'accepted' | 'pending' | 'needsVotes') => setFilterBy(value)}>
                   <SelectTrigger className="h-8 w-[140px] text-xs">
                     <SelectValue />
                   </SelectTrigger>
@@ -563,7 +578,7 @@ export function ParagraphWithSuggestions({
               
               <div className="flex items-center gap-2">
                 <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
-                <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
+                <Select value={sortBy} onValueChange={(value: 'votePercentage' | 'date' | 'status') => setSortBy(value)}>
                   <SelectTrigger className="h-8 w-[160px] text-xs">
                     <SelectValue />
                   </SelectTrigger>

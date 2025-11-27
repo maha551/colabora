@@ -3,6 +3,8 @@ const { metricsCollector } = require('../middleware/monitoring');
 const { requireAuth, requireDocumentAccess } = require('../middleware/auth');
 const VoterManager = require('../modules/voting');
 const documentLockManager = require('../modules/locks');
+const webSocketManager = require('../modules/websocket');
+const { logger } = require('../middleware/logger');
 
 const router = express.Router({ mergeParams: true });
 
@@ -40,7 +42,7 @@ router.post('/', requireAuth, requireDocumentAccess, async (req, res) => {
       return res.status(403).json({ error: 'Cannot vote on agreed documents' });
     }
   } catch (error) {
-    console.error('Error checking document status:', error);
+    logger.error('Error checking document status', { error: error.message, stack: error.stack, documentId });
     return res.status(500).json({ error: 'Failed to validate document status' });
   }
 
@@ -54,7 +56,7 @@ router.post('/', requireAuth, requireDocumentAccess, async (req, res) => {
 
   db.get(verifyQuery, [proposalId, paragraphId, documentId], (err, proposal) => {
     if (err) {
-      console.error('Error verifying proposal:', err);
+      logger.error('Error verifying proposal', { error: err.message, documentId, paragraphId, proposalId });
       return res.status(500).json({ error: 'Failed to cast vote' });
     }
 
@@ -67,7 +69,7 @@ router.post('/', requireAuth, requireDocumentAccess, async (req, res) => {
       SELECT id, vote FROM votes WHERE proposal_id = ? AND user_id = ?
     `, [proposalId, userId], (err, existingVote) => {
       if (err) {
-        console.error('Error checking existing vote:', err);
+        logger.error('Error checking existing vote', { error: err.message, documentId, paragraphId, proposalId, userId });
         return res.status(500).json({ error: 'Failed to cast vote' });
       }
 
@@ -77,7 +79,7 @@ router.post('/', requireAuth, requireDocumentAccess, async (req, res) => {
           SELECT vote_change_allowed FROM documents WHERE id = ?
         `, [documentId], (docErr, doc) => {
           if (docErr) {
-            console.error('Error checking document options:', docErr);
+            logger.error('Error checking document options', { error: docErr.message, documentId });
             return res.status(500).json({ error: 'Failed to check document options' });
           }
 
@@ -90,18 +92,70 @@ router.post('/', requireAuth, requireDocumentAccess, async (req, res) => {
           // Update existing vote
           db.run(`
             UPDATE votes SET vote = ? WHERE proposal_id = ? AND user_id = ?
-          `, [vote, proposalId, userId], function(err) {
+          `, [vote, proposalId, userId], async function(err) {
             if (err) {
-              console.error('Error updating vote:', err);
+              logger.error('Error updating vote', { error: err.message, documentId, paragraphId, proposalId, userId });
               return res.status(500).json({ error: 'Failed to update vote' });
             }
 
-          // Check if proposal should be approved (using document threshold)
-          checkAndUpdateProposalApproval(db, proposalId, documentId).catch(err =>
-            console.error('Error updating proposal approval:', err)
-          );
+          // Fetch all votes for this proposal to include in WebSocket update (for instant UI update)
+          db.all(`
+            SELECT v.id, v.user_id, v.vote, v.created_at,
+                   u.name as user_name, u.email as user_email
+            FROM votes v
+            LEFT JOIN users u ON v.user_id = u.id
+            WHERE v.proposal_id = ?
+            ORDER BY v.created_at ASC
+          `, [proposalId], (voteErr, votes) => {
+            if (voteErr) {
+              logger.error('Error fetching votes for WebSocket update', { error: voteErr.message, documentId, paragraphId, proposalId });
+              // Still broadcast without votes, client will reload
+              webSocketManager.broadcastVoteUpdate(documentId, proposalId, paragraphId, {
+                voteId: existingVote.id,
+                userId,
+                vote,
+                action: 'updated'
+              });
+              return res.json({ message: 'Vote updated successfully' });
+            }
 
-            res.json({ message: 'Vote updated successfully' });
+            // Get document voting_anonymous setting
+            db.get(`SELECT voting_anonymous FROM documents WHERE id = ?`, [documentId], (docErr, doc) => {
+              const isAnonymous = doc?.voting_anonymous === 1;
+              
+              // Format votes for broadcast - include userId for all votes
+              // Client will handle anonymity filtering based on document settings
+              // This ensures consistent vote structure for all recipients
+              const formattedVotes = votes.map(v => ({
+                id: v.id,
+                userId: v.user_id, // Always include userId - client handles anonymity
+                vote: v.vote,
+                createdAt: v.created_at,
+                // Include user info - client will filter based on anonymity settings
+                user: isAnonymous && v.user_id !== userId 
+                  ? undefined // Hide user info for anonymous votes (except own vote)
+                  : { id: v.user_id, name: v.user_name, email: v.user_email }
+              }));
+
+              // Broadcast real-time update via WebSocket with all votes
+              webSocketManager.broadcastVoteUpdate(documentId, proposalId, paragraphId, {
+                voteId: existingVote.id,
+                userId,
+                vote,
+                action: 'updated',
+                allVotes: formattedVotes, // Include all votes for instant UI update
+                isAnonymous // Include anonymity flag so client knows how to display
+              });
+              
+              // Respond immediately, then process approval asynchronously
+              res.json({ message: 'Vote updated successfully' });
+              
+              // Process approval check asynchronously (non-blocking)
+              checkAndUpdateProposalApproval(db, proposalId, documentId).catch(err => {
+                logger.error('Error updating proposal approval (async)', { error: err.message, proposalId, paragraphId });
+              });
+            });
+          });
           });
         });
       } else {
@@ -112,16 +166,11 @@ router.post('/', requireAuth, requireDocumentAccess, async (req, res) => {
         db.run(`
           INSERT INTO votes (id, proposal_id, user_id, vote)
           VALUES (?, ?, ?, ?)
-        `, [voteId, proposalId, userId, vote], function(err) {
+        `, [voteId, proposalId, userId, vote], async function(err) {
           if (err) {
-            console.error('Error casting vote:', err);
+            logger.error('Error casting vote', { error: err.message, stack: err.stack, documentId, paragraphId, proposalId, userId });
             return res.status(500).json({ error: 'Failed to cast vote' });
           }
-
-          // Check if proposal should be approved
-          checkAndUpdateProposalApproval(db, proposalId, documentId).catch(err =>
-            console.error('Error updating proposal approval:', err)
-          );
 
           // Record business metrics
           metricsCollector.recordBusinessEvent('vote_cast', {
@@ -132,7 +181,64 @@ router.post('/', requireAuth, requireDocumentAccess, async (req, res) => {
             documentId
           });
 
-          res.json({ message: 'Vote cast successfully' });
+          // Fetch all votes for this proposal to include in WebSocket update (for instant UI update)
+          db.all(`
+            SELECT v.id, v.user_id, v.vote, v.created_at,
+                   u.name as user_name, u.email as user_email
+            FROM votes v
+            LEFT JOIN users u ON v.user_id = u.id
+            WHERE v.proposal_id = ?
+            ORDER BY v.created_at ASC
+          `, [proposalId], (voteErr, votes) => {
+            if (voteErr) {
+              logger.error('Error fetching votes for WebSocket update', { error: voteErr.message, documentId, paragraphId, proposalId });
+              // Still broadcast without votes, client will reload
+              webSocketManager.broadcastVoteUpdate(documentId, proposalId, paragraphId, {
+                voteId,
+                userId,
+                vote,
+                action: 'cast'
+              });
+              return res.json({ message: 'Vote cast successfully' });
+            }
+
+            // Get document voting_anonymous setting
+            db.get(`SELECT voting_anonymous FROM documents WHERE id = ?`, [documentId], (docErr, doc) => {
+              const isAnonymous = doc?.voting_anonymous === 1;
+              
+              // Format votes for broadcast - include userId for all votes
+              // Client will handle anonymity filtering based on document settings
+              // This ensures consistent vote structure for all recipients
+              const formattedVotes = votes.map(v => ({
+                id: v.id,
+                userId: v.user_id, // Always include userId - client handles anonymity
+                vote: v.vote,
+                createdAt: v.created_at,
+                // Include user info - client will filter based on anonymity settings
+                user: isAnonymous && v.user_id !== userId 
+                  ? undefined // Hide user info for anonymous votes (except own vote)
+                  : { id: v.user_id, name: v.user_name, email: v.user_email }
+              }));
+
+              // Broadcast real-time update via WebSocket with all votes
+              webSocketManager.broadcastVoteUpdate(documentId, proposalId, paragraphId, {
+                voteId,
+                userId,
+                vote,
+                action: 'cast',
+                allVotes: formattedVotes, // Include all votes for instant UI update
+                isAnonymous // Include anonymity flag so client knows how to display
+              });
+              
+              // Respond immediately, then process approval asynchronously
+              res.json({ message: 'Vote cast successfully' });
+              
+              // Process approval check asynchronously (non-blocking)
+              checkAndUpdateProposalApproval(db, proposalId, documentId).catch(err => {
+                logger.error('Error updating proposal approval (async)', { error: err.message, proposalId, paragraphId });
+              });
+            });
+          });
         });
       }
     });
@@ -171,7 +277,7 @@ async function checkAndUpdateProposalApproval(db, proposalId, documentId) {
     const approvalPercentage = totalUsers > 0 ? (proVotes / totalUsers) * 100 : 0;
     const shouldApprove = approvalPercentage >= acceptanceThreshold;
 
-    console.log(`Proposal ${proposalId}: ${proVotes}/${totalUsers} PRO votes (${approvalPercentage.toFixed(1)}%) - ${shouldApprove ? 'APPROVED' : 'NOT APPROVED'}`);
+    logger.debug('Proposal approval check', { proposalId, proVotes, totalUsers, approvalPercentage, approved: shouldApprove });
 
     // Update proposal approval status
     await new Promise((resolve, reject) => {
@@ -235,7 +341,7 @@ async function checkAndUpdateProposalApproval(db, proposalId, documentId) {
     }
 
   } catch (error) {
-    console.error('Error in checkAndUpdateProposalApproval:', error);
+    logger.error('Error in checkAndUpdateProposalApproval', { error: error.message, stack: error.stack, proposalId, paragraphId });
   }
 }
 
@@ -255,7 +361,7 @@ async function updateAgreedViewForParagraph(db, proposalId, documentId) {
       });
 
       if (!proposalData) {
-        console.error('Proposal not found:', proposalId);
+        logger.warn('Proposal not found', { proposalId, paragraphId });
         return;
       }
 
@@ -300,7 +406,7 @@ async function updateAgreedViewForParagraph(db, proposalId, documentId) {
 
       // Fix: Add validation for zero users
       if (totalUsers === 0) {
-        console.warn(`Document ${documentId} has no eligible voters - cannot calculate approval percentage`);
+        logger.warn('Document has no eligible voters - cannot calculate approval percentage', { documentId });
         return;
       }
 
@@ -329,7 +435,7 @@ async function updateAgreedViewForParagraph(db, proposalId, documentId) {
             WHERE p.id = ?
           `, [paragraphId], (err, paragraphData) => {
             if (err || !paragraphData) {
-              console.error('Error getting paragraph data:', err);
+              logger.error('Error getting paragraph data', { error: err.message, paragraphId });
               return;
             }
 
@@ -337,7 +443,7 @@ async function updateAgreedViewForParagraph(db, proposalId, documentId) {
 
             if (!bestProposal) {
               // No proposal meets the threshold - revert paragraph to empty state
-              console.log(`No approved proposals for paragraph ${paragraphId} - reverting to empty state`);
+              logger.debug('No approved proposals for paragraph - reverting to empty state', { paragraphId, documentId });
 
               if (isDocumentTitle) {
                 // For document title paragraph, don't empty it - keep the current title
@@ -348,7 +454,7 @@ async function updateAgreedViewForParagraph(db, proposalId, documentId) {
               // Use transaction for atomic paragraph clearing
               db.run('BEGIN TRANSACTION', (beginErr) => {
                 if (beginErr) {
-                  console.error('Error beginning transaction for paragraph clearing:', beginErr);
+                  logger.error('Error beginning transaction for paragraph clearing', { error: beginErr.message, paragraphId });
                   return;
                 }
 
@@ -361,7 +467,7 @@ async function updateAgreedViewForParagraph(db, proposalId, documentId) {
                   if (operationsCompleted >= totalOperations && !hasError) {
                     db.run('COMMIT', (commitErr) => {
                       if (commitErr) {
-                        console.error('Error committing paragraph clearing transaction:', commitErr);
+                        logger.error('Error committing paragraph clearing transaction', { error: commitErr.message, paragraphId });
                         db.run('ROLLBACK', () => {});
                       }
                     });
@@ -371,9 +477,9 @@ async function updateAgreedViewForParagraph(db, proposalId, documentId) {
                 const handleError = (error, operation) => {
                   if (!hasError) {
                     hasError = true;
-                    console.error(`Error in ${operation}:`, error);
+                    logger.error('Error in operation', { error: error.message, operation, paragraphId });
                     db.run('ROLLBACK', () => {
-                      console.error(`Transaction rolled back due to error in ${operation}`);
+                      logger.error('Transaction rolled back due to error in operation', { operation, paragraphId });
                     });
                   }
                 };
@@ -434,7 +540,7 @@ async function updateAgreedViewForParagraph(db, proposalId, documentId) {
             // This ensures all related updates (paragraph, document title, proposal status, history) succeed or fail together
             db.run('BEGIN TRANSACTION', (beginErr) => {
               if (beginErr) {
-                console.error('Error beginning transaction for proposal approval:', beginErr);
+                logger.error('Error beginning transaction for proposal approval', { error: beginErr.message, proposalId, paragraphId });
                 return;
               }
 
@@ -461,7 +567,7 @@ async function updateAgreedViewForParagraph(db, proposalId, documentId) {
                   // Check for existing history before creating new one
                   db.get(`SELECT id FROM history WHERE proposal_id = ?`, [bestProposal.id], (err, existingHistory) => {
                     if (err) {
-                      console.error('Error checking existing history:', err);
+                      logger.error('Error checking existing history', { error: err.message, paragraphId, proposalId });
                       db.run('ROLLBACK', () => {});
                       return;
                     }
@@ -475,14 +581,14 @@ async function updateAgreedViewForParagraph(db, proposalId, documentId) {
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                       `, [historyId, paragraphId, bestProposal.user_id, oldValue, newValue, bestApprovalPercentage, bestProposal.id, newHeadingLevel], (historyErr) => {
                         if (historyErr) {
-                          console.error('Error recording history entry:', historyErr);
+                          logger.error('Error recording history entry', { error: historyErr.message, paragraphId, proposalId });
                           db.run('ROLLBACK', () => {});
                           return;
                         }
                         // Commit transaction after history entry
                         db.run('COMMIT', (commitErr) => {
                           if (commitErr) {
-                            console.error('Error committing proposal approval transaction:', commitErr);
+                            logger.error('Error committing proposal approval transaction', { error: commitErr.message, proposalId, paragraphId });
                             db.run('ROLLBACK', () => {});
                           }
                         });
@@ -491,7 +597,7 @@ async function updateAgreedViewForParagraph(db, proposalId, documentId) {
                       // History already exists, just commit
                       db.run('COMMIT', (commitErr) => {
                         if (commitErr) {
-                          console.error('Error committing proposal approval transaction:', commitErr);
+                          logger.error('Error committing proposal approval transaction', { error: commitErr.message, proposalId, paragraphId });
                           db.run('ROLLBACK', () => {});
                         }
                       });
@@ -503,9 +609,9 @@ async function updateAgreedViewForParagraph(db, proposalId, documentId) {
               const handleError = (error, operation) => {
                 if (!hasError) {
                   hasError = true;
-                  console.error(`Error in ${operation}:`, error);
+                  logger.error('Error in operation', { error: error.message, operation, proposalId, paragraphId });
                   db.run('ROLLBACK', () => {
-                    console.error(`Transaction rolled back due to error in ${operation}`);
+                    logger.error('Transaction rolled back due to error in operation', { operation, proposalId, paragraphId });
                   });
                 }
               };
@@ -589,7 +695,7 @@ async function updateAgreedViewForParagraph(db, proposalId, documentId) {
     });
   });
     } catch (error) {
-      console.error('Error updating agreed view for paragraph:', error);
+      logger.error('Error updating agreed view for paragraph', { error: error.message, stack: error.stack, proposalId, documentId });
       throw error;
     }
   });
@@ -600,97 +706,235 @@ async function updateAgreedViewForParagraph(db, proposalId, documentId) {
   // Use document-level locking to prevent race conditions
   return documentLockManager.withLock(documentId, async () => {
     try {
-      // First get the paragraph_id from the proposal
-      const proposalData = await new Promise((resolve, reject) => {
-        db.get(`SELECT paragraph_id FROM proposals WHERE id = ?`, [proposalId], (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        });
-      });
+      logger.debug('Starting updateAgreedView', { proposalId, documentId });
+      
+      // Batch query: Get proposal data, document threshold, and paragraph info in parallel
+      const [proposalData, doc, eligibleVoters] = await Promise.all([
+        new Promise((resolve, reject) => {
+          db.get(`SELECT paragraph_id FROM proposals WHERE id = ?`, [proposalId], (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          });
+        }),
+        new Promise((resolve, reject) => {
+          db.get(`SELECT acceptance_threshold FROM documents WHERE id = ?`, [documentId], (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          });
+        }),
+        VoterManager.getEligibleVoterCount(db, documentId)
+      ]);
 
       if (!proposalData) {
-        console.log(`Proposal ${proposalId} not found`);
+        logger.warn('Proposal not found in updateAgreedView', { proposalId, documentId });
         return;
       }
 
       const paragraphId = proposalData.paragraph_id;
+      const acceptanceThreshold = doc?.acceptance_threshold || 75.0;
+      
+      if (eligibleVoters === 0) {
+        logger.warn('Document has no eligible voters - cannot calculate approval percentage', { documentId });
+        return;
+      }
 
-      // Get all approved proposals for this paragraph, ordered by approval percentage
-      const approvedProposals = await new Promise((resolve, reject) => {
+      logger.debug('Found paragraph for proposal in updateAgreedView', { paragraphId, proposalId, documentId });
+
+      // Get ALL proposals for this paragraph with current vote counts (not just approved ones)
+      // We need to check current vote counts, not just the approved flag
+      const allProposals = await new Promise((resolve, reject) => {
         db.all(`
-          SELECT pr.id, pr.text, pr.type, pr.user_id, pr.heading_level,
+          SELECT pr.id, pr.text, pr.type, pr.user_id, pr.heading_level, pr.created_at,
                  COUNT(CASE WHEN v.vote = 'PRO' THEN 1 END) as pro_votes,
                  COUNT(v.id) as total_votes
           FROM proposals pr
           LEFT JOIN votes v ON pr.id = v.proposal_id
-          WHERE pr.paragraph_id = ? AND pr.approved = 1
+          WHERE pr.paragraph_id = ?
           GROUP BY pr.id
-          ORDER BY (COUNT(CASE WHEN v.vote = 'PRO' THEN 1 END) * 1.0 / NULLIF(COUNT(v.id), 0)) DESC, pr.created_at DESC
         `, [paragraphId], (err, rows) => {
           if (err) reject(err);
           else resolve(rows || []);
         });
       });
 
-      if (approvedProposals.length === 0) {
-        console.log(`No approved proposals found for paragraph ${paragraphId}`);
+      if (allProposals.length === 0) {
+        logger.debug('No proposals found for paragraph', { paragraphId, documentId });
         return;
       }
 
-      // Calculate approval percentages using eligible voter count (not just votes cast)
-      // This ensures consistency with the approval logic in checkAndUpdateProposalApproval
-      const proposalsWithPercentages = await Promise.all(approvedProposals.map(async (p) => {
-        const eligibleVoters = await VoterManager.getEligibleVoterCount(db, documentId);
+      // Calculate approval percentages and filter by threshold
+      const proposalsWithPercentages = allProposals.map((p) => {
         const approvalPercentage = eligibleVoters > 0 ? (p.pro_votes / eligibleVoters) * 100 : 0;
         return {
           ...p,
           approvalPercentage,
           eligibleVoters
         };
-      }));
-
-      // Filter to only proposals that still meet the current threshold
-      const doc = await new Promise((resolve, reject) => {
-        db.get(`SELECT acceptance_threshold FROM documents WHERE id = ?`, [documentId], (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        });
       });
 
-      const acceptanceThreshold = doc?.acceptance_threshold || 75.0;
+      // Filter to only proposals that meet the threshold
       const validProposals = proposalsWithPercentages.filter(p => p.approvalPercentage >= acceptanceThreshold);
 
       if (validProposals.length === 0) {
-        console.log(`No proposals meet current acceptance threshold (${acceptanceThreshold}%) for paragraph ${paragraphId}`);
+        logger.debug('No proposals meet current acceptance threshold', { paragraphId, documentId, acceptanceThreshold });
+        
+        // Get current paragraph to check if it needs to be cleared
+        const currentParagraph = await new Promise((resolve, reject) => {
+          db.get(`SELECT text, title, order_index, heading_level FROM paragraphs WHERE id = ?`, [paragraphId], (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          });
+        });
+
+        if (!currentParagraph) {
+          logger.warn('Paragraph not found', { paragraphId, documentId });
+          return;
+        }
+
+        // Check if paragraph has content that needs to be cleared
+        const hasContent = (currentParagraph.text && currentParagraph.text.trim()) || 
+                          (currentParagraph.title && currentParagraph.title.trim());
+        const isFirstParagraph = currentParagraph.order_index === 1;
+
+        // Don't clear document title paragraph (first paragraph)
+        if (isFirstParagraph) {
+          logger.debug('Skipping clear for document title paragraph', { paragraphId, documentId });
+          return;
+        }
+
+        // Clear paragraph content if it has any
+        if (hasContent) {
+          await new Promise((resolve, reject) => {
+            db.run('BEGIN TRANSACTION', (beginErr) => {
+              if (beginErr) {
+                reject(beginErr);
+                return;
+              }
+
+              // Clear paragraph based on type
+              const clearQuery = currentParagraph.title 
+                ? `UPDATE paragraphs SET title = '', updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+                : `UPDATE paragraphs SET text = '', updated_at = CURRENT_TIMESTAMP WHERE id = ?`;
+
+              db.run(clearQuery, [paragraphId], (clearErr) => {
+                if (clearErr) {
+                  db.run('ROLLBACK', () => {});
+                  reject(clearErr);
+                  return;
+                }
+
+                // Update document timestamp
+                db.run(`UPDATE documents SET updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [documentId], (docErr) => {
+                  if (docErr) {
+                    db.run('ROLLBACK', () => {});
+                    reject(docErr);
+                    return;
+                  }
+
+                  db.run('COMMIT', (commitErr) => {
+                    if (commitErr) {
+                      db.run('ROLLBACK', () => {});
+                      reject(commitErr);
+                    } else {
+                      logger.debug('Cleared paragraph content (no approved proposals)', { paragraphId, documentId });
+                      resolve();
+                    }
+                  });
+                });
+              });
+            });
+          });
+
+          // Broadcast paragraph update (reverted to empty) via WebSocket
+          // Use simpler query without history aggregation for performance
+          db.get(`SELECT id, text, title, heading_level, order_index FROM paragraphs WHERE id = ?`, [paragraphId], (paraErr, updatedPara) => {
+            if (!paraErr && updatedPara) {
+              webSocketManager.broadcastDocumentUpdate(documentId, 'paragraph', {
+                paragraphId,
+                text: updatedPara.text || '',
+                title: updatedPara.title || '',
+                headingLevel: updatedPara.heading_level,
+                orderIndex: updatedPara.order_index,
+                reverted: true // Indicates paragraph was reverted to empty state
+              });
+              logger.debug('Broadcasted paragraph revert', { paragraphId, documentId });
+            }
+          });
+        }
+        
         return;
       }
 
+      // Sort by: 1) Most votes (pro_votes DESC), 2) Most recent if tied (created_at DESC)
+      validProposals.sort((a, b) => {
+        if (b.pro_votes !== a.pro_votes) {
+          return b.pro_votes - a.pro_votes; // More votes first
+        }
+        // If votes are equal, most recent first
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+
       const bestProposal = validProposals[0];
 
-      // Get current paragraph content
+      // Get current paragraph content and check if it's the first paragraph (title paragraph)
       const currentParagraph = await new Promise((resolve, reject) => {
-        db.get(`SELECT text, title FROM paragraphs WHERE id = ?`, [paragraphId], (err, row) => {
+        db.get(`SELECT text, title, order_index FROM paragraphs WHERE id = ?`, [paragraphId], (err, row) => {
           if (err) reject(err);
           else resolve(row);
         });
       });
 
       if (!currentParagraph) {
-        console.log(`Paragraph ${paragraphId} not found`);
+        logger.warn('Paragraph not found', { paragraphId, documentId });
         return;
       }
+
+      // Check if this is the first paragraph (document title paragraph)
+      // First paragraph always has order_index = 1 and is the document title
+      const isFirstParagraph = currentParagraph.order_index === 1;
 
       const newValue = bestProposal.text;
       const oldValue = bestProposal.type === 'TITLE' ? currentParagraph.title : currentParagraph.text;
       const bestApprovalPercentage = bestProposal.approvalPercentage;
 
-      console.log(`Applying approved proposal ${bestProposal.id} to paragraph ${paragraphId} (${bestApprovalPercentage.toFixed(1)}% approval)`);
+      logger.info('Applying approved proposal to paragraph', { proposalId: bestProposal.id, paragraphId, documentId, approvalPercentage: bestApprovalPercentage });
+      if (isFirstParagraph && bestProposal.type === 'TITLE') {
+        logger.debug('This is the document title paragraph - will update documents.title', { paragraphId, documentId });
+      }
 
       // Check if we need to update the paragraph content
       const needsUpdate = oldValue !== newValue;
 
       if (!needsUpdate) {
-        console.log(`Paragraph ${paragraphId} already has the correct approved content`);
+        logger.debug('Paragraph already has the correct approved content', { paragraphId, documentId });
+        // Even if paragraph doesn't need update, we might need to update documents.title
+        if (isFirstParagraph && bestProposal.type === 'TITLE') {
+          // Check if documents.title needs updating
+          const currentDocTitle = await new Promise((resolve, reject) => {
+            db.get(`SELECT title FROM documents WHERE id = ?`, [documentId], (err, row) => {
+              if (err) reject(err);
+              else resolve(row?.title);
+            });
+          });
+          if (currentDocTitle !== newValue) {
+            logger.debug('Updating documents.title', { documentId, oldTitle: currentDocTitle, newTitle: newValue });
+            await new Promise((resolve, reject) => {
+              db.run(
+                `UPDATE documents SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+                [newValue, documentId],
+                function(err) {
+                  if (err) {
+                    logger.error('Error updating document title', { error: err.message, documentId, newTitle: newValue });
+                    reject(err);
+                  } else {
+                    logger.info('Updated documents.title', { documentId, newTitle: newValue });
+                    resolve();
+                  }
+                }
+              );
+            });
+          }
+        }
         return;
       }
 
@@ -703,69 +947,194 @@ async function updateAgreedViewForParagraph(db, proposalId, documentId) {
       });
 
       // Update paragraph content
-      const updateField = bestProposal.type === 'TITLE' ? 'title' : 'text';
-      await new Promise((resolve, reject) => {
-        db.run(
-          `UPDATE paragraphs SET ${updateField} = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-          [newValue, paragraphId],
-          function(err) {
-            if (err) {
-              console.error('Error updating paragraph:', err);
-              db.run('ROLLBACK', () => reject(err));
-            } else {
-              resolve();
+      if (bestProposal.type === 'TITLE') {
+        // For TITLE proposals, update the title field and heading_level
+        await new Promise((resolve, reject) => {
+          db.run(
+            `UPDATE paragraphs SET title = ?, heading_level = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+            [newValue, bestProposal.heading_level, paragraphId],
+            function(err) {
+              if (err) {
+                logger.error('Error updating paragraph title', { error: err.message, paragraphId, documentId });
+                db.run('ROLLBACK', () => reject(err));
+              } else {
+                resolve();
+              }
             }
-          }
-        );
-      });
+          );
+        });
 
-      // Create history entry to record this approval
-      const { v4: uuidv4 } = require('uuid');
-      const historyId = uuidv4();
+        // If this is the first paragraph (document title paragraph), also update documents.title
+        if (isFirstParagraph) {
+          await new Promise((resolve, reject) => {
+            db.run(
+              `UPDATE documents SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+              [newValue, documentId],
+              function(err) {
+                if (err) {
+                  logger.error('Error updating document title', { error: err.message, documentId, newTitle: newValue });
+                  db.run('ROLLBACK', () => reject(err));
+                } else {
+                  logger.info('Updated documents.title', { documentId, newTitle: newValue });
+                  resolve();
+                }
+              }
+            );
+          });
+        }
+      } else {
+        // For BODY proposals, update the text field
+        await new Promise((resolve, reject) => {
+          db.run(
+            `UPDATE paragraphs SET text = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+            [newValue, paragraphId],
+            function(err) {
+              if (err) {
+                logger.error('Error updating paragraph text', { error: err.message, paragraphId, documentId });
+                db.run('ROLLBACK', () => reject(err));
+              } else {
+                resolve();
+              }
+            }
+          );
+        });
+      }
 
-      await new Promise((resolve, reject) => {
-        db.run(`
-          INSERT OR REPLACE INTO history
-          (id, paragraph_id, user_id, old_text, new_text, approval_percentage, proposal_id, heading_level, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        `, [
-          historyId,
-          paragraphId,
-          bestProposal.user_id,
-          oldValue,
-          newValue,
-          bestApprovalPercentage,
-          bestProposal.id,
-          bestProposal.heading_level
-        ], function(err) {
-          if (err) {
-            console.error('Error creating history entry:', err);
-            db.run('ROLLBACK', () => reject(err));
-          } else {
-            console.log(`Created history entry ${historyId} for approved proposal`);
-            resolve();
-          }
+      // Update or create history entry to record this approval
+      // First check if history entry already exists for this proposal
+      const existingHistory = await new Promise((resolve, reject) => {
+        db.get(`SELECT id FROM history WHERE proposal_id = ? AND paragraph_id = ?`, 
+          [bestProposal.id, paragraphId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
         });
       });
+
+      if (existingHistory) {
+        // Update existing history entry with current approval percentage
+        // Note: history table doesn't have updated_at column, only created_at
+        await new Promise((resolve, reject) => {
+          db.run(`
+            UPDATE history 
+            SET approval_percentage = ?
+            WHERE id = ?
+          `, [bestApprovalPercentage, existingHistory.id], function(err) {
+            if (err) {
+              logger.error('Error updating history entry', { error: err.message, historyId: existingHistory.id, paragraphId, documentId });
+              db.run('ROLLBACK', () => reject(err));
+            } else {
+              logger.debug('Updated history entry', { historyId: existingHistory.id, approvalPercentage: bestApprovalPercentage, paragraphId, documentId });
+              resolve();
+            }
+          });
+        });
+      } else {
+        // Create new history entry
+        const { v4: uuidv4 } = require('uuid');
+        const historyId = uuidv4();
+
+        await new Promise((resolve, reject) => {
+          db.run(`
+            INSERT INTO history
+            (id, paragraph_id, user_id, old_text, new_text, approval_percentage, proposal_id, heading_level, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+          `, [
+            historyId,
+            paragraphId,
+            bestProposal.user_id,
+            oldValue,
+            newValue,
+            bestApprovalPercentage,
+            bestProposal.id,
+            bestProposal.heading_level
+          ], function(err) {
+            if (err) {
+              logger.error('Error creating history entry', { error: err.message, paragraphId, proposalId, documentId });
+              db.run('ROLLBACK', () => reject(err));
+            } else {
+              logger.debug('Created history entry for approved proposal', { historyId, paragraphId, proposalId, documentId });
+              resolve();
+            }
+          });
+        });
+      }
+
+      // Also update history entries for other proposals in this paragraph to reflect current approval percentages
+      // This ensures proposals that fall below threshold have updated history entries
+      for (const proposal of proposalsWithPercentages) {
+        if (proposal.id === bestProposal.id) continue; // Already handled above
+        
+        const otherHistory = await new Promise((resolve, reject) => {
+          db.get(`SELECT id FROM history WHERE proposal_id = ? AND paragraph_id = ?`, 
+            [proposal.id, paragraphId], (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          });
+        });
+
+        if (otherHistory) {
+          // Update history entry with current approval percentage
+          // Note: history table doesn't have updated_at column
+          await new Promise((resolve) => {
+            db.run(`
+              UPDATE history 
+              SET approval_percentage = ?
+              WHERE id = ?
+            `, [proposal.approvalPercentage, otherHistory.id], (err) => {
+              if (err) {
+                logger.error('Error updating history entry', { error: err.message, historyId: otherHistory.id, paragraphId, documentId });
+              }
+              resolve();
+            });
+          });
+        }
+      }
 
       // Commit transaction
       await new Promise((resolve, reject) => {
         db.run('COMMIT', (err) => {
           if (err) {
-            console.error('Error committing transaction:', err);
+            logger.error('Error committing transaction', { error: err.message, paragraphId, proposalId, documentId });
             reject(err);
           } else {
-            console.log(`Successfully applied approved proposal to paragraph ${paragraphId}`);
+            logger.info('Successfully applied approved proposal to paragraph', { paragraphId, proposalId, documentId });
+            
+            // Broadcast paragraph update via WebSocket (for instant agreed view update)
+            // Use simpler query without history aggregation for better performance
+            db.get(`SELECT id, text, title, heading_level, order_index FROM paragraphs WHERE id = ?`, [paragraphId], (paraErr, updatedPara) => {
+              if (!paraErr && updatedPara) {
+                const updateData = {
+                  paragraphId,
+                  text: updatedPara.text || '',
+                  title: updatedPara.title || null,
+                  headingLevel: updatedPara.heading_level,
+                  orderIndex: updatedPara.order_index,
+                  proposalId: bestProposal.id,
+                  approvalPercentage: bestApprovalPercentage
+                };
+                
+                logger.debug('Broadcasting paragraph update', { paragraphId, documentId, proposalId: bestProposal.id });
+                
+                webSocketManager.broadcastDocumentUpdate(documentId, 'paragraph', updateData);
+                logger.debug('Broadcasted paragraph update', { paragraphId, documentId });
+              } else if (paraErr) {
+                logger.error('Error fetching paragraph for WebSocket broadcast', { error: paraErr.message, paragraphId, documentId });
+              }
+            });
+            
             resolve();
           }
         });
       });
 
+      logger.debug('Completed updateAgreedView', { proposalId, documentId, paragraphId });
+
     } catch (error) {
-      console.error('Error updating agreed view for paragraph:', error);
+      logger.error('Error updating agreed view for paragraph', { error: error.message, stack: error.stack, proposalId, documentId });
       throw error;
     }
   });
 }
 
 module.exports = router;
+

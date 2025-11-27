@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { User } from '../types';
-import { authApi } from '../lib/api';
+import { authApi, RateLimitError } from '../lib/api';
 import { toast } from 'sonner';
 
 export function useAuth() {
@@ -14,9 +14,9 @@ export function useAuth() {
       setError(null);
       const response = await authApi.getCurrentUser();
       setCurrentUser(response.user);
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Check if it's a rate limit error
-      if (error.name === 'RateLimitError') {
+      if (error instanceof RateLimitError) {
         console.warn('Rate limited during auth check, showing login');
         setError('Too many requests. Please wait a moment before trying again.');
       } else {

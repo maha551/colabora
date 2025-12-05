@@ -3,29 +3,9 @@ import { Document, OrganizationGovernanceRules, RepresentativeElection, VotingAn
 import { organizationsApi, governanceApi, documentsApi, RateLimitError } from '../lib/api';
 import { toast } from 'sonner';
 
-// Policy votes are deprecated - kept for backwards compatibility
-export interface PolicyVote {
-  id: string;
-  organizationId: string;
-  title: string;
-  description?: string;
-  documentId?: string;
-  status: 'draft' | 'active' | 'completed' | 'cancelled';
-  thresholdPercentage: number;
-  deadlineAt?: string;
-  anonymousVoting: boolean;
-  votesYes: number;
-  votesNo: number;
-  votesAbstain: number;
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface OrganizationData {
   // Documents data
   documents: Document[];
-  policyVotes: PolicyVote[]; // Deprecated - always returns empty array
 
   // Governance data
   governanceRules: OrganizationGovernanceRules | null;
@@ -40,7 +20,6 @@ export interface OrganizationData {
     governance: boolean;
     elections: boolean;
     analytics: boolean;
-    policyVotes: boolean;
   };
 
   // Error states
@@ -49,7 +28,6 @@ export interface OrganizationData {
     governance: string | null;
     elections: string | null;
     analytics: string | null;
-    policyVotes: string | null;
   };
 }
 
@@ -72,9 +50,6 @@ export interface OrganizationActions {
   // Analytics actions
   refreshAnalytics: () => Promise<void>;
 
-  // Policy votes actions
-  refreshPolicyVotes: () => Promise<void>;
-
   // General actions
   refreshAll: () => Promise<void>;
 }
@@ -89,7 +64,6 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
 } {
   // Data state
   const [documents, setDocuments] = useState<Document[]>([]);
-  const [policyVotes, setPolicyVotes] = useState<PolicyVote[]>([]);
   const [governanceRules, setGovernanceRules] = useState<OrganizationGovernanceRules | null>(null);
   const [elections, setElections] = useState<RepresentativeElection[]>([]);
   const [analytics, setAnalytics] = useState<VotingAnalytics | null>(null);
@@ -112,7 +86,6 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
     governance: false,
     elections: false,
     analytics: false,
-    policyVotes: false,
   });
 
   // Error states
@@ -121,7 +94,6 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
     governance: null as string | null,
     elections: null as string | null,
     analytics: null as string | null,
-    policyVotes: null as string | null,
   });
 
   // Helper to update loading state
@@ -172,14 +144,6 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
     }
   }, [organizationId, loading.documents, setLoadingState, setErrorState]);
 
-
-  const loadPolicyVotes = useCallback(async () => {
-    // Policy votes have been deprecated - use rule proposals instead
-    // This function is kept for backwards compatibility but does nothing
-    setLoadingState('policyVotes', false);
-    setErrorState('policyVotes', null);
-    setPolicyVotes([]);
-  }, [setLoadingState, setErrorState]);
 
   // Governance actions
   const loadGovernanceRules = useCallback(async () => {
@@ -248,7 +212,6 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
       case 'documents':
         if (documents.length === 0 && !loading.documents && !documentsLoadedRef.current && !documentsRateLimitedRef.current) {
           loadDocuments();
-          loadPolicyVotes();
         }
         break;
       case 'governance':
@@ -259,19 +222,22 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
           loadElections();
         }
         break;
-      case 'analytics':
+      case 'transparency':
         if (!analytics && !loading.analytics) {
           loadAnalytics();
         }
-        // Analytics may need elections data for fallback counts
+        // Transparency may need elections data for fallback counts
         if (!electionsLoadedRef.current && !loading.elections) {
           loadElections();
         }
         break;
       case 'dashboard':
-        // Dashboard needs elections for showing active elections and election warnings
+        // Dashboard needs elections, documents, and rule proposals
         if (!electionsLoadedRef.current && !loading.elections) {
           loadElections();
+        }
+        if (documents.length === 0 && !loading.documents && !documentsLoadedRef.current && !documentsRateLimitedRef.current) {
+          loadDocuments();
         }
         break;
       default:
@@ -287,7 +253,6 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
     loading.elections, 
     loading.analytics,
     loadDocuments,
-    loadPolicyVotes,
     loadGovernanceRules,
     loadElections,
     loadAnalytics
@@ -361,14 +326,11 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
 
     refreshAnalytics: loadAnalytics,
 
-    refreshPolicyVotes: loadPolicyVotes,
-
     refreshAll: async () => {
       await Promise.all([
         loadDocuments(),
         loadGovernanceRules(),
         loadAnalytics(),
-        loadPolicyVotes(),
         // Note: Elections are loaded per-tab, not in refreshAll
         // This prevents unnecessary API calls for organizations without elections
       ]);
@@ -377,7 +339,6 @@ export function useOrganizationData(organizationId: string, activeTab: string): 
 
   const data: OrganizationData = {
     documents,
-    policyVotes,
     governanceRules,
     elections,
     analytics,

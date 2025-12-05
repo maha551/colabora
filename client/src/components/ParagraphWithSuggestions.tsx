@@ -417,7 +417,9 @@ export function ParagraphWithSuggestions({
               {renderHeading()}
               {renderBody()}
               {!headingContent && !bodyContent && (
-                <p className="text-sm text-muted-foreground italic">Consensus open.</p>
+                <div className="pt-2">
+                  <p className="text-sm text-muted-foreground italic text-center">Consensus open.</p>
+                </div>
               )}
             </div>
             <div

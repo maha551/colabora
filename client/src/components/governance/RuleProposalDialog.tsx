@@ -121,6 +121,11 @@ export function RuleProposalDialog({
       voteChangeAllowed: 'Vote Changes Allowed',
       representativeCanCreateVotes: 'Representatives Can Create Votes',
       representativeCanInviteMembers: 'Representatives Can Invite Members',
+      membersCanProposeRules: 'Members Can Propose Rules',
+      membersCanCreateDocuments: 'Members Can Create Documents',
+      membersCanInitializeElections: 'Members Can Initialize Elections',
+      membersCanInviteMembers: 'Members Can Invite Members',
+      membersCanManageRuleProposals: 'Members Can Manage Rule Proposals',
       representativeCanManageDocuments: 'Representatives Can Manage Documents',
       representativeApprovalRequired: 'Representative Approval Required',
       tamperProofEnabled: 'Tamper-Proof Records',
@@ -193,7 +198,7 @@ export function RuleProposalDialog({
       },
       representativeCanCreateVotes: {
         label: 'Representatives Can Create Votes',
-        description: 'Whether representatives can create policy implementation votes',
+        description: 'Whether representatives can create votes for organizational decisions',
         impact: 'Affects representative powers and governance workflow'
       },
       representativeCanInviteMembers: {
@@ -220,6 +225,31 @@ export function RuleProposalDialog({
         label: 'Audit Trail',
         description: 'Log all governance actions for accountability',
         impact: 'Affects transparency and ability to review organization history'
+      },
+      membersCanProposeRules: {
+        label: 'Members Can Propose Rules',
+        description: 'Whether regular members (not just representatives) can propose changes to governance rules',
+        impact: 'Affects who can initiate rule changes. Enabling this democratizes rule-making'
+      },
+      membersCanCreateDocuments: {
+        label: 'Members Can Create Documents',
+        description: 'Whether regular members (not just representatives) can create organizational documents',
+        impact: 'Affects document creation permissions. Enabling this allows all members to contribute documents'
+      },
+      membersCanInitializeElections: {
+        label: 'Members Can Initialize Elections',
+        description: 'Whether regular members (not just representatives) can start new representative elections',
+        impact: 'Affects election initiation. Enabling this allows members to trigger elections when needed'
+      },
+      membersCanInviteMembers: {
+        label: 'Members Can Invite Members',
+        description: 'Whether regular members (not just representatives) can invite new members to the organization',
+        impact: 'Affects membership growth. Enabling this allows all members to help grow the organization'
+      },
+      membersCanManageRuleProposals: {
+        label: 'Members Can Manage Rule Proposals',
+        description: 'Whether regular members (not just representatives) can start voting and complete rule proposals',
+        impact: 'Affects proposal workflow. Enabling this allows members to manage the full proposal lifecycle'
       }
     };
 
@@ -237,7 +267,9 @@ export function RuleProposalDialog({
     const booleanFields = [
       'anonymousVotingEnabled', 'voteChangeAllowed', 'representativeCanCreateVotes',
       'representativeCanInviteMembers', 'representativeCanManageDocuments',
-      'representativeApprovalRequired', 'tamperProofEnabled', 'auditTrailEnabled'
+      'representativeApprovalRequired', 'tamperProofEnabled', 'auditTrailEnabled',
+      'membersCanProposeRules', 'membersCanCreateDocuments', 'membersCanInitializeElections',
+      'membersCanInviteMembers', 'membersCanManageRuleProposals'
     ];
     const selectFields = ['electionVotingMethod', 'thresholdCalculationMethod'];
 
@@ -249,7 +281,10 @@ export function RuleProposalDialog({
     return 'text';
   };
 
-  const getCurrentValueDisplay = (field: string, value: string | number | boolean) => {
+  const getCurrentValueDisplay = (field: string, value: string | number | boolean | null | undefined) => {
+    if (value === null || value === undefined) {
+      return 'Not set';
+    }
     const fieldType = getRuleFieldType(field);
 
     switch (fieldType) {
@@ -388,7 +423,7 @@ export function RuleProposalDialog({
         errors.push('All option titles are required');
       }
     } else {
-      if (!proposalData.proposedValue && proposalData.proposedValue !== false && proposalData.proposedValue !== 0) {
+      if (proposalData.proposedValue === null || proposalData.proposedValue === undefined || proposalData.proposedValue === '') {
         errors.push('Proposed value is required');
       }
 
@@ -430,6 +465,52 @@ export function RuleProposalDialog({
 
     setCreating(true);
     try {
+      // Pre-submission validation
+      if (!proposalData.useOptions) {
+        try {
+          const validation = await governanceApi.validateRuleChange(
+            organization.id,
+            proposalData.ruleField,
+            proposalData.proposedValue
+          );
+
+          if (!validation.valid) {
+            // Show errors
+            if (validation.errors.length > 0) {
+              toast.error(validation.errors[0]);
+              setCreating(false);
+              return;
+            }
+
+            // Show warnings but allow submission
+            if (validation.warnings.length > 0) {
+              const proceed = window.confirm(
+                `Warning: ${validation.warnings[0]}\n\nDo you want to proceed?`
+              );
+              if (!proceed) {
+                setCreating(false);
+                return;
+              }
+            }
+
+            // Show conflicts but allow submission with confirmation
+            if (validation.conflicts.length > 0) {
+              const conflict = validation.conflicts[0];
+              const proceed = window.confirm(
+                `Conflict: ${conflict.message}\n\nDo you want to proceed anyway?`
+              );
+              if (!proceed) {
+                setCreating(false);
+                return;
+              }
+            }
+          }
+        } catch (validationError: any) {
+          // If validation fails, still allow submission (backend will catch it)
+          console.warn('Validation check failed:', validationError);
+        }
+      }
+
       const proposalPayload = {
         title: proposalData.title.trim(),
         description: proposalData.description.trim(),
@@ -451,8 +532,8 @@ export function RuleProposalDialog({
     }
   };
 
-  const isRepresentative = organization.representatives?.includes(currentUser.id);
-  const isActiveMember = organization.members?.some(m => m.userId === currentUser.id && m.status === 'active') || false;
+  const isRepresentative = currentUser ? organization.representatives?.includes(currentUser.id) : false;
+  const isActiveMember = currentUser ? organization.members?.some(m => m.userId === currentUser.id && m.status === 'active') || false : false;
 
   if (!isRepresentative && !isActiveMember) {
     return null; // Only members can access this dialog
@@ -469,6 +550,12 @@ export function RuleProposalDialog({
     { value: 'defaultAcceptanceThreshold', label: 'Document Acceptance Threshold (%)' },
     { value: 'documentProposalPeriodDays', label: 'Document Proposal Period (days)' },
     { value: 'thresholdCalculationMethod', label: 'Threshold Calculation Method' },
+    // Member permission flags
+    { value: 'membersCanProposeRules', label: 'Members Can Propose Rules' },
+    { value: 'membersCanCreateDocuments', label: 'Members Can Create Documents' },
+    { value: 'membersCanInitializeElections', label: 'Members Can Initialize Elections' },
+    { value: 'membersCanInviteMembers', label: 'Members Can Invite Members' },
+    { value: 'membersCanManageRuleProposals', label: 'Members Can Manage Rule Proposals' },
     { value: 'anonymousVotingEnabled', label: 'Anonymous Voting' },
     { value: 'voteChangeAllowed', label: 'Allow Vote Changes' },
     { value: 'representativeCanCreateVotes', label: 'Representatives Can Create Votes' },
@@ -551,7 +638,7 @@ export function RuleProposalDialog({
                         <AlertDescription>
                           <div className="space-y-1">
                             <div>
-                              <strong>Current value:</strong> {getCurrentValueDisplay(proposalData.ruleField, currentRules[proposalData.ruleField as keyof OrganizationGovernanceRules])}
+                              <strong>Current value:</strong> {getCurrentValueDisplay(proposalData.ruleField, currentRules[proposalData.ruleField as keyof OrganizationGovernanceRules] ?? null)}
                             </div>
                             <div className="text-sm text-gray-600 mt-2">
                               <strong>What this rule does:</strong> {ruleInfo.description}
@@ -597,7 +684,7 @@ export function RuleProposalDialog({
                     <Label htmlFor="proposed-value">
                       {proposalData.ruleField ? `Proposed ${getRuleDisplayInfo(proposalData.ruleField).label} *` : 'New Value *'}
                     </Label>
-                    {renderValueInput(proposalData.ruleField, proposalData.proposedValue, (value) => handleInputChange('proposedValue', value))}
+                    {renderValueInput(proposalData.ruleField, proposalData.proposedValue || '', (value) => handleInputChange('proposedValue', value))}
                     {proposalData.ruleField && (
                       <p className="text-xs text-gray-500 mt-1">
                         {getRuleDisplayInfo(proposalData.ruleField).description}

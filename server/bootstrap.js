@@ -217,6 +217,7 @@ function registerRoutes(app) {
   const activityRoutes = require('./routes/activity');
   const structureProposalRoutes = require('./routes/structure-proposals');
   const structureHistoryRoutes = require('./routes/structure-history');
+  const documentTreeProposalRoutes = require('./routes/document-tree-proposals');
   const pendingVotesRoutes = require('./routes/pending-votes');
   const debatedProposalsRoutes = require('./routes/debated-proposals');
   const agreedVersionsRoutes = require('./routes/agreed-versions');
@@ -314,6 +315,7 @@ function registerRoutes(app) {
   app.use('/api/documents/:documentId/activity', requireDatabase, activityRoutes);
   app.use('/api/documents/:documentId/structure-proposals', requireDatabase, structureProposalRoutes);
   app.use('/api/documents/:documentId/structure-history', requireDatabase, structureHistoryRoutes);
+  app.use('/api/documents/tree-proposals', requireDatabase, documentTreeProposalRoutes);
   app.use('/api/documents/:documentId/paragraphs', requireDatabase, paragraphRoutes);
   app.use('/api/documents/:documentId/paragraphs/:paragraphId/proposals', requireDatabase, proposalRoutes);
   app.use('/api/documents/:documentId/paragraphs/:paragraphId/proposals/:proposalId/vote', requireDatabase, voteRoutes);

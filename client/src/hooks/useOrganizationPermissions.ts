@@ -1,4 +1,4 @@
-import { User, Organization } from '../types';
+import { User, Organization, OrganizationGovernanceRules } from '../types';
 
 export interface OrganizationPermissions {
   // Basic roles
@@ -18,6 +18,7 @@ export interface OrganizationPermissions {
   canCreateElections: boolean;
   canManageGovernanceRules: boolean;
   canProposeRules: boolean;
+  canManageRuleProposals: boolean;
   canVoteInElections: boolean;
 
   // Analytics permissions
@@ -31,27 +32,63 @@ export interface OrganizationPermissions {
 
 /**
  * Custom hook for determining user permissions within an organization
- * Centralizes all permission logic for clean, testable, and maintainable code
+ * Now supports dynamic permissions based on governance rules
  */
-export function useOrganizationPermissions(user: User, organization: Organization): OrganizationPermissions {
+export function useOrganizationPermissions(
+  user: User,
+  organization: Organization,
+  governanceRules: OrganizationGovernanceRules | null = null
+): OrganizationPermissions {
   // Basic role checks
   const isRepresentative = organization.representatives?.includes(user.id) ?? false;
   const isActiveMember = organization.members?.some(m => m.userId === user.id && m.status === 'active') ?? false;
   const isAdmin = user.role === 'admin';
 
+  // Bootstrap mode check
+  const isBootstrap = governanceRules?.bootstrapMode ?? true; // Default to true for new orgs
+  const isRecovery = governanceRules?.recoveryMode ?? false;
+
+  // Dynamic permissions based on governance rules
+  const canProposeRules = isAdmin ||
+    (isBootstrap && isActiveMember) ||
+    (isRecovery && isActiveMember) ||
+    (governanceRules?.membersCanProposeRules && isActiveMember) ||
+    isRepresentative;
+
+  const canCreateDocuments = isAdmin ||
+    (isBootstrap && isActiveMember) ||
+    (isRecovery && isActiveMember) ||
+    (governanceRules?.membersCanCreateDocuments && isActiveMember) ||
+    isRepresentative;
+
+  const canInitializeElections = isAdmin ||
+    (isBootstrap && isRepresentative) ||
+    (isRecovery && isActiveMember) ||
+    (governanceRules?.membersCanInitializeElections && isActiveMember) ||
+    isRepresentative;
+
+  const canInviteMembers = isAdmin ||
+    (isBootstrap && isRepresentative) ||
+    (isRecovery && isActiveMember) ||
+    (governanceRules?.membersCanInviteMembers && isActiveMember && governanceRules?.representativeCanInviteMembers === true) ||
+    (isRepresentative && governanceRules?.representativeCanInviteMembers === true);
+
+  const canManageRuleProposals = isAdmin ||
+    (isBootstrap && isRepresentative) ||
+    (isRecovery && isActiveMember) ||
+    (governanceRules?.membersCanManageRuleProposals && isActiveMember) ||
+    isRepresentative;
+
   // Document permissions
-  const canCreateDocuments = isRepresentative || isAdmin; // Only reps can create documents directly
   const canViewAllDocuments = isRepresentative || isActiveMember || isAdmin;
 
   // Member management permissions
-  const canInviteMembers = isRepresentative || isAdmin;
   const canManageMembers = isRepresentative || isAdmin;
   const canViewMemberList = isActiveMember || isRepresentative || isAdmin;
 
   // Governance permissions
-  const canCreateElections = isRepresentative || isAdmin;
+  const canCreateElections = canInitializeElections;
   const canManageGovernanceRules = isRepresentative || isAdmin;
-  const canProposeRules = isRepresentative || isActiveMember || isAdmin; // Members can propose, reps can create directly
   const canVoteInElections = isActiveMember || isRepresentative || isAdmin;
 
   // Analytics permissions
@@ -80,6 +117,7 @@ export function useOrganizationPermissions(user: User, organization: Organizatio
     canCreateElections,
     canManageGovernanceRules,
     canProposeRules,
+    canManageRuleProposals,
     canVoteInElections,
 
     // Analytics permissions

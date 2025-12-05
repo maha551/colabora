@@ -6,6 +6,8 @@ import { useWebSocket, DocumentUpdate } from './hooks/useWebSocket';
 import { useAuth } from './hooks/useAuth';
 import { useDocuments } from './hooks/useDocuments';
 import { useDocumentView } from './hooks/useDocumentView';
+import { useUserOrganizations } from './hooks/useUserOrganizations';
+import { useNavigationHistory } from './hooks/useNavigationHistory';
 
 // Layout and Pages
 import { AppLayout } from './components/layout/AppLayout';
@@ -23,16 +25,25 @@ import { proposalsApi, votesApi, commentsApi, paragraphsApi, structureProposalsA
 import { toast } from 'sonner';
 
 export default function App() {
+  // Navigation history for proper back button functionality (initialized early for use in logout wrapper)
+  const { history, canGoBack, push, pop, clear: clearHistory } = useNavigationHistory();
+
   // Authentication state
   const {
     currentUser,
     authLoading,
     error: authError,
     handleLogin,
-    handleLogout,
+    handleLogout: originalHandleLogout,
     handleProfileUpdate,
     isAuthenticated,
   } = useAuth();
+
+  // Wrap logout to clear navigation history
+  const handleLogout = useCallback(async () => {
+    clearHistory();
+    await originalHandleLogout();
+  }, [originalHandleLogout, clearHistory]);
 
   // Document management state
   const {
@@ -56,12 +67,19 @@ export default function App() {
     mapDocumentWithSuggestions,
   } = useDocumentView();
 
+  // User organizations for smart navigation
+  const { organizations, loading: organizationsLoading, isSingleOrg, primaryOrganization, refreshOrganizations } = useUserOrganizations(currentUser);
+
   // UI state
   const [currentView, setCurrentView] = useState<'documents' | 'activity' | 'document' | 'profile' | 'organizations' | 'organization' | 'admin'>('activity');
   const [selectedOrganization, setSelectedOrganization] = useState<Organization | null>(null);
+  const [documentOrganization, setDocumentOrganization] = useState<Organization | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [structureProposals, setStructureProposals] = useState<StructureProposal[]>([]);
   const [showStructureProposalMode, setShowStructureProposalMode] = useState(false);
+
+  // Track if initial auto-navigation has occurred to prevent re-navigation
+  const initialLoadCompleteRef = useRef(false);
 
   // Load structure proposals for current document
   const loadStructureProposalsRef = useRef<{ loading: boolean; lastLoadTime: number }>({ loading: false, lastLoadTime: 0 });
@@ -101,14 +119,17 @@ export default function App() {
     loadStructureProposals();
   }, [loadStructureProposals]);
 
-  // Monitor URL hash for document links
+  // Monitor URL hash for document links (deep linking - don't push to history)
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash;
       if (hash.startsWith('#document/')) {
         const documentId = hash.replace('#document/', '');
         if (currentUser && documentId) {
-          loadDocumentById(documentId, currentUser);
+          // Deep linking - load document but don't push to history
+          loadDocumentById(documentId, currentUser).then(() => {
+            setCurrentView('document');
+          });
         }
       }
     };
@@ -121,6 +142,67 @@ export default function App() {
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, [currentUser, loadDocumentById]);
+
+  // Reset initial load ref when user changes (e.g., after logout/login)
+  useEffect(() => {
+    if (!isAuthenticated) {
+      initialLoadCompleteRef.current = false;
+    }
+  }, [isAuthenticated, currentUser?.id]);
+
+  // Smart default view: Auto-navigate single-org users to their organization view
+  useEffect(() => {
+    // Only run once on initial load, after auth and organizations are loaded
+    if (initialLoadCompleteRef.current || !isAuthenticated || organizationsLoading) {
+      return;
+    }
+
+    // Ensure organizations array is actually populated (not just loading is false)
+    // Auto-navigate if user has exactly 1 organization and is not admin
+    if (organizations.length === 1 && primaryOrganization && currentUser?.role !== 'admin') {
+      console.log('Auto-navigating single-org user to organization view:', {
+        organizationId: primaryOrganization.id,
+        organizationName: primaryOrganization.name,
+        userRole: currentUser?.role,
+        organizationsCount: organizations.length
+      });
+      setSelectedOrganization(primaryOrganization);
+      setCurrentView('organization');
+      initialLoadCompleteRef.current = true;
+    } else {
+      // Mark as complete even if we don't auto-navigate
+      console.log('Not auto-navigating:', {
+        organizationsCount: organizations.length,
+        hasPrimaryOrg: !!primaryOrganization,
+        userRole: currentUser?.role,
+        isAdmin: currentUser?.role === 'admin'
+      });
+      initialLoadCompleteRef.current = true;
+    }
+  }, [isAuthenticated, organizationsLoading, organizations.length, isSingleOrg, primaryOrganization, currentUser?.role]);
+
+  // Fetch organization when viewing a document that belongs to an organization
+  useEffect(() => {
+    if (currentDocument?.organizationId) {
+      // Check if organization is already in the loaded organizations list
+      const existingOrg = organizations.find(org => org.id === currentDocument.organizationId);
+      if (existingOrg) {
+        setDocumentOrganization(existingOrg);
+      } else {
+        // Fetch organization if not in the list
+        organizationsApi.getOrganization(currentDocument.organizationId)
+          .then(response => {
+            setDocumentOrganization(response.organization);
+          })
+          .catch(error => {
+            console.error('Failed to load document organization:', error);
+            setDocumentOrganization(null);
+          });
+      }
+    } else {
+      setDocumentOrganization(null);
+    }
+  }, [currentDocument?.organizationId, organizations]);
 
   // Load structure proposals when document ID changes (not on every document update)
   useEffect(() => {
@@ -610,41 +692,125 @@ export default function App() {
 
   // Navigation handlers
   const handleShowDocuments = () => {
+    // Push current view to history before navigating
+    if (currentView !== 'documents') {
+      push({
+        view: currentView,
+        documentId: currentDocument?.id,
+        organizationId: selectedOrganization?.id || documentOrganization?.id,
+      });
+    }
     clearDocument();
     setCurrentView('documents');
     // Documents will be loaded by useEffect when currentView changes
   };
 
   const handleShowActivity = () => {
+    // Push current view to history before navigating
+    if (currentView !== 'activity') {
+      push({
+        view: currentView,
+        documentId: currentDocument?.id,
+        organizationId: selectedOrganization?.id || documentOrganization?.id,
+      });
+    }
     clearDocument();
     setCurrentView('activity');
   };
 
   const handleShowProfile = () => {
+    // Push current view to history before navigating
+    if (currentView !== 'profile') {
+      push({
+        view: currentView,
+        documentId: currentDocument?.id,
+        organizationId: selectedOrganization?.id || documentOrganization?.id,
+      });
+    }
     clearDocument();
     setCurrentView('profile');
   };
 
   const handleShowOrganizations = () => {
+    // Push current view to history before navigating
+    if (currentView !== 'organizations') {
+      push({
+        view: currentView,
+        documentId: currentDocument?.id,
+        organizationId: selectedOrganization?.id || documentOrganization?.id,
+      });
+    }
     clearDocument();
     setCurrentView('organizations');
   };
 
   const handleShowAdmin = () => {
+    // Push current view to history before navigating
+    if (currentView !== 'admin') {
+      push({
+        view: currentView,
+        documentId: currentDocument?.id,
+        organizationId: selectedOrganization?.id || documentOrganization?.id,
+      });
+    }
     clearDocument();
     setCurrentView('admin');
   };
 
-  const handleBackToDocuments = () => {
-    clearDocument();
-    setCurrentView('activity');
-    window.location.hash = '';
+  // Proper back handler that restores previous navigation state
+  const handleBack = () => {
+    const previousState = pop();
+    if (!previousState) {
+      // Fallback to activity if no history
+      clearDocument();
+      setCurrentView('activity');
+      window.location.hash = '';
+      return;
+    }
+
+    // Restore previous state
+    if (previousState.view === 'document' && previousState.documentId && currentUser) {
+      loadDocumentById(previousState.documentId, currentUser).then(() => {
+        setCurrentView('document');
+        window.location.hash = `#document/${previousState.documentId}`;
+      }).catch(() => {
+        // If document load fails, fallback to documents view
+        clearDocument();
+        setCurrentView('documents');
+        window.location.hash = '';
+      });
+    } else if (previousState.view === 'organization' && previousState.organizationId) {
+      const org = organizations.find(o => o.id === previousState.organizationId);
+      if (org) {
+        setSelectedOrganization(org);
+        setCurrentView('organization');
+        clearDocument();
+        window.location.hash = '';
+      } else {
+        // Fallback if org not found
+        clearDocument();
+        setCurrentView('organizations');
+        window.location.hash = '';
+      }
+    } else {
+      clearDocument();
+      setCurrentView(previousState.view);
+      window.location.hash = '';
+    }
   };
 
   // Document selection handler
   const handleDocumentSelect = async (document: Document) => {
+    // Push current view to history before navigating
+    if (currentView !== 'document') {
+      push({
+        view: currentView,
+        documentId: currentDocument?.id,
+        organizationId: selectedOrganization?.id || documentOrganization?.id,
+      });
+    }
     await selectDocument(document);
-        setCurrentView('document');
+    setCurrentView('document');
   };
 
   // Document editing handlers
@@ -992,11 +1158,19 @@ export default function App() {
   // Activity feed handlers
   const handleNavigateToDocument = async (documentId: string) => {
     try {
+      // Push current view to history before navigating
+      if (currentView !== 'document') {
+        push({
+          view: currentView,
+          documentId: currentDocument?.id,
+          organizationId: selectedOrganization?.id || documentOrganization?.id,
+        });
+      }
       // Load the document directly
       await loadDocumentById(documentId, currentUser);
-        setCurrentView('document');
-        // Load structure proposals for this document
-        await loadStructureProposals();
+      setCurrentView('document');
+      // Load structure proposals for this document
+      await loadStructureProposals();
     } catch (error) {
       console.error('Failed to load document:', error);
       toast.error('Failed to load document');
@@ -1016,13 +1190,50 @@ export default function App() {
 
   // Organization handlers
   const handleSelectOrganization = (org: Organization) => {
+    // Push current view to history before navigating
+    if (currentView !== 'organization') {
+      push({
+        view: currentView,
+        documentId: currentDocument?.id,
+        organizationId: selectedOrganization?.id || documentOrganization?.id,
+      });
+    }
     setSelectedOrganization(org);
     setCurrentView('organization');
   };
 
   const handleBackFromOrganization = () => {
     setSelectedOrganization(null);
-    setCurrentView('organizations');
+    // For single-org users, go back to activity view; for multi-org users, go to organizations list
+    if (isSingleOrg && currentUser?.role !== 'admin') {
+      setCurrentView('activity');
+    } else {
+      setCurrentView('organizations');
+    }
+  };
+
+  // Handler to refresh organization data after branding update
+  const handleOrganizationBrandingUpdate = async (organizationId: string) => {
+    try {
+      const response = await organizationsApi.getOrganization(organizationId);
+      const updatedOrg = response.organization;
+      
+      // Update selectedOrganization if it matches
+      if (selectedOrganization?.id === organizationId) {
+        setSelectedOrganization(updatedOrg);
+      }
+      
+      // Update documentOrganization if it matches
+      if (documentOrganization?.id === organizationId) {
+        setDocumentOrganization(updatedOrg);
+      }
+      
+      // Refresh organizations list to update primaryOrganization
+      // This will automatically update primaryOrganization since it's derived from the organizations array
+      await refreshOrganizations();
+    } catch (error) {
+      console.error('Failed to refresh organization:', error);
+    }
   };
 
   // Document sharing
@@ -1065,7 +1276,7 @@ export default function App() {
   }
 
   // Calculate layout props
-  const showBackButton = currentView === 'document' || currentView === 'profile' || currentView === 'organizations' || currentView === 'organization' || currentView === 'documents' || currentView === 'admin';
+  const showBackButton = canGoBack && (currentView !== 'activity' || history.length > 1);
   const title = currentView === 'document' && currentDocument ? currentDocument.title :
                 currentView === 'activity' ? 'Activity Feed' :
                 currentView === 'profile' ? 'Edit Profile' :
@@ -1085,10 +1296,20 @@ export default function App() {
         onShowOrganizations={handleShowOrganizations}
         onShowAdmin={currentUser?.role === 'admin' ? handleShowAdmin : undefined}
       showBackButton={showBackButton}
-        onBack={handleBackToDocuments}
+        onBack={handleBack}
       title={title}
         showCreateButton={currentView === 'documents'}
         onCreateDocument={() => setIsCreateDialogOpen(true)}
+        organization={
+          // For single-org users, apply branding to all views
+          isSingleOrg && primaryOrganization
+            ? primaryOrganization
+            : (currentView === 'organization' 
+              ? selectedOrganization 
+              : (currentView === 'document' && currentDocument?.organizationId 
+                ? documentOrganization 
+                : null))
+        }
     >
       {currentView === 'documents' && (
         <DocumentsPage
@@ -1110,6 +1331,7 @@ export default function App() {
           onNavigateToDocument={handleNavigateToDocument}
           onAddComment={handleAddComment}
           onWebSocketUpdate={setActivityFeedUpdateHandler}
+          organizations={organizations}
         />
       )}
 
@@ -1133,13 +1355,14 @@ export default function App() {
           currentUser={currentUser}
           onBack={handleBackFromOrganization}
           onSelectDocument={handleDocumentSelect}
+          onBrandingUpdate={handleOrganizationBrandingUpdate}
         />
       )}
 
       {currentView === 'admin' && currentUser?.role === 'admin' && (
         <AdminDashboard
           currentUser={currentUser}
-          onBack={handleBackToDocuments}
+          onBack={handleBack}
         />
       )}
 

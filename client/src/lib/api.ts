@@ -16,7 +16,10 @@ import type {
   StructureVersionDetail,
   DocumentVote,
   OrganizationVote,
-  User
+  User,
+  TreeProposalOperation,
+  TreeProposalsResponse,
+  TreeProposalResponse
 } from "../types";
 
 // API Response Types
@@ -479,18 +482,29 @@ export const documentsApi = {
       voteChangeAllowed?: boolean;
       structureProposalsEnabled?: boolean;
       parentId?: string;
+      positionType?: 'root' | 'child' | 'above_sibling' | 'below_sibling';
+      referenceDocumentId?: string;
     },
     ownershipType?: 'personal' | 'shared' | 'organizational',
     organizationId?: string
   ): Promise<DocumentResponse> {
-    // Extract parentId from options if present, and remove it from options
-    const { parentId, ...optionsWithoutParentId } = options || {};
+    // Extract parentId, positionType, and referenceDocumentId from options
+    const { parentId, positionType, referenceDocumentId, ...optionsWithoutPosition } = options || {};
+    
+    // Build options object with position info if provided
+    const finalOptions = { ...optionsWithoutPosition };
+    if (positionType) {
+      finalOptions.positionType = positionType;
+    }
+    if (referenceDocumentId) {
+      finalOptions.referenceDocumentId = referenceDocumentId;
+    }
     
     // Build request body, only including fields that have values
     const requestBody: Record<string, unknown> = {
       title,
       description: description || undefined,
-      options: Object.keys(optionsWithoutParentId).length > 0 ? optionsWithoutParentId : undefined,
+      options: Object.keys(finalOptions).length > 0 ? finalOptions : undefined,
       ownershipType: ownershipType || 'personal',
       organizationId: organizationId || undefined,
       parentId: parentId || undefined,
@@ -603,6 +617,44 @@ export const documentsApi = {
 
   async getDeletionStatus(documentId: string): Promise<DeletionStatusResponse> {
     return apiRequest<DeletionStatusResponse>(`/api/documents/${documentId}/deletion-status`)
+  },
+}
+
+// Document Tree Proposals API functions
+export const documentTreeProposalsApi = {
+  // Get all tree proposals for a document
+  async getProposals(documentId: string): Promise<TreeProposalsResponse> {
+    return apiRequest<TreeProposalsResponse>(`/api/documents/tree-proposals/${documentId}`)
+  },
+
+  // Create a tree proposal
+  async createProposal(operation: TreeProposalOperation): Promise<TreeProposalResponse> {
+    return apiRequest<TreeProposalResponse>('/api/documents/tree-proposals', {
+      method: 'POST',
+      body: JSON.stringify(operation),
+    })
+  },
+
+  // Vote on a tree proposal
+  async voteOnProposal(proposalId: string, vote: 'PRO' | 'NEUTRAL' | 'CONTRA'): Promise<MessageResponse> {
+    return apiRequest<MessageResponse>(`/api/documents/tree-proposals/${proposalId}/vote`, {
+      method: 'POST',
+      body: JSON.stringify({ vote }),
+    })
+  },
+
+  // Apply an approved proposal
+  async applyProposal(proposalId: string): Promise<MessageResponse> {
+    return apiRequest<MessageResponse>(`/api/documents/tree-proposals/${proposalId}/apply`, {
+      method: 'POST',
+    })
+  },
+
+  // Cancel/delete a proposal
+  async cancelProposal(proposalId: string): Promise<MessageResponse> {
+    return apiRequest<MessageResponse>(`/api/documents/tree-proposals/${proposalId}`, {
+      method: 'DELETE',
+    })
   },
 }
 
@@ -927,7 +979,15 @@ export const organizationsApi = {
   },
 
   // Update organization
-  async updateOrganization(organizationId: string, updates: { name?: string, description?: string, membershipPolicy?: 'open' | 'invitation', votingThreshold?: number }): Promise<OrganizationResponse> {
+  async updateOrganization(organizationId: string, updates: { 
+    name?: string, 
+    description?: string, 
+    membershipPolicy?: 'open' | 'invitation', 
+    votingThreshold?: number,
+    brandingColor?: string,
+    brandingLogoUrl?: string,
+    brandingTitle?: string
+  }): Promise<OrganizationResponse> {
     return apiRequest<OrganizationResponse>(`/api/organizations/${organizationId}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
@@ -1015,6 +1075,119 @@ export const governanceApi = {
     return apiRequest<GovernanceRulesResponse>(`/api/governance/${organizationId}/governance-rules`)
   },
 
+  // Permissions
+  async getPermissions(organizationId: string): Promise<{
+    success: boolean;
+    permissions: {
+      canProposeRules: boolean;
+      canCreateDocuments: boolean;
+      canInitializeElections: boolean;
+      canInviteMembers: boolean;
+      canManageRuleProposals: boolean;
+      canVoteInElections: boolean;
+      canViewAnalytics: boolean;
+      canExportData: boolean;
+      canManageOrganization: boolean;
+    };
+    context: {
+      isRepresentative: boolean;
+      isActiveMember: boolean;
+      isAdmin: boolean;
+      bootstrapMode: boolean;
+      recoveryMode: boolean;
+    };
+  }> {
+    return apiRequest(`/api/governance/${organizationId}/permissions`)
+  },
+
+  // Bootstrap Status
+  async getBootstrapStatus(organizationId: string): Promise<{
+    success: boolean;
+    bootstrap: {
+      mode: boolean;
+      completedAt: string | null;
+      progress: {
+        completed: number;
+        total: number;
+        checklist: Array<{
+          rule: string;
+          completed: boolean;
+          proposalId?: string;
+        }>;
+      };
+      canComplete: boolean;
+      daysRemaining: number | null;
+    };
+  }> {
+    return apiRequest(`/api/governance/${organizationId}/bootstrap-status`)
+  },
+
+  // Complete Bootstrap
+  async completeBootstrap(organizationId: string, confirm: boolean): Promise<{
+    success: boolean;
+    message: string;
+    bootstrap: {
+      mode: boolean;
+      completedAt: string;
+    };
+  }> {
+    return apiRequest(`/api/governance/${organizationId}/bootstrap/complete`, {
+      method: 'POST',
+      body: JSON.stringify({ confirm }),
+    })
+  },
+
+  // Validate Rule Change
+  async validateRuleChange(organizationId: string, ruleField: string, proposedValue: unknown): Promise<{
+    valid: boolean;
+    errors: string[];
+    warnings: string[];
+    conflicts: Array<{
+      type: 'dependency' | 'deadlock' | 'cooldown' | 'duplicate';
+      message: string;
+      details?: unknown;
+    }>;
+  }> {
+    return apiRequest(`/api/governance/${organizationId}/validate-rule-change`, {
+      method: 'POST',
+      body: JSON.stringify({ ruleField, proposedValue }),
+    })
+  },
+
+  // Rule History
+  async getRuleHistory(organizationId: string, options?: {
+    ruleField?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{
+    success: boolean;
+    history: Array<{
+      id: string;
+      ruleField: string;
+      oldValue: unknown;
+      newValue: unknown;
+      changedBy: {
+        userId: string;
+        userName: string;
+        proposalId?: string;
+      };
+      changedAt: string;
+    }>;
+    pagination: {
+      total: number;
+      limit: number;
+      offset: number;
+      hasMore: boolean;
+    };
+  }> {
+    const params = new URLSearchParams();
+    if (options?.ruleField) params.append('ruleField', options.ruleField);
+    if (options?.limit) params.append('limit', options.limit.toString());
+    if (options?.offset) params.append('offset', options.offset.toString());
+    const query = params.toString();
+    return apiRequest(`/api/governance/${organizationId}/rule-history${query ? `?${query}` : ''}`)
+  },
+
   async updateGovernanceRules(organizationId: string, updates: Partial<OrganizationGovernanceRules>): Promise<GovernanceRulesResponse> {
     return apiRequest<GovernanceRulesResponse>(`/api/governance/${organizationId}/governance-rules`, {
       method: 'PUT',
@@ -1071,6 +1244,13 @@ export const governanceApi = {
     return apiRequest<MessageResponse>(`/api/governance/${organizationId}/elections/${electionId}/vote`, {
       method: 'POST',
       body: JSON.stringify(voteData),
+    })
+  },
+
+  async updateElectionPhase(organizationId: string, electionId: string, newPhase: 'nomination' | 'voting'): Promise<MessageResponse> {
+    return apiRequest<MessageResponse>(`/api/governance/${organizationId}/elections/${electionId}/update-phase`, {
+      method: 'POST',
+      body: JSON.stringify({ newPhase }),
     })
   },
 

@@ -134,6 +134,16 @@ export function OrganizationalDocumentStatus({ document }: OrganizationalDocumen
               </div>
             )}
 
+            {/* Show when voting will start for proposal status */}
+            {document.status === 'proposal' && document.proposalDeadline && (
+              <div className="flex items-center space-x-2 text-sm mt-2">
+                <Hourglass className="h-4 w-4 text-muted-foreground" />
+                <span className="text-muted-foreground">
+                  Voting starts {formatDistanceToNow(new Date(document.proposalDeadline), { addSuffix: true })}
+                </span>
+              </div>
+            )}
+
             {document.votingStartedAt && (
               <div className="flex items-center space-x-2 text-sm mt-2">
                 <Clock className="h-4 w-4 text-muted-foreground" />

@@ -20,7 +20,10 @@ import {
   ArrowUpDown,
   LogOut,
   UserCircle,
-  Activity
+  Activity,
+  Building2,
+  Folder,
+  User as UserIcon
 } from "lucide-react";
 import {
   Select,
@@ -28,6 +31,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectSeparator,
 } from "./ui/select";
 import {
   DropdownMenu,
@@ -103,7 +107,7 @@ export function DocumentDashboard({
   // New state for ownership type
   const [ownershipType, setOwnershipType] = useState<'personal' | 'shared'>('personal');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [documentFilter, setDocumentFilter] = useState<'all' | 'owned' | 'personal' | 'shared' | 'organizational' | string>("all");
   const [sortBy, setSortBy] = useState<string>("modified");
   
   // Document options state
@@ -131,14 +135,30 @@ export function DocumentDashboard({
       doc.title.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    // Apply role filter
-    if (roleFilter !== "all") {
+    // Apply document filter
+    if (documentFilter !== "all") {
       filtered = filtered.filter(doc => {
-        const isFacilitator = doc.ownerId === currentUser.id;
+        const isOwner = doc.ownerId === currentUser.id;
         const isCollaborator = doc.collaborators.some(collab => collab.userId === currentUser.id);
+        const ownershipType = doc.ownershipType || 'personal';
 
-        if (roleFilter === "facilitator") return isFacilitator;
-        if (roleFilter === "collaborator") return isCollaborator && !isFacilitator; // Exclude facilitator-owned docs from collaborator filter
+        if (documentFilter === "owned") {
+          return isOwner;
+        }
+        if (documentFilter === "personal") {
+          return ownershipType === 'personal' && isOwner;
+        }
+        if (documentFilter === "shared") {
+          // Shared documents: either ownershipType is 'shared' OR user is a collaborator but not owner
+          return (ownershipType === 'shared' || (isCollaborator && !isOwner));
+        }
+        if (documentFilter === "organizational") {
+          return ownershipType === 'organizational';
+        }
+        // If filter is an organizationId, filter by that organization
+        if (organizations.some(org => org.id === documentFilter)) {
+          return doc.organizationId === documentFilter;
+        }
         return true;
       });
     }
@@ -162,7 +182,7 @@ export function DocumentDashboard({
     });
 
     return filtered;
-  }, [documents, searchQuery, roleFilter, sortBy, currentUser.id]);
+  }, [documents, searchQuery, documentFilter, sortBy, currentUser.id, organizations]);
 
   const handleCreateDocument = async () => {
     if (!newDocumentTitle.trim()) {
@@ -233,6 +253,17 @@ export function DocumentDashboard({
     });
   };
 
+  // Get display label for selected filter
+  const getFilterLabel = (filter: typeof documentFilter): string => {
+    if (filter === 'all') return 'All Documents';
+    if (filter === 'owned') return 'My Documents';
+    if (filter === 'personal') return 'Personal';
+    if (filter === 'shared') return 'Shared';
+    if (filter === 'organizational') return 'Organizational';
+    const org = organizations.find(o => o.id === filter);
+    return org ? org.name : 'All Documents';
+  };
+
 
   if (loading) {
     return (
@@ -258,7 +289,7 @@ export function DocumentDashboard({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-5xl mx-auto px-4 py-6">
+      <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Search and New Document Button */}
         <div className="mb-8">
           <div className="flex items-center justify-between gap-4 mb-4">
@@ -280,14 +311,60 @@ export function DocumentDashboard({
           <div className="flex items-center gap-3 mb-4 bg-white rounded-lg px-3 py-2.5 border border-gray-200 shadow-sm">
             <div className="flex items-center gap-3 flex-1">
               <Filter className="h-4 w-4 text-gray-500 flex-shrink-0" />
-              <Select value={roleFilter} onValueChange={setRoleFilter}>
-                <SelectTrigger className="w-[180px] h-9">
-                  <SelectValue placeholder="Filter by role" />
+              <Select value={documentFilter} onValueChange={(value) => setDocumentFilter(value as typeof documentFilter)}>
+                <SelectTrigger className="w-[200px] h-9">
+                  <SelectValue placeholder="Filter documents">
+                    <div className="flex items-center gap-2">
+                      <Filter className="h-4 w-4" />
+                      <span>{getFilterLabel(documentFilter)}</span>
+                    </div>
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Documents</SelectItem>
-                  <SelectItem value="facilitator">My Documents</SelectItem>
-                  <SelectItem value="collaborator">Collaborating On</SelectItem>
+                  <SelectItem value="all">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      <span>All Documents</span>
+                    </div>
+                  </SelectItem>
+                  <SelectSeparator />
+                  <SelectItem value="owned">
+                    <div className="flex items-center gap-2">
+                      <UserIcon className="h-4 w-4" />
+                      <span>My Documents</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="personal">
+                    <div className="flex items-center gap-2">
+                      <Folder className="h-4 w-4" />
+                      <span>Personal</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="shared">
+                    <div className="flex items-center gap-2">
+                      <Share className="h-4 w-4" />
+                      <span>Shared</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="organizational">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="h-4 w-4" />
+                      <span>Organizational</span>
+                    </div>
+                  </SelectItem>
+                  {organizations.length > 0 && (
+                    <>
+                      <SelectSeparator />
+                      {organizations.map((org) => (
+                        <SelectItem key={org.id} value={org.id}>
+                          <div className="flex items-center gap-2">
+                            <Building2 className="h-4 w-4" />
+                            <span>{org.name}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
                 </SelectContent>
               </Select>
 
@@ -594,45 +671,99 @@ export function DocumentDashboard({
           <div className="text-center py-16">
             <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {searchQuery ? "No documents found" : "No documents yet"}
+              {searchQuery || documentFilter !== 'all' ? "No documents found" : "No documents yet"}
             </h3>
             <p className="text-gray-600 mb-6">
-              {searchQuery
-                ? "Try adjusting your search terms or create a new document."
+              {searchQuery || documentFilter !== 'all'
+                ? "Try adjusting your search terms or filter selection."
                 : "Get started by creating your first collaborative document."
               }
             </p>
-            {!searchQuery && (
+            {!searchQuery && documentFilter === 'all' && (
               <Button onClick={() => setIsCreateDialogOpen(true)} className="gap-2">
                 <Plus className="h-4 w-4" />
                 Create Your First Document
               </Button>
             )}
+            {(searchQuery || documentFilter !== 'all') && (
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setSearchQuery('');
+                  setDocumentFilter('all');
+                }} 
+                className="gap-2"
+              >
+                Clear Filters
+              </Button>
+            )}
           </div>
         ) : (
-          <div className="space-y-2">
-            {console.log('Rendering documents:', filteredDocuments.length)}
+          <div className="space-y-6">
             {filteredDocuments.map((doc) => {
               const totalCollaborators = doc.collaborators.length;
               const totalSuggestions = doc.paragraphs.reduce((acc, p) => acc + p.proposals.length, 0);
+              const isOwner = doc.ownerId === currentUser.id;
+              const ownershipType = doc.ownershipType || 'personal';
+              const organization = organizations.find(org => org.id === doc.organizationId);
+
+              // Determine document type badge
+              const getDocumentTypeBadge = () => {
+                if (ownershipType === 'organizational' && organization) {
+                  return (
+                    <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 text-xs">
+                      <Building2 className="h-3 w-3 mr-1" />
+                      {organization.name}
+                    </Badge>
+                  );
+                }
+                if (ownershipType === 'shared') {
+                  return (
+                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs">
+                      <Share className="h-3 w-3 mr-1" />
+                      Shared
+                    </Badge>
+                  );
+                }
+                if (ownershipType === 'personal' && isOwner) {
+                  return (
+                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs">
+                      <Folder className="h-3 w-3 mr-1" />
+                      Personal
+                    </Badge>
+                  );
+                }
+                return null;
+              };
 
               return (
                 <div
                   key={doc.id}
-                  className="bg-white border border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 hover:shadow-sm transition-all cursor-pointer group relative"
+                  className={`bg-white border border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 hover:shadow-sm transition-all cursor-pointer group relative ${
+                    isOwner ? 'border-l-4 border-l-gray-400' : ''
+                  }`}
                   onClick={() => {
                     console.log('Button clicked for document:', doc.title);
                     onSelectDocument(doc);
                   }}
                 >
-                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-transparent group-hover:bg-gray-300 rounded-l-lg transition-colors"></div>
+                  <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-lg transition-colors ${
+                    isOwner ? 'bg-gray-400' : 'bg-transparent group-hover:bg-gray-300'
+                  }`}></div>
                   <div className="flex items-center justify-between px-4 py-2.5 gap-4">
                     {/* Left side - Title and metadata */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 mb-1">
+                      <div className="flex items-center gap-3 mb-1 flex-wrap">
                         <h3 className="text-base font-semibold text-gray-900 truncate group-hover:text-gray-950">
                           {doc.title}
                         </h3>
+                        {getDocumentTypeBadge()}
+                        {isOwner && (
+                          <Badge variant="outline" className="text-xs bg-gray-100 text-gray-600 border-gray-300">
+                            <UserIcon className="h-3 w-3 mr-1" />
+                            Owned
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex items-center gap-3 text-xs text-gray-500 flex-wrap leading-relaxed">
                         {/* Created By */}
@@ -647,6 +778,17 @@ export function DocumentDashboard({
 
                         {/* Separator */}
                         <span className="text-gray-300">•</span>
+
+                        {/* Organization name for organizational docs */}
+                        {ownershipType === 'organizational' && organization && (
+                          <>
+                            <div className="flex items-center gap-1.5">
+                              <Building2 className="h-3 w-3 text-gray-400" />
+                              <span>{organization.name}</span>
+                            </div>
+                            <span className="text-gray-300">•</span>
+                          </>
+                        )}
 
                         {/* Collaborators */}
                         {totalCollaborators > 0 && (

@@ -2,7 +2,8 @@ app = 'colabora-fresh-final'
 primary_region = 'fra'  # EU region (Frankfurt) - changed from 'iad' (US)
 
 [build]
-  dockerfile = 'Dockerfile'
+  builder = "dockerfile"
+  dockerfile = "Dockerfile"
 
 [env]
   ALLOWED_ORIGINS = 'https://colabora-fresh-final.fly.dev'

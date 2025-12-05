@@ -19,6 +19,12 @@ import { Slider } from '../ui/slider';
 import { Switch } from '../ui/switch';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 
+interface PositionContext {
+  positionType: 'root' | 'child' | 'above_sibling' | 'below_sibling';
+  referenceDocumentId?: string;
+  referenceDocumentTitle?: string;
+}
+
 interface DocumentCreationModalProps {
   organization: Organization;
   governanceRules: OrganizationGovernanceRules | null;
@@ -26,6 +32,7 @@ interface DocumentCreationModalProps {
   onClose: () => void;
   onSuccess: () => void;
   parentId?: string;
+  positionContext?: PositionContext | null;
 }
 
 export function DocumentCreationModal({
@@ -34,7 +41,8 @@ export function DocumentCreationModal({
   isOpen,
   onClose,
   onSuccess,
-  parentId
+  parentId,
+  positionContext
 }: DocumentCreationModalProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -74,18 +82,48 @@ export function DocumentCreationModal({
 
     setIsSubmitting(true);
     try {
+      // Build options with position context if provided
+      const options: {
+        acceptanceThreshold: number;
+        votingAnonymous: boolean;
+        votingAnonymityLocked: boolean;
+        voteChangeAllowed: boolean;
+        structureProposalsEnabled: boolean;
+        parentId?: string;
+        positionType?: 'root' | 'child' | 'above_sibling' | 'below_sibling';
+        referenceDocumentId?: string;
+      } = {
+        acceptanceThreshold,
+        votingAnonymous,
+        votingAnonymityLocked,
+        voteChangeAllowed,
+        structureProposalsEnabled,
+      };
+
+      // Use positionContext if provided, otherwise fall back to parentId
+      if (positionContext) {
+        options.positionType = positionContext.positionType;
+        if (positionContext.referenceDocumentId) {
+          options.referenceDocumentId = positionContext.referenceDocumentId;
+        }
+        // Set parentId based on position type
+        if (positionContext.positionType === 'child' && positionContext.referenceDocumentId) {
+          options.parentId = positionContext.referenceDocumentId;
+        } else if (positionContext.positionType === 'root') {
+          options.parentId = undefined;
+        } else if ((positionContext.positionType === 'above_sibling' || positionContext.positionType === 'below_sibling') && positionContext.referenceDocumentId) {
+          // For sibling positions, parentId will be determined by backend from reference document
+          // But we can still pass it if we have it
+        }
+      } else if (parentId) {
+        options.parentId = parentId;
+      }
+
       await documentsApi.createDocument(
         title.trim(),
         description.trim() || undefined,
         undefined, // contributors - org members are auto-included
-        {
-          acceptanceThreshold,
-          votingAnonymous,
-          votingAnonymityLocked,
-          voteChangeAllowed,
-          structureProposalsEnabled,
-          parentId: parentId
-        },
+        options,
         'organizational',
         organization.id
       );
@@ -269,6 +307,32 @@ export function DocumentCreationModal({
               </CardContent>
             </Card>
 
+            {/* Position Context Indicator */}
+            {positionContext && (
+              <Card className="border-green-200 bg-green-50">
+                <CardContent className="p-4">
+                  <h4 className="font-medium text-green-900 mb-2 flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Document Position
+                  </h4>
+                  <p className="text-sm text-green-700">
+                    {positionContext.positionType === 'root' && (
+                      <>Creating document at the root level</>
+                    )}
+                    {positionContext.positionType === 'child' && (
+                      <>Creating document as a child of <strong>"{positionContext.referenceDocumentTitle}"</strong></>
+                    )}
+                    {positionContext.positionType === 'above_sibling' && (
+                      <>Creating document above <strong>"{positionContext.referenceDocumentTitle}"</strong></>
+                    )}
+                    {positionContext.positionType === 'below_sibling' && (
+                      <>Creating document below <strong>"{positionContext.referenceDocumentTitle}"</strong></>
+                    )}
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Organization Info */}
             <Card className="border-blue-200 bg-blue-50">
               <CardContent className="p-4">
@@ -282,7 +346,7 @@ export function DocumentCreationModal({
                 <div className="text-xs text-blue-600 space-y-1">
                   <p>• All active organization members will be included as collaborators</p>
                   <p>• Document will be created in proposal status and require member voting for approval</p>
-                  {parentId && <p>• Document will be created as a child of the selected parent document</p>}
+                  {(parentId || positionContext?.positionType === 'child') && <p>• Document will be created as a child of the selected parent document</p>}
                   <p>• Settings are determined by organization governance rules and cannot be customized</p>
                 </div>
               </CardContent>

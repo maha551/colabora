@@ -175,14 +175,16 @@ export function AgreedDocument({ document, totalUsers }: AgreedDocumentProps) {
                 const validLevel = (level >= 1 && level <= 6) ? level : 1; // Default to h1 if invalid
                 
                 return (
-                  <div key={paragraph.id}>
-                    {React.createElement(
-                      `h${validLevel}`,
-                      { className: "text-2xl font-bold text-gray-900 dark:text-gray-100 leading-tight whitespace-pre-wrap mb-4" },
-                      displayText.trim()
-                    )}
-                    {/* Optional metadata for transparency */}
-                    <div className="text-xs text-gray-500 mb-4 flex items-center gap-2">
+                  <div key={paragraph.id} className="group flex items-start gap-4 mb-4">
+                    <div className="flex-1">
+                      {React.createElement(
+                        `h${validLevel}`,
+                        { className: "text-2xl font-bold text-gray-900 dark:text-gray-100 leading-tight whitespace-pre-wrap" },
+                        displayText.trim()
+                      )}
+                    </div>
+                    {/* Optional metadata for transparency - shown on hover (desktop only) */}
+                    <div className="hidden md:flex items-center gap-2 text-xs text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 pt-1">
                       <CheckCircle2 className="h-3 w-3 text-green-600" />
                       <span>Approved with {approvalPct.toFixed(0)}% consensus</span>
                     </div>
@@ -192,12 +194,12 @@ export function AgreedDocument({ document, totalUsers }: AgreedDocumentProps) {
 
               // Regular paragraph from winning proposal
               return (
-                <div key={paragraph.id} className="relative">
-                  <p className="leading-relaxed text-gray-800 dark:text-gray-200 text-justify indent-8 first-line:font-medium whitespace-pre-wrap mb-4">
+                <div key={paragraph.id} className="group flex items-start gap-4 mb-6">
+                  <p className="flex-1 leading-relaxed text-gray-800 dark:text-gray-200 text-justify indent-8 first-line:font-medium whitespace-pre-wrap">
                     {displayText.trim()}
                   </p>
-                  {/* Optional metadata for transparency */}
-                  <div className="text-xs text-gray-500 mb-6 flex items-center gap-2">
+                  {/* Optional metadata for transparency - shown on hover (desktop only) */}
+                  <div className="hidden md:flex items-center gap-2 text-xs text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 pt-1">
                     <CheckCircle2 className="h-3 w-3 text-green-600" />
                     <span>Approved with {approvalPct.toFixed(0)}% consensus</span>
                   </div>

@@ -1,10 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
-import { Button } from '../ui/button';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Avatar, AvatarFallback } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import {
   Activity,
@@ -13,13 +11,8 @@ import {
   FileText,
   Settings,
   Clock,
-  CheckCircle2,
-  AlertTriangle,
   Eye,
-  TrendingUp,
   BarChart3,
-  UserPlus,
-  UserMinus,
   Crown
 } from 'lucide-react';
 import { Organization, User } from '../../types';
@@ -55,7 +48,16 @@ export function PublicGovernanceDashboard({ organization, currentUser }: PublicG
       const response = await governanceApi.auditLogsApi.getPublicAuditLogs(organization.id, {
         limit: 50
       });
-      setAuditLogs(response.auditLogs || []);
+      // API returns logs array, normalize to our interface format
+      const normalizedLogs = (response.logs || []).map((log: any) => ({
+        id: log.id,
+        action_type: log.actionType || log.action_type || '',
+        created_at: log.createdAt || log.created_at || new Date().toISOString(),
+        performed_by_name: log.performedByName || log.performed_by_name || '',
+        affected_user_name: log.affectedUserName || log.affected_user_name,
+        details: log.details
+      }));
+      setAuditLogs(normalizedLogs);
     } catch (error) {
       console.error('Failed to load audit logs:', error);
       toast.error('Failed to load governance history');
@@ -145,7 +147,7 @@ export function PublicGovernanceDashboard({ organization, currentUser }: PublicG
     const groups: { [key: string]: AuditLogEntry[] } = {};
 
     logs.forEach(log => {
-      const date = new Date(log.createdAt || log.created_at).toLocaleDateString();
+      const date = new Date(log.created_at).toLocaleDateString();
       if (!groups[date]) {
         groups[date] = [];
       }
@@ -159,7 +161,7 @@ export function PublicGovernanceDashboard({ organization, currentUser }: PublicG
     const now = new Date();
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    return auditLogs.filter(log => new Date(log.createdAt || log.created_at) >= sevenDaysAgo);
+    return auditLogs.filter(log => new Date(log.created_at) >= sevenDaysAgo);
   };
 
   const getGovernanceStats = () => {
@@ -167,8 +169,8 @@ export function PublicGovernanceDashboard({ organization, currentUser }: PublicG
       totalActions: auditLogs.length,
       recentActivity: getRecentActivity().length,
       electionsHeld: auditLogs.filter(log => log.action_type === 'election_completed').length,
-      membersAdded: auditLogs.filter(log => ['member_invited', 'member_joined', 'member_bulk_added'].includes(log.action_type)).length,
-      ruleChanges: auditLogs.filter(log => log.action_type.includes('rule_proposal')).length
+      membersAdded: auditLogs.filter(log => log.action_type && ['member_invited', 'member_joined', 'member_bulk_added'].includes(log.action_type)).length,
+      ruleChanges: auditLogs.filter(log => log.action_type && log.action_type.includes('rule_proposal')).length
     };
 
     return stats;
@@ -245,7 +247,7 @@ export function PublicGovernanceDashboard({ organization, currentUser }: PublicG
           <TabsTrigger value="all">All History</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="recent" className="space-y-4">
+        <TabsContent value="recent" className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -258,7 +260,7 @@ export function PublicGovernanceDashboard({ organization, currentUser }: PublicG
             </CardHeader>
             <CardContent>
               {recentLogs.length > 0 ? (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   {recentLogs.map((log) => (
                     <div key={log.id} className="flex items-start gap-3 p-3 border rounded-lg">
                       <div className="mt-1">
@@ -269,7 +271,7 @@ export function PublicGovernanceDashboard({ organization, currentUser }: PublicG
                           {getActionDescription(log.action_type, log.performed_by_name, log.affected_user_name)}
                         </div>
                         <div className="text-xs text-gray-500 mt-1">
-                          {new Date(log.createdAt || log.created_at).toLocaleString()}
+                          {new Date(log.created_at).toLocaleString()}
                         </div>
                       </div>
                     </div>
@@ -286,7 +288,7 @@ export function PublicGovernanceDashboard({ organization, currentUser }: PublicG
           </Card>
         </TabsContent>
 
-        <TabsContent value="all" className="space-y-4">
+        <TabsContent value="all" className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -299,7 +301,7 @@ export function PublicGovernanceDashboard({ organization, currentUser }: PublicG
             </CardHeader>
             <CardContent>
               {Object.keys(groupedLogs).length > 0 ? (
-                <div className="space-y-6">
+                <div className="space-y-8">
                   {Object.entries(groupedLogs)
                     .sort(([a], [b]) => new Date(b).getTime() - new Date(a).getTime())
                     .map(([date, logs]) => (
@@ -321,7 +323,7 @@ export function PublicGovernanceDashboard({ organization, currentUser }: PublicG
                                 {getActionDescription(log.action_type, log.performed_by_name, log.affected_user_name)}
                               </div>
                               <div className="text-xs text-gray-500 mt-1">
-                                {new Date(log.createdAt || log.created_at).toLocaleTimeString()}
+                                {new Date(log.created_at).toLocaleTimeString()}
                               </div>
                             </div>
                           </div>

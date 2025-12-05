@@ -6,6 +6,15 @@ const { securityLogger, logger } = require('../middleware/logger');
 
 const router = express.Router();
 
+// Helper function to generate random professional color
+function generateDefaultBrandingColor() {
+  const colors = [
+    '#3B82F6', '#10B981', '#8B5CF6', '#06B6D4',
+    '#F59E0B', '#EF4444', '#6366F1', '#14B8A6'
+  ];
+  return colors[Math.floor(Math.random() * colors.length)];
+}
+
 // Get admin dashboard stats
 router.get('/dashboard', requireAdmin, (req, res) => {
   const db = req.app.locals.db;
@@ -97,11 +106,14 @@ router.post('/organizations', requireAdmin, [
       return res.status(400).json({ error: 'One or more representative users not found' });
     }
 
+    // Generate default branding color
+    const defaultBrandingColor = generateDefaultBrandingColor();
+
     // Create organization
     db.run(`
-      INSERT INTO organizations (id, name, description, representatives, membership_policy, voting_threshold, is_active, created_by_admin_id)
-      VALUES (?, ?, ?, ?, ?, ?, 1, ?)
-    `, [organizationId, name, description, JSON.stringify(representatives), membershipPolicy, votingThreshold, req.user.id], function(err) {
+      INSERT INTO organizations (id, name, description, representatives, membership_policy, voting_threshold, is_active, created_by_admin_id, branding_color)
+      VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+    `, [organizationId, name, description, JSON.stringify(representatives), membershipPolicy, votingThreshold, req.user.id, defaultBrandingColor], function(err) {
       if (err) {
         logger.error('Error creating organization', { error: err.message, code: err.code, organizationId, name, description, representatives, membershipPolicy, votingThreshold, createdBy: req.user.id });
         return res.status(500).json({ 

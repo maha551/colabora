@@ -29,7 +29,7 @@ function OrganizationalDocumentVoting({ document, user: _user, onVoteCast }: Org
     if (document?.id) {
       loadVotingData();
     }
-  }, [document.id, document?.status]); // Reload when document status changes
+  }, [document.id, document?.status, document?.updatedAt]); // Also reload when document is updated
 
   const loadVotingData = async () => {
     try {
@@ -75,17 +75,12 @@ function OrganizationalDocumentVoting({ document, user: _user, onVoteCast }: Org
 
     const { document: doc } = votingData;
 
+    // Don't show voting component for proposal status - that's handled by OrganizationalDocumentStatus
+    if (doc.status === 'proposal') {
+      return null;
+    }
+
     switch (doc.status) {
-      case 'proposal':
-        return {
-          icon: '⏳',
-          title: 'Proposal Period',
-          description: doc.proposalDeadline
-            ? `Voting starts ${formatDistanceToNow(new Date(doc.proposalDeadline), { addSuffix: true })}`
-            : 'Awaiting voting period',
-          color: 'text-blue-600',
-          bgColor: 'bg-blue-50'
-        };
       case 'voting':
         return {
           icon: '🗳️',
@@ -171,7 +166,8 @@ function OrganizationalDocumentVoting({ document, user: _user, onVoteCast }: Org
   const statusInfo = getStatusInfo();
   const progressPercentage = getProgressPercentage();
 
-  if (!statusInfo) return null;
+  // Don't render if status is proposal (handled by OrganizationalDocumentStatus)
+  if (!statusInfo || doc.status === 'proposal') return null;
 
   return (
     <div className="bg-white rounded-lg border shadow-sm">
@@ -189,14 +185,6 @@ function OrganizationalDocumentVoting({ document, user: _user, onVoteCast }: Org
       </div>
 
       <div className="p-6">
-        {/* Organization Info */}
-        {doc.organizationName && (
-          <div className="mb-4">
-            <span className="text-sm text-gray-500">Organization:</span>
-            <span className="ml-2 font-medium">{doc.organizationName}</span>
-          </div>
-        )}
-
         {/* Voting Statistics */}
         {doc.status === 'voting' && (
           <div className="mb-6">

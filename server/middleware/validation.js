@@ -305,6 +305,40 @@ const organizationValidation = {
       .isFloat({ min: 0.1, max: 1.0 })
       .withMessage('Voting threshold must be between 0.1 and 1.0'),
 
+    body('brandingColor')
+      .optional()
+      .matches(/^#[0-9A-Fa-f]{6}$/)
+      .withMessage('Branding color must be a valid hex color code (e.g., #3B82F6)'),
+
+    body('brandingLogoUrl')
+      .optional({ nullable: true, checkFalsy: true })
+      .custom((value) => {
+        // Allow null, undefined, or empty string
+        if (!value || value === '' || value === null) return true;
+        // If value exists, must be a string
+        if (typeof value !== 'string') return false;
+        // Check length - allow up to 5MB images (base64 adds ~33% overhead, so ~6.67MB = ~6,670,000 chars)
+        // For regular URLs, limit to 2000 characters
+        if (value.startsWith('data:image/')) {
+          if (value.length > 7000000) return false; // ~5MB image when base64-encoded
+        } else if (value.startsWith('http://') || value.startsWith('https://')) {
+          if (value.length > 2000) return false;
+        } else {
+          return false;
+        }
+        return true;
+      })
+      .withMessage('Logo URL must be a valid data URL (max 5MB image) or HTTP/HTTPS URL (max 2000 characters)'),
+
+    body('brandingTitle')
+      .optional({ nullable: true, checkFalsy: true })
+      .isLength({ max: 100 })
+      .withMessage('Branding title must be less than 100 characters')
+      .customSanitizer((value) => {
+        if (!value || value === null || value === '') return null;
+        return sanitizeString(value);
+      }),
+
     handleValidationErrors
   ],
 

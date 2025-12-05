@@ -108,28 +108,44 @@ export function DocumentViewPage({
   }, 0) || 0;
 
   return (
-    <>
+    <div className="min-h-screen bg-gray-50">
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Centered workspace description */}
-        {document?.description && (
-          <div className="text-center mb-6">
-            <p className="text-sm text-gray-600">{document.description}</p>
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        {/* Document Header Section */}
+        <div className="mb-6 space-y-3">
+          {/* Document Title/Description */}
+          <div className="text-center">
+            <h1 className="text-lg font-semibold text-gray-900 mb-1">{document.title}</h1>
+            {document?.description && (
+              <p className="text-sm text-gray-600">{document.description}</p>
+            )}
           </div>
-        )}
 
-        {/* Organizational Document Components */}
+          {/* Organization Info - Integrated into header */}
+          {document?.ownershipType === 'organizational' && organization && (
+            <div className="text-center">
+              <p className="text-sm text-gray-500">
+                <span className="font-medium">Organization:</span> {organization.name}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Organizational Document Components - Consolidated */}
         {document?.ownershipType === 'organizational' && (
           <div className="mb-6 space-y-4">
             <OrganizationalDocumentStatus document={document} />
-            <OrganizationalDocumentVoting 
-              document={document} 
-              user={currentUser}
-              onVoteCast={() => {
-                // Reload document to get updated voting data
-                // This will be handled by parent component
-              }}
-            />
+            {/* Only show voting component when document is in voting status (not proposal) */}
+            {document?.status === 'voting' && (
+              <OrganizationalDocumentVoting 
+                document={document} 
+                user={currentUser}
+                onVoteCast={() => {
+                  // Reload document to get updated voting data
+                  // This will be handled by parent component
+                }}
+              />
+            )}
             <DocumentDeletionProposal
               document={document}
               currentUser={currentUser}
@@ -144,36 +160,38 @@ export function DocumentViewPage({
           </div>
         )}
 
-        {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "discussion" | "agreed" | "history")}>
-          <div className="flex justify-center mb-6 px-4">
-            <TabsList className="w-full sm:w-auto">
-              <TabsTrigger value="discussion" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm" aria-label={`Discussion tab with ${totalSuggestions} proposals`}>
-                <Edit3 className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
-                <span aria-hidden="true">Discussion</span>
-                {totalSuggestions > 0 && (
-                  <Badge variant="secondary" className="ml-1 text-xs" aria-label={`${totalSuggestions} proposals`}>
-                    {totalSuggestions}
-                  </Badge>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="agreed" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm" aria-label={`Agreed tab with ${acceptedSuggestions} approved paragraphs`}>
-                <FileText className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
-                <span aria-hidden="true">Agreed</span>
-                {acceptedSuggestions > 0 && (
-                  <Badge variant="default" className="ml-1 bg-green-600 text-xs" aria-label={`${acceptedSuggestions} approved paragraphs`}>
-                    {acceptedSuggestions}
-                  </Badge>
-                )}
-              </TabsTrigger>
-              {document?.structureProposalsEnabled && (
-                <TabsTrigger value="history" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm" aria-label="Document structure history">
-                  <Clock className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
-                  <span aria-hidden="true">History</span>
+        {/* Document Actions Section - Tabs and Collaborators */}
+        <div className="mb-6 space-y-4">
+          {/* Tabs */}
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "discussion" | "agreed" | "history")}>
+            <div className="flex justify-center px-4">
+              <TabsList className="w-full sm:w-auto">
+                <TabsTrigger value="discussion" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm" aria-label={`Discussion tab with ${totalSuggestions} proposals`}>
+                  <Edit3 className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
+                  <span aria-hidden="true">Discussion</span>
+                  {totalSuggestions > 0 && (
+                    <Badge variant="secondary" className="ml-1 text-xs" aria-label={`${totalSuggestions} proposals`}>
+                      {totalSuggestions}
+                    </Badge>
+                  )}
                 </TabsTrigger>
-              )}
-            </TabsList>
-          </div>
+                <TabsTrigger value="agreed" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm" aria-label={`Agreed tab with ${acceptedSuggestions} approved paragraphs`}>
+                  <FileText className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
+                  <span aria-hidden="true">Agreed</span>
+                  {acceptedSuggestions > 0 && (
+                    <Badge variant="default" className="ml-1 bg-green-600 text-xs" aria-label={`${acceptedSuggestions} approved paragraphs`}>
+                      {acceptedSuggestions}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                {document?.structureProposalsEnabled && (
+                  <TabsTrigger value="history" className="gap-1 sm:gap-2 flex-1 sm:flex-none text-xs sm:text-sm" aria-label="Document structure history">
+                    <Clock className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
+                    <span aria-hidden="true">History</span>
+                  </TabsTrigger>
+                )}
+              </TabsList>
+            </div>
 
           {/* Document Status - Only show in agreed view */}
           {activeTab === 'agreed' && (
@@ -191,75 +209,76 @@ export function DocumentViewPage({
             </div>
           )}
 
-          {/* Collaborators Display */}
-          <div className="flex justify-center mb-8">
-            <CollaboratorManagement
-              document={document}
-              currentUser={currentUser}
-              onCollaboratorAdded={onCollaboratorAdded}
-              onCollaboratorRemoved={onCollaboratorRemoved}
-            >
-              <div className="flex items-center gap-2 sm:gap-3 text-sm text-gray-600 cursor-pointer hover:text-gray-900 transition-colors">
-                <Users className="h-4 w-4" />
-                <div className="flex items-center -space-x-1 sm:-space-x-2">
-                  {/* Owner */}
-                  <Avatar className="h-6 w-6 sm:h-8 sm:w-8 border-2 border-white">
-                    <AvatarFallback className="text-xs bg-blue-100 text-blue-700">
-                      {document.owner.name.split(' ').map(n => n[0]).join('')}
-                    </AvatarFallback>
-                  </Avatar>
-                  {/* Collaborators */}
-                  {document.collaborators.slice(0, 3).map((collaborator) => (
-                    <Avatar key={collaborator.id} className="h-6 w-6 sm:h-8 sm:w-8 border-2 border-white">
-                      <AvatarFallback className="text-xs bg-gray-200 text-gray-700">
-                        {collaborator.user.name.split(' ').map(n => n[0]).join('')}
-                      </AvatarFallback>
-                    </Avatar>
-                  ))}
-                  {document.collaborators.length > 3 && (
+            {/* Collaborators Display - Integrated with tabs */}
+            <div className="flex justify-center items-center gap-4 px-4">
+              <CollaboratorManagement
+                document={document}
+                currentUser={currentUser}
+                onCollaboratorAdded={onCollaboratorAdded}
+                onCollaboratorRemoved={onCollaboratorRemoved}
+              >
+                <div className="flex items-center gap-2 sm:gap-3 text-sm text-gray-600 cursor-pointer hover:text-gray-900 transition-colors">
+                  <Users className="h-4 w-4" />
+                  <div className="flex items-center -space-x-1 sm:-space-x-2">
+                    {/* Owner */}
                     <Avatar className="h-6 w-6 sm:h-8 sm:w-8 border-2 border-white">
-                      <AvatarFallback className="text-xs bg-gray-200 text-gray-700">
-                        +{document.collaborators.length - 3}
+                      <AvatarFallback className="text-xs bg-blue-100 text-blue-700">
+                        {document.owner.name.split(' ').map(n => n[0]).join('')}
                       </AvatarFallback>
                     </Avatar>
-                  )}
+                    {/* Collaborators */}
+                    {document.collaborators.slice(0, 3).map((collaborator) => (
+                      <Avatar key={collaborator.id} className="h-6 w-6 sm:h-8 sm:w-8 border-2 border-white">
+                        <AvatarFallback className="text-xs bg-gray-200 text-gray-700">
+                          {collaborator.user.name.split(' ').map(n => n[0]).join('')}
+                        </AvatarFallback>
+                      </Avatar>
+                    ))}
+                    {document.collaborators.length > 3 && (
+                      <Avatar className="h-6 w-6 sm:h-8 sm:w-8 border-2 border-white">
+                        <AvatarFallback className="text-xs bg-gray-200 text-gray-700">
+                          +{document.collaborators.length - 3}
+                        </AvatarFallback>
+                      </Avatar>
+                    )}
+                  </div>
+                  <span className="font-medium text-xs sm:text-sm">
+                    {(document.collaborators.length || 0) + 1} collab{(document.collaborators.length || 0) + 1 !== 1 ? 's' : ''}
+                  </span>
                 </div>
-                <span className="font-medium text-xs sm:text-sm">
-                  {(document.collaborators.length || 0) + 1} collab{(document.collaborators.length || 0) + 1 !== 1 ? 's' : ''}
-                </span>
-              </div>
-            </CollaboratorManagement>
-          </div>
+              </CollaboratorManagement>
+            </div>
 
-          <TabsContent value="discussion" className="mt-0">
-            <DocumentEditor
-              key={documentLoadKey}
-              document={document}
-              totalUsers={totalUsers}
-              currentUser={currentUser}
-              onAddSuggestion={onAddSuggestion}
-              onVote={onVote}
-              onComment={onComment}
-              onAddElement={onAddElement}
-            />
-          </TabsContent>
-
-          <TabsContent value="agreed" className="mt-0">
-            <AgreedDocument
-              document={document}
-              totalUsers={totalUsers}
-            />
-          </TabsContent>
-
-          {document?.structureProposalsEnabled && (
-            <TabsContent value="history" className="mt-0">
-              <StructureHistory
-                documentId={document.id}
-                currentUserId={currentUser.id}
+            <TabsContent value="discussion" className="mt-0">
+              <DocumentEditor
+                key={documentLoadKey}
+                document={document}
+                totalUsers={totalUsers}
+                currentUser={currentUser}
+                onAddSuggestion={onAddSuggestion}
+                onVote={onVote}
+                onComment={onComment}
+                onAddElement={onAddElement}
               />
             </TabsContent>
-          )}
-        </Tabs>
+
+            <TabsContent value="agreed" className="mt-0">
+              <AgreedDocument
+                document={document}
+                totalUsers={totalUsers}
+              />
+            </TabsContent>
+
+            {document?.structureProposalsEnabled && (
+              <TabsContent value="history" className="mt-0">
+                <StructureHistory
+                  documentId={document.id}
+                  currentUserId={currentUser.id}
+                />
+              </TabsContent>
+            )}
+          </Tabs>
+        </div>
 
         {/* Structure Proposals Section - Moved to end of document */}
         {document?.structureProposalsEnabled && (
@@ -284,7 +303,7 @@ export function DocumentViewPage({
             </div>
 
             {structureProposals.length > 0 ? (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 {structureProposals.map((proposal) => (
                   <StructureProposalCard
                     key={proposal.id}
@@ -320,6 +339,6 @@ export function DocumentViewPage({
           }}
         />
       )}
-    </>
+    </div>
   );
 }

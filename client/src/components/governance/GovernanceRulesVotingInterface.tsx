@@ -5,16 +5,20 @@ import { Badge } from '../ui/badge';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Separator } from '../ui/separator';
 import { Vote, Settings, Clock, Users, Shield, FileText, Eye, EyeOff, Lock, AlertTriangle, Plus, CheckCircle } from 'lucide-react';
-import { Organization, OrganizationGovernanceRules, User } from '../../types';
+import { Organization, OrganizationGovernanceRules, User, BootstrapStatus, RecoveryStatus } from '../../types';
 import { governanceApi } from '../../lib/api';
 import { RuleProposalDialog } from './RuleProposalDialog';
 import { RuleProposalVotingInterface } from './RuleProposalVotingInterface';
+import { BootstrapModeBanner } from './BootstrapModeBanner';
+import { RecoveryModeBanner } from './RecoveryModeBanner';
+import { useOrganizationPermissions } from '../../hooks/useOrganizationPermissions';
 import { toast } from 'sonner';
 
 interface GovernanceRulesVotingInterfaceProps {
   organization: Organization;
   currentUser: User | null;
   onClose?: () => void;
+  refreshTrigger?: number; // When this changes, refresh data
 }
 
 interface RuleProposal {
@@ -29,7 +33,7 @@ interface RuleProposal {
     optionDescription?: string;
     proposedValue: any;
   }>;
-  status: 'draft' | 'active' | 'approved' | 'rejected' | 'cancelled';
+  status: 'draft' | 'active' | 'approved' | 'rejected' | 'cancelled' | 'expired';
   createdBy: {
     id: string;
     name: string;
@@ -45,7 +49,8 @@ interface RuleProposal {
 export function GovernanceRulesVotingInterface({
   organization,
   currentUser,
-  onClose
+  onClose,
+  refreshTrigger
 }: GovernanceRulesVotingInterfaceProps) {
   const [governanceRules, setGovernanceRules] = useState<OrganizationGovernanceRules | null>(null);
   const [ruleProposals, setRuleProposals] = useState<RuleProposal[]>([]);
@@ -54,21 +59,41 @@ export function GovernanceRulesVotingInterface({
   const [showRuleVotingInterface, setShowRuleVotingInterface] = useState(false);
   const [selectedRuleField, setSelectedRuleField] = useState<string>('');
   const [selectedProposalId, setSelectedProposalId] = useState<string>('');
+  const [bootstrapStatus, setBootstrapStatus] = useState<BootstrapStatus | null>(null);
+  const [recoveryStatus, setRecoveryStatus] = useState<RecoveryStatus | null>(null);
+
+  // Use dynamic permissions
+  const permissions = currentUser ? useOrganizationPermissions(currentUser, organization, governanceRules) : null;
 
   useEffect(() => {
     loadData();
-  }, [organization.id]);
+  }, [organization.id, refreshTrigger]);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [rulesResponse, proposalsResponse] = await Promise.all([
+      const [rulesResponse, proposalsResponse, bootstrapResponse] = await Promise.all([
         governanceApi.getGovernanceRules(organization.id),
-        governanceApi.ruleProposalsApi.getRuleProposals(organization.id)
+        governanceApi.ruleProposalsApi.getRuleProposals(organization.id),
+        governanceApi.getBootstrapStatus(organization.id).catch(() => null)
       ]);
 
       setGovernanceRules(rulesResponse.governanceRules);
-      setRuleProposals(proposalsResponse.ruleProposals || []);
+      // Type assertion needed as API response may have slightly different structure
+      setRuleProposals((proposalsResponse.ruleProposals || []) as unknown as RuleProposal[]);
+      
+      if (bootstrapResponse) {
+        setBootstrapStatus(bootstrapResponse.bootstrap);
+        // Set recovery status from governance rules
+        if (rulesResponse.governanceRules) {
+          setRecoveryStatus({
+            mode: rulesResponse.governanceRules.recoveryMode,
+            enteredAt: rulesResponse.governanceRules.recoveryModeEnteredAt,
+            reason: rulesResponse.governanceRules.recoveryModeReason,
+            canExit: false // Will be calculated by backend
+          });
+        }
+      }
     } catch (error) {
       console.error('Failed to load governance data:', error);
       toast.error('Failed to load governance rules');
@@ -142,7 +167,7 @@ export function GovernanceRulesVotingInterface({
         label: 'Representatives Can Create Votes',
         icon: Vote,
         category: 'Permissions',
-        description: 'Representatives can create policy implementation votes'
+        description: 'Representatives can create votes for organizational decisions'
       },
       representativeCanInviteMembers: {
         label: 'Representatives Can Invite Members',
@@ -197,7 +222,8 @@ export function GovernanceRulesVotingInterface({
     }
     if (booleanFields.includes(field)) return value ? 'Enabled' : 'Disabled';
     if (field === 'electionVotingMethod') {
-      return value.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+      const strValue = String(value);
+      return strValue.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
     }
 
     return String(value);
@@ -220,8 +246,8 @@ export function GovernanceRulesVotingInterface({
       // Show voting interface for this proposal
       setSelectedProposalId(activeProposal.id);
       setShowRuleVotingInterface(true);
-    } else if (draftProposal && isRepresentative) {
-      // Show start voting option for draft proposals (representatives only)
+    } else if (draftProposal && canManageRuleProposals) {
+      // Show start voting option for draft proposals (if user can manage)
       handleStartVoting(draftProposal.id);
     } else {
       // Show proposal dialog
@@ -252,6 +278,9 @@ export function GovernanceRulesVotingInterface({
     const draftProposal = ruleProposals.find(proposal =>
       proposal.ruleField === ruleField && proposal.status === 'draft'
     );
+    const expiredProposal = ruleProposals.find(proposal =>
+      proposal.ruleField === ruleField && proposal.status === 'expired'
+    );
 
     if (activeProposal) {
       return (
@@ -266,6 +295,14 @@ export function GovernanceRulesVotingInterface({
         <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
           <Settings className="h-3 w-3 mr-1" />
           Awaiting Approval
+        </Badge>
+      );
+    }
+    if (expiredProposal) {
+      return (
+        <Badge variant="secondary" className="bg-gray-100 text-gray-800">
+          <Clock className="h-3 w-3 mr-1" />
+          Expired
         </Badge>
       );
     }
@@ -292,8 +329,10 @@ export function GovernanceRulesVotingInterface({
   };
 
   const ruleCategories = groupRulesByCategory();
-  const isRepresentative = organization.representatives?.includes(currentUser.id);
-  const isActiveMember = organization.members?.some(m => m.userId === currentUser.id && m.status === 'active') || false;
+  
+  // Use dynamic permissions
+  const canProposeRules = permissions?.canProposeRules ?? false;
+  const canManageRuleProposals = permissions?.canManageRuleProposals ?? false;
 
   if (loading) {
     return (
@@ -309,6 +348,7 @@ export function GovernanceRulesVotingInterface({
         organization={organization}
         currentUser={currentUser}
         proposalId={selectedProposalId}
+        refreshTrigger={refreshTrigger}
         onBack={() => {
           setShowRuleVotingInterface(false);
           setSelectedProposalId('');
@@ -357,7 +397,7 @@ export function GovernanceRulesVotingInterface({
         <Card key={category}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              {React.createElement(getRuleDisplayInfo(rules[0].field).icon, { className: "h-5 w-5" })}
+              {React.createElement(getRuleDisplayInfo(rules[0]?.field || '').icon || Settings, { className: "h-5 w-5" })}
               {category}
             </CardTitle>
             <CardDescription>
@@ -367,7 +407,7 @@ export function GovernanceRulesVotingInterface({
               {category === 'Security' && 'Security and compliance settings'}
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
             {rules.map(({ field, value, info }) => {
               const activeProposal = getActiveProposalForRule(field);
               const statusBadge = getRuleStatusBadge(field);
@@ -415,8 +455,8 @@ export function GovernanceRulesVotingInterface({
         </Card>
       ))}
 
-      {/* Draft Proposals (Representatives Only) */}
-      {isRepresentative && ruleProposals.filter(p => p.status === 'draft').length > 0 && (
+      {/* Draft Proposals */}
+      {canManageRuleProposals && ruleProposals.filter(p => p.status === 'draft').length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -428,7 +468,7 @@ export function GovernanceRulesVotingInterface({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
+            <div className="space-y-6">
               {ruleProposals.filter(p => p.status === 'draft').map(proposal => (
                 <div key={proposal.id} className="flex items-center justify-between p-3 border rounded">
                   <div className="flex-1">
@@ -468,7 +508,7 @@ export function GovernanceRulesVotingInterface({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
+            <div className="space-y-6">
               {ruleProposals.filter(p => p.status === 'active').map(proposal => (
                 <div key={proposal.id} className="flex items-center justify-between p-3 border rounded">
                   <div>
@@ -498,7 +538,6 @@ export function GovernanceRulesVotingInterface({
           currentUser={currentUser}
           open={showRuleProposalDialog}
           onOpenChange={setShowRuleProposalDialog}
-          initialRuleField={selectedRuleField}
           onSuccess={handleProposalSuccess}
         />
       )}

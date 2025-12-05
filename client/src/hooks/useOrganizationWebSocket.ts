@@ -11,7 +11,12 @@ export type OrganizationUpdateEventType =
   | 'member-removed' 
   | 'member-invited' 
   | 'rule-proposal-created' 
-  | 'rule-proposal-approved';
+  | 'rule-proposal-approved'
+  | 'rule-proposal-rejected'
+  | 'rule-proposal-expired'
+  | 'rule-proposal-vote-cast'
+  | 'branding-updated'
+  | 'document-created';
 
 export interface OrganizationUpdate {
   organizationId: string;
@@ -159,6 +164,16 @@ export function useOrganizationWebSocket({
     }
 
     if (socketRef.current) {
+      // Remove all event listeners before disconnecting
+      socketRef.current.off('connect');
+      socketRef.current.off('disconnect');
+      socketRef.current.off('reconnect');
+      socketRef.current.off('reconnect_attempt');
+      socketRef.current.off('reconnect_error');
+      socketRef.current.off('reconnect_failed');
+      socketRef.current.off('connect_error');
+      socketRef.current.off('organization-update');
+
       if (currentOrganizationIdRef.current) {
         socketRef.current.emit('unsubscribe-organization', currentOrganizationIdRef.current);
       }
@@ -198,7 +213,11 @@ export function useOrganizationWebSocket({
         disconnect();
       }
     };
-  }, [organizationId, userId, authToken]);
+    // Note: connect and disconnect are useCallback hooks that depend on the same values
+    // (organizationId, userId, authToken) or are stable (disconnect has empty deps).
+    // Including them here ensures the effect re-runs when they change, which is safe
+    // since they're already memoized and will only change when their deps change.
+  }, [organizationId, userId, authToken, connect, disconnect]);
 
   return {
     isConnected: isConnectedRef.current,

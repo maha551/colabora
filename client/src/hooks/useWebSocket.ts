@@ -60,8 +60,8 @@ export function useWebSocket({
     }
 
     // If already connected and subscribing to the same documents, don't reconnect
-    const targetDocId = documentId || (documentIds && documentIds.length === 1 ? documentIds[0] : null);
-    if (isConnectedRef.current && socketRef.current && currentDocumentIdRef.current === targetDocId) {
+    const currentTargetDocId = documentId || (documentIds && documentIds.length === 1 ? documentIds[0] : null);
+    if (isConnectedRef.current && socketRef.current && currentDocumentIdRef.current === currentTargetDocId) {
       // Check if we need to update subscriptions for multiple documents
       if (documentIds && documentIds.length > 0) {
         const currentSubs = Array.from(subscribedDocumentIdsRef.current);
@@ -208,6 +208,16 @@ export function useWebSocket({
     }
 
     if (socketRef.current) {
+      // Remove all event listeners before disconnecting
+      socketRef.current.off('connect');
+      socketRef.current.off('disconnect');
+      socketRef.current.off('reconnect');
+      socketRef.current.off('reconnect_attempt');
+      socketRef.current.off('reconnect_error');
+      socketRef.current.off('reconnect_failed');
+      socketRef.current.off('connect_error');
+      socketRef.current.off('document-update');
+
       // Unsubscribe from all documents
       subscribedDocumentIdsRef.current.forEach(docId => {
         socketRef.current?.emit('unsubscribe-document', docId);

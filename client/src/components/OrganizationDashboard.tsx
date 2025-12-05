@@ -37,7 +37,8 @@ export function OrganizationDashboard({ currentUser, onSelectOrganization }: Org
     loadOrganizations();
   }, []);
 
-  // Auto-navigate for single organization users (admins see all organizations)
+  // Auto-navigate for single organization users (fallback - main auto-navigation happens in App.tsx)
+  // This ensures that if a user manually navigates to organizations view, they still get auto-navigated
   useEffect(() => {
     if (organizations.length === 1 && currentUser.role !== 'admin') {
       onSelectOrganization(organizations[0]);
@@ -113,8 +114,9 @@ export function OrganizationDashboard({ currentUser, onSelectOrganization }: Org
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="flex flex-col items-center justify-center p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
+        <p className="text-gray-600 text-sm">Loading organizations...</p>
       </div>
     );
   }
@@ -129,7 +131,8 @@ export function OrganizationDashboard({ currentUser, onSelectOrganization }: Org
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-4xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold">Organizations</h1>
@@ -155,7 +158,7 @@ export function OrganizationDashboard({ currentUser, onSelectOrganization }: Org
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
           {organizations.map((org) => (
             <OrganizationCard
               key={org.id}
@@ -259,6 +262,7 @@ export function OrganizationDashboard({ currentUser, onSelectOrganization }: Org
           </div>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }

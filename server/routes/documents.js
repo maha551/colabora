@@ -396,8 +396,112 @@ async function withTransaction(db, operation) {
   }
 }
 
+// Helper function to calculate sort_order based on position type
+async function calculateSortOrder(db, positionType, referenceDocumentId, parentId) {
+  if (positionType === 'root') {
+    // Get max sort_order for root documents (parent_id IS NULL)
+    return new Promise((resolve, reject) => {
+      db.get(
+        `SELECT COALESCE(MAX(sort_order), 0) as max_sort FROM documents WHERE parent_id IS NULL`,
+        [],
+        (err, row) => {
+          if (err) {
+            logger.error('Error calculating sort_order for root', { error: err.message });
+            reject(new Error(`Failed to calculate sort_order: ${err.message}`));
+          } else {
+            const newSortOrder = (row?.max_sort || 0) + 1.0;
+            logger.debug('Calculated sort_order for root', { sortOrder: newSortOrder });
+            resolve(newSortOrder);
+          }
+        }
+      );
+    });
+  } else if (positionType === 'child') {
+    // Get max sort_order for children of reference document
+    return new Promise((resolve, reject) => {
+      db.get(
+        `SELECT COALESCE(MAX(sort_order), 0) as max_sort FROM documents WHERE parent_id = ?`,
+        [referenceDocumentId],
+        (err, row) => {
+          if (err) {
+            logger.error('Error calculating sort_order for child', { error: err.message, referenceDocumentId });
+            reject(new Error(`Failed to calculate sort_order: ${err.message}`));
+          } else {
+            const newSortOrder = (row?.max_sort || 0) + 1.0;
+            logger.debug('Calculated sort_order for child', { sortOrder: newSortOrder, parentId: referenceDocumentId });
+            resolve(newSortOrder);
+          }
+        }
+      );
+    });
+  } else if (positionType === 'above_sibling' || positionType === 'below_sibling') {
+    // Get reference document's sort_order and parent_id
+    return new Promise((resolve, reject) => {
+      db.get(
+        `SELECT sort_order, parent_id FROM documents WHERE id = ?`,
+        [referenceDocumentId],
+        (err, row) => {
+          if (err) {
+            logger.error('Error fetching reference document for sort_order', { error: err.message, referenceDocumentId });
+            reject(new Error(`Failed to fetch reference document: ${err.message}`));
+          } else if (!row) {
+            reject(new Error(`Reference document not found: ${referenceDocumentId}`));
+          } else {
+            // If sort_order is NULL, use created_at timestamp as fallback
+            const refSortOrder = row.sort_order || (Date.now() / 1000);
+            const refParentId = row.parent_id;
+            
+            // Check if we need to reorder (gap too small)
+            db.get(
+              `SELECT MIN(ABS(sort_order - ?)) as min_gap FROM documents 
+               WHERE parent_id ${refParentId ? '= ?' : 'IS NULL'} 
+               AND id != ? 
+               AND sort_order IS NOT NULL`,
+              refParentId ? [refSortOrder, refParentId, referenceDocumentId] : [refSortOrder, referenceDocumentId],
+              (gapErr, gapRow) => {
+                if (gapErr) {
+                  logger.warn('Error checking sort_order gap, proceeding anyway', { error: gapErr.message });
+                }
+                
+                const minGap = gapRow?.min_gap || 1.0;
+                let newSortOrder;
+                
+                if (minGap < 0.1) {
+                  // Gap too small, need to reorder siblings
+                  logger.debug('Gap too small, reordering siblings', { minGap, refSortOrder });
+                  // For now, just add/subtract 0.5 and let periodic reordering handle it
+                  // In production, you might want to reorder all siblings here
+                  newSortOrder = positionType === 'above_sibling' 
+                    ? refSortOrder - 0.5 
+                    : refSortOrder + 0.5;
+                } else {
+                  // Gap is sufficient, use fractional ordering
+                  newSortOrder = positionType === 'above_sibling' 
+                    ? refSortOrder - (minGap / 2) 
+                    : refSortOrder + (minGap / 2);
+                }
+                
+                logger.debug('Calculated sort_order for sibling', { 
+                  positionType, 
+                  sortOrder: newSortOrder, 
+                  refSortOrder,
+                  parentId: refParentId 
+                });
+                resolve(newSortOrder);
+              }
+            );
+          }
+        }
+      );
+    });
+  } else {
+    // Default: use timestamp-based sort_order
+    return Promise.resolve(Date.now() / 1000);
+  }
+}
+
 // Helper function to build document creation SQL and parameters
-async function buildDocumentInsertSQL(db, ownershipType, organizationId, options, documentId, trimmedTitle, trimmedDescription, userId, parentId) {
+async function buildDocumentInsertSQL(db, ownershipType, organizationId, options, documentId, trimmedTitle, trimmedDescription, userId, parentId, sortOrder) {
   logger.debug('Building document INSERT SQL', { ownershipType, documentId });
 
   // Parse options with defaults
@@ -411,19 +515,24 @@ async function buildDocumentInsertSQL(db, ownershipType, organizationId, options
   const structureProposalsEnabled = options?.structureProposalsEnabled === true ? 1 : 0;
 
   let sql, params;
+  // Declare variables for organizational documents at function scope
+  let validatedAcceptanceThreshold;
+  let finalVotingAnonymous;
+  let finalVoteChangeAllowed;
+  let finalStructureProposalsEnabled;
 
   if (ownershipType === 'shared') {
     // For shared documents, store creator IDs as JSON
     sql = `
       INSERT INTO documents (
         id, title, description, owner_id, ownership_type, creator_ids, organization_id, parent_id,
-        acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed,
+        sort_order, acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed,
         structure_proposals_enabled, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     `;
     params = [
       documentId, trimmedTitle, trimmedDescription, userId, ownershipType, JSON.stringify(options?.creatorIds || []), null, parentId || null,
-      acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
+      sortOrder || null, acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
     ];
   } else if (ownershipType === 'organizational') {
     logger.debug('Building organizational document SQL', { organizationId, documentId });
@@ -440,8 +549,8 @@ async function buildDocumentInsertSQL(db, ownershipType, organizationId, options
     // For organizational documents, always use governance rules (no overrides allowed)
     // This ensures consistency across all organizational documents
     const finalAcceptanceThreshold = governanceRules?.defaultAcceptanceThreshold || DOCUMENT_CONFIG.DEFAULT_ACCEPTANCE_THRESHOLD;
-    const finalVotingAnonymous = governanceRules?.anonymousVotingEnabled ? 1 : 0;
-    const finalVoteChangeAllowed = governanceRules?.voteChangeAllowed ? 1 : 0;
+    finalVotingAnonymous = governanceRules?.anonymousVotingEnabled ? 1 : 0;
+    finalVoteChangeAllowed = governanceRules?.voteChangeAllowed ? 1 : 0;
     
     // Use governance rule for proposal period, or default
     const proposalPeriodDays = governanceRules?.documentProposalPeriodDays || DOCUMENT_CONFIG.DEFAULT_PROPOSAL_PERIOD_DAYS;
@@ -484,22 +593,22 @@ async function buildDocumentInsertSQL(db, ownershipType, organizationId, options
 
     sql = `
       INSERT INTO documents (
-        id, title, description, owner_id, ownership_type, creator_ids, organization_id, parent_id, status, proposal_deadline,
+        id, title, description, owner_id, ownership_type, creator_ids, organization_id, parent_id, sort_order, status, proposal_deadline,
         paragraph_proposals_cutoff, acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed,
         structure_proposals_enabled, min_voters_required, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     `;
     // Ensure finalAcceptanceThreshold is valid (already calculated above from governance rules)
-    const validatedAcceptanceThreshold = (typeof finalAcceptanceThreshold === 'number' && !isNaN(finalAcceptanceThreshold))
+    validatedAcceptanceThreshold = (typeof finalAcceptanceThreshold === 'number' && !isNaN(finalAcceptanceThreshold))
       ? finalAcceptanceThreshold : DOCUMENT_CONFIG.DEFAULT_ACCEPTANCE_THRESHOLD;
 
     // For organizational documents, structure proposals are always enabled by default
     // This can be overridden by governance rules in the future if needed
-    const finalStructureProposalsEnabled = structureProposalsEnabled; // Keep user preference if provided, but typically always enabled for org docs
-    
+    finalStructureProposalsEnabled = structureProposalsEnabled; // Keep user preference if provided, but typically always enabled for org docs
+
     params = [
       documentId, trimmedTitle, trimmedDescription, userId, ownershipType, null, organizationId, parentId || null,
-      'proposal', proposalDeadline.toISOString(), paragraphProposalsCutoff.toISOString(),
+      sortOrder || null, 'proposal', proposalDeadline.toISOString(), paragraphProposalsCutoff.toISOString(),
       validatedAcceptanceThreshold, finalVotingAnonymous, votingAnonymityLocked, finalVoteChangeAllowed, finalStructureProposalsEnabled,
       minVotersRequired
     ];
@@ -509,13 +618,13 @@ async function buildDocumentInsertSQL(db, ownershipType, organizationId, options
     sql = `
       INSERT INTO documents (
         id, title, description, owner_id, ownership_type, creator_ids, organization_id, parent_id,
-        acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed,
+        sort_order, acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed,
         structure_proposals_enabled, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     `;
     params = [
       documentId, trimmedTitle, trimmedDescription, userId, ownershipType, null, null, parentId || null,
-      acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
+      sortOrder || null, acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled
     ];
   }
 
@@ -526,7 +635,7 @@ async function buildDocumentInsertSQL(db, ownershipType, organizationId, options
         votingAnonymous: finalVotingAnonymous,
         votingAnonymityLocked: votingAnonymityLocked,
         voteChangeAllowed: finalVoteChangeAllowed,
-        structureProposalsEnabled: structureProposalsEnabled
+        structureProposalsEnabled: finalStructureProposalsEnabled
       }
     : {
         acceptanceThreshold,
@@ -1045,6 +1154,7 @@ router.get('/', requireAuth, (req, res) => {
               ...doc,
               title: doc.title, // Explicitly include title to ensure it's preserved
               parentId: doc.parent_id || undefined,
+              sortOrder: doc.sort_order !== null && doc.sort_order !== undefined ? doc.sort_order : undefined,
               status: doc.status || 'draft',
               proposalDeadline: doc.proposal_deadline || undefined,
               owner: {
@@ -1113,7 +1223,7 @@ router.get('/organization/:organizationId', requireAuth, (req, res) => {
       WHERE d.ownership_type = 'organizational'
         AND d.organization_id = ?
         AND o.is_active = 1
-      ORDER BY d.parent_id NULLS FIRST, d.created_at ASC
+      ORDER BY d.parent_id NULLS FIRST, COALESCE(d.sort_order, CAST(strftime('%s', d.created_at) AS REAL)) ASC, d.created_at ASC
     `;
 
     db.all(documentsQuery, [organizationId], (err, documents) => {
@@ -1214,6 +1324,7 @@ router.get('/organization/:organizationId', requireAuth, (req, res) => {
                 return resolve({
                   ...doc,
                   parentId: doc.parent_id || undefined,
+                  sortOrder: doc.sort_order !== null && doc.sort_order !== undefined ? doc.sort_order : undefined,
                   owner: {
                     id: doc.owner_id,
                     name: doc.owner_name,
@@ -1244,6 +1355,7 @@ router.get('/organization/:organizationId', requireAuth, (req, res) => {
               resolve({
                 ...doc,
                 parentId: doc.parent_id || undefined,
+                sortOrder: doc.sort_order !== null && doc.sort_order !== undefined ? doc.sort_order : undefined,
                 status: doc.status || 'draft',
                 proposalDeadline: doc.proposal_deadline || undefined,
                 owner: {
@@ -1652,12 +1764,18 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
   const { title, description, options, ownershipType = 'personal', organizationId, creatorIds, parentId } = req.body;
   const userId = req.user.id;
 
+  // Extract position type and reference document from options
+  const positionType = options?.positionType;
+  const referenceDocumentId = options?.referenceDocumentId;
+
   logDocumentEvent('info', 'document_creation_started', {
     userId,
     ownershipType,
     organizationId,
     hasParent: !!parentId,
-    hasOptions: !!options
+    hasOptions: !!options,
+    positionType,
+    referenceDocumentId
   });
 
   // Validate input parameters
@@ -1712,30 +1830,115 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
 
       logDocumentSuccess('organization_verified', { userId, organizationId, organizationName: org.name });
 
-      // Simple membership check - any active member can create docs
-      db.get(`
-        SELECT status FROM organization_members
-        WHERE organization_id = ? AND user_id = ? AND status = 'active'
-      `, [organizationId, userId], async (err, member) => {
-        if (err || !member) {
-          logDocumentError('DOC_ORG_ACCESS_DENIED', 'User is not an active member of organization', {
-            userId,
-            organizationId
-          });
-          return res.status(403).json({ error: 'Must be an active organization member to create documents' });
-        }
-
-        logDocumentSuccess('organization_membership_verified', { userId, organizationId });
-
+      // Check dynamic permission for creating documents
+      const { canCreateDocuments } = require('../modules/permissions');
+      const { getGovernanceRules } = require('../routes/governance');
+      
+      (async () => {
         try {
-          const result = await createDocument(db, ownershipType, organizationId, options, userId, title, description, creatorIds, parentId);
+          const rules = await getGovernanceRules(db, organizationId);
+          const canCreate = await canCreateDocuments(db, userId, organizationId, rules, req.user.role);
+          
+          if (!canCreate) {
+            logDocumentError('DOC_ORG_ACCESS_DENIED', 'User does not have permission to create documents', {
+              userId,
+              organizationId
+            });
+            return res.status(403).json({ 
+              error: 'You do not have permission to create documents',
+              details: 'Check your organization\'s governance rules to see who can create documents'
+            });
+          }
+
+          // Handle position-based document creation for organizational docs
+          let finalParentId = parentId;
+          let calculatedSortOrder = null;
+
+          // If positionType is provided, validate reference document and calculate position
+          if (options?.positionType && options.positionType !== 'root') {
+            if (!options.referenceDocumentId) {
+              return res.status(400).json({
+                error: 'Reference document ID is required when position type is specified',
+                code: 'DOC_REFERENCE_REQUIRED'
+              });
+            }
+
+            // Validate reference document exists and user has access
+            try {
+              const refDoc = await new Promise((resolve, reject) => {
+                db.get(
+                  `SELECT id, parent_id, organization_id, ownership_type FROM documents WHERE id = ?`,
+                  [options.referenceDocumentId],
+                  (err, row) => {
+                    if (err) reject(err);
+                    else resolve(row);
+                  }
+                );
+              });
+
+              if (!refDoc) {
+                return res.status(404).json({
+                  error: 'Reference document not found',
+                  code: 'DOC_REFERENCE_NOT_FOUND'
+                });
+              }
+
+              // Verify reference document belongs to same organization
+              if (refDoc.organization_id !== organizationId) {
+                return res.status(403).json({
+                  error: 'Reference document belongs to a different organization',
+                  code: 'DOC_REFERENCE_ORG_MISMATCH'
+                });
+              }
+
+              // Determine parent_id based on position type
+              if (options.positionType === 'child') {
+                finalParentId = options.referenceDocumentId;
+              } else if (options.positionType === 'above_sibling' || options.positionType === 'below_sibling') {
+                finalParentId = refDoc.parent_id || null;
+              }
+
+              // Calculate sort_order based on position type
+              calculatedSortOrder = await calculateSortOrder(db, options.positionType, options.referenceDocumentId, finalParentId);
+            } catch (refError) {
+              logger.error('Error validating reference document', { error: refError.message, referenceDocumentId: options.referenceDocumentId });
+              return res.status(500).json({
+                error: 'Failed to validate reference document',
+                details: refError.message
+              });
+            }
+          } else if (options?.positionType === 'root') {
+            // For root documents, calculate sort_order
+            calculatedSortOrder = await calculateSortOrder(db, 'root', null, null);
+            finalParentId = null;
+          }
+
+          // Continue with document creation
+          const result = await createDocument(db, ownershipType, organizationId, options, userId, title, description, creatorIds, finalParentId, calculatedSortOrder);
           logDocumentSuccess('organizational_document_created', {
             userId,
             organizationId,
             title: title.substring(0, 50)
           });
+          // Broadcast organization update for real-time UI updates
+          webSocketManager.broadcastOrganizationUpdate(organizationId, 'document-created', {
+            document: result,
+            createdBy: userId
+          });
           return res.status(201).json({ document: result });
         } catch (error) {
+          if (error.message && error.message.includes('permission')) {
+            logDocumentError('DOC_ORG_ACCESS_DENIED', 'Permission check failed', {
+              userId,
+              organizationId,
+              error: error.message
+            });
+            return res.status(403).json({ 
+              error: 'You do not have permission to create documents',
+              details: error.message
+            });
+          }
+          
           logDocumentError('DOC_CREATION_FAILED', 'Error in organizational document creation', {
             userId,
             organizationId,
@@ -1748,48 +1951,112 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
             code: error.code || 'DOC_CREATION_FAILED'
           });
         }
-      });
+      })();
     });
     return;
   }
 
-  // Validate parent document if provided
-  try {
-    const parentValidation = await validateParentDocument(db, parentId, ownershipType, organizationId, userId);
-    if (!parentValidation.valid) {
-      logDocumentError(parentValidation.error, parentValidation.message, {
-        userId,
-        parentId,
-        ownershipType,
-        organizationId
-      });
-      return res.status(parentValidation.statusCode).json({
-        error: parentValidation.message,
-        code: parentValidation.error
+  // Handle position-based document creation
+  let finalParentId = parentId;
+  let calculatedSortOrder = null;
+
+  // If positionType is provided, validate reference document and calculate position
+  if (positionType && positionType !== 'root') {
+    if (!referenceDocumentId) {
+      return res.status(400).json({
+        error: 'Reference document ID is required when position type is specified',
+        code: 'DOC_REFERENCE_REQUIRED'
       });
     }
-  } catch (validationError) {
-    logDocumentError('DOC_PARENT_VALIDATION_ERROR', 'Error during parent validation', {
-      userId,
-      parentId,
-      error: validationError.message
-    });
-    return res.status(500).json({
-      error: 'Failed to validate parent document',
-      details: validationError.message
-    });
+
+    // Validate reference document exists and user has access
+    try {
+      const refDoc = await new Promise((resolve, reject) => {
+        db.get(
+          `SELECT id, parent_id, organization_id, ownership_type FROM documents WHERE id = ?`,
+          [referenceDocumentId],
+          (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          }
+        );
+      });
+
+      if (!refDoc) {
+        return res.status(404).json({
+          error: 'Reference document not found',
+          code: 'DOC_REFERENCE_NOT_FOUND'
+        });
+      }
+
+      // Determine parent_id based on position type
+      if (positionType === 'child') {
+        finalParentId = referenceDocumentId;
+      } else if (positionType === 'above_sibling' || positionType === 'below_sibling') {
+        finalParentId = refDoc.parent_id || null;
+      }
+
+      // Calculate sort_order based on position type
+      calculatedSortOrder = await calculateSortOrder(db, positionType, referenceDocumentId, finalParentId);
+    } catch (refError) {
+      logger.error('Error validating reference document', { error: refError.message, referenceDocumentId });
+      return res.status(500).json({
+        error: 'Failed to validate reference document',
+        details: refError.message
+      });
+    }
+  } else if (positionType === 'root') {
+    // For root documents, calculate sort_order
+    calculatedSortOrder = await calculateSortOrder(db, 'root', null, null);
+    finalParentId = null;
+  }
+
+  // Validate parent document if provided (after position calculation)
+  if (finalParentId) {
+    try {
+      const parentValidation = await validateParentDocument(db, finalParentId, ownershipType, organizationId, userId);
+      if (!parentValidation.valid) {
+        logDocumentError(parentValidation.error, parentValidation.message, {
+          userId,
+          parentId: finalParentId,
+          ownershipType,
+          organizationId
+        });
+        return res.status(parentValidation.statusCode).json({
+          error: parentValidation.message,
+          code: parentValidation.error
+        });
+      }
+    } catch (validationError) {
+      logDocumentError('DOC_PARENT_VALIDATION_ERROR', 'Error during parent validation', {
+        userId,
+        parentId: finalParentId,
+        error: validationError.message
+      });
+      return res.status(500).json({
+        error: 'Failed to validate parent document',
+        details: validationError.message
+      });
+    }
   }
 
   // For non-organizational documents without parent, create immediately
   (async () => {
     try {
-      const result = await createDocument(db, ownershipType, organizationId, options, userId, title, description, creatorIds, parentId);
+      const result = await createDocument(db, ownershipType, organizationId, options, userId, title, description, creatorIds, finalParentId, calculatedSortOrder);
       logDocumentSuccess('document_created', {
         userId,
         ownershipType,
         organizationId,
         title: title.substring(0, 50)
       });
+      // Broadcast organization update if document belongs to an organization
+      if (organizationId) {
+        webSocketManager.broadcastOrganizationUpdate(organizationId, 'document-created', {
+          document: result,
+          createdBy: userId
+        });
+      }
       return res.status(201).json({ document: result });
     } catch (error) {
       logDocumentError('DOC_CREATION_FAILED', 'Error in document creation', {
@@ -1831,8 +2098,8 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
     }
   })();
 });
-  async function createDocument(db, ownershipType, organizationId, options, userId, title, description, creatorIds, parentId) {
-    logger.debug('Starting createDocument function', { ownershipType, organizationId, userId, title: title.substring(0, 50), parentId });
+  async function createDocument(db, ownershipType, organizationId, options, userId, title, description, creatorIds, parentId, sortOrder) {
+    logger.debug('Starting createDocument function', { ownershipType, organizationId, userId, title: title.substring(0, 50), parentId, sortOrder });
 
     const documentId = uuidv4();
     const trimmedTitle = title.trim();
@@ -1840,9 +2107,23 @@ router.post('/', requireAuth, documentValidation.create, async (req, res) => {
 
     logger.debug('Generated document ID', { documentId, ownershipType });
 
+    // If sortOrder not provided, calculate default based on parent_id
+    let finalSortOrder = sortOrder;
+    if (finalSortOrder === null || finalSortOrder === undefined) {
+      // Default: calculate based on parent_id (similar to root or child logic)
+      const positionType = parentId ? 'child' : 'root';
+      const referenceId = parentId || null;
+      try {
+        finalSortOrder = await calculateSortOrder(db, positionType, referenceId, parentId);
+      } catch (calcError) {
+        logger.warn('Failed to calculate sort_order, using timestamp', { error: calcError.message });
+        finalSortOrder = Date.now() / 1000;
+      }
+    }
+
     // Build the SQL query and parameters using the helper function
     const { sql, params, acceptanceThreshold, votingAnonymous, votingAnonymityLocked, voteChangeAllowed, structureProposalsEnabled } =
-      await buildDocumentInsertSQL(db, ownershipType, organizationId, options, documentId, trimmedTitle, trimmedDescription, userId, parentId);
+      await buildDocumentInsertSQL(db, ownershipType, organizationId, options, documentId, trimmedTitle, trimmedDescription, userId, parentId, finalSortOrder);
 
     logger.debug('Executing document INSERT', { documentId, paramsLength: params.length });
 

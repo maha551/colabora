@@ -108,24 +108,17 @@ export function ElectionCreationDialog({
 
     setCreating(true);
     try {
-      const response = await governanceApi.createElection(organization.id, {
+      await governanceApi.createElection(organization.id, {
         title: electionData.title,
         description: electionData.description,
         positionsAvailable: electionData.positionsAvailable,
         termMonths: electionData.termMonths
       });
 
-      // Start the election
-      await governanceApi.startElection(
-        organization.id,
-        response.election.id,
-        {
-          votingStartDate: electionData.votingStartDate,
-          votingEndDate: electionData.votingEndDate
-        }
-      );
-
-      toast.success('Election created and started successfully');
+      // Election is created in 'draft' status - representatives will need to:
+      // 1. Start nomination period (draft → nomination)
+      // 2. Start voting period (nomination → voting)
+      toast.success('Election created. Start the nomination period to allow candidates to nominate themselves.');
       onSuccess?.();
       onOpenChange(false);
     } catch (error) {

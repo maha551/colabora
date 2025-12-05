@@ -21,21 +21,21 @@ jobs:
           JWT_SECRET=$(openssl rand -base64 32)
 
           # Set secrets on Fly.io
-          flyctl secrets set SESSION_SECRET="$SESSION_SECRET" --app colabora-fresh
-          flyctl secrets set JWT_SECRET="$JWT_SECRET" --app colabora-fresh
-          flyctl secrets set ALLOWED_ORIGINS="https://colabora-fresh.fly.dev,https://*.colabora-fresh.fly.dev" --app colabora-fresh
-          flyctl secrets set FRONTEND_URL="https://colabora-fresh.fly.dev" --app colabora-fresh
-          flyctl secrets set DATABASE_URL="/data/colabora.db" --app colabora-fresh
+          flyctl secrets set SESSION_SECRET="$SESSION_SECRET" --app colabora-fresh-final
+          flyctl secrets set JWT_SECRET="$JWT_SECRET" --app colabora-fresh-final
+          flyctl secrets set ALLOWED_ORIGINS="https://colabora-fresh-final.fly.dev,https://*.colabora-fresh-final.fly.dev" --app colabora-fresh-final
+          flyctl secrets set FRONTEND_URL="https://colabora-fresh-final.fly.dev" --app colabora-fresh-final
+          flyctl secrets set DATABASE_URL="/data/colabora.db" --app colabora-fresh-final
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
-      - name: Deploy to Fly.io
-        run: flyctl deploy --remote-only --app colabora-fresh
+      - name: Deploy to Fly.io (EU - Frankfurt)
+        run: flyctl deploy --remote-only --app colabora-fresh-final --region fra
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
       - name: Get deployment URL
         run: |
-          echo "🌐 App URL: https://$(flyctl status --app colabora-fresh --json | jq -r '.Hostname')"
+          echo "🌐 App URL: https://$(flyctl status --app colabora-fresh-final --json | jq -r '.Hostname')"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

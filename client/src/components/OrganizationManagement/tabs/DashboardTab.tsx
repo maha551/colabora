@@ -1,13 +1,12 @@
-import React from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Button } from '../../ui/button';
-import { Avatar, AvatarFallback } from '../../ui/avatar';
 import { Badge } from '../../ui/badge';
-import { Users, Vote, Clock, FileText, TrendingUp, Calendar } from 'lucide-react';
+import { Vote, ArrowRight, Settings, MessageSquare } from 'lucide-react';
 import { Organization, RepresentativeElection, OrganizationGovernanceRules, Document, User } from '../../../types';
 import { OrganizationPermissions } from '../../../hooks/useOrganizationPermissions';
-import { OrganizationStats } from '../shared/OrganizationStats';
-import { OrganizationStatusBadge, VotingStatusBadge } from '../shared/StatusBadges';
+import { governanceApi } from '../../../lib/api';
+import { formatDistanceToNow } from 'date-fns';
 
 interface DashboardTabProps {
   organization: Organization;
@@ -22,6 +21,18 @@ interface DashboardTabProps {
   onNavigateToGovernance?: () => void;
 }
 
+interface RuleProposal {
+  id: string;
+  title: string;
+  description: string;
+  status: 'draft' | 'active' | 'approved' | 'rejected' | 'cancelled' | 'expired';
+  createdBy: {
+    id: string;
+    name: string;
+  };
+  votingDeadline?: string;
+}
+
 export function DashboardTab({
   organization,
   currentUser,
@@ -34,307 +45,210 @@ export function DashboardTab({
   onNavigateToMembers,
   onNavigateToGovernance
 }: DashboardTabProps) {
-  // Calculate statistics
-  const activeDocuments = documents.filter(d => d.status === 'voting' || d.status === 'proposal').length;
-  const totalDocuments = documents.length;
-  const activeElections = elections.filter(e => e.status === 'active').length;
-  const upcomingElections = elections.filter(e => e.status === 'upcoming' || e.status === 'scheduled').length;
+  const [ruleProposals, setRuleProposals] = useState<RuleProposal[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Get next election date
-  const nextElection = elections
-    .filter(e => e.status === 'scheduled' || e.status === 'upcoming')
-    .sort((a, b) => {
-      const dateA = a.startDate ? new Date(a.startDate).getTime() : Infinity;
-      const dateB = b.startDate ? new Date(b.startDate).getTime() : Infinity;
-      return dateA - dateB;
-    })[0];
+  useEffect(() => {
+    loadRuleProposals();
+  }, [organization.id]);
+
+  const loadRuleProposals = async () => {
+    try {
+      setLoading(true);
+      const response = await governanceApi.ruleProposalsApi.getRuleProposals(organization.id);
+      setRuleProposals((response.ruleProposals || []) as unknown as RuleProposal[]);
+    } catch (error) {
+      console.error('Failed to load rule proposals:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Open votes on document rules (active rule proposals)
+  const activeRuleProposals = ruleProposals.filter(p => p.status === 'active');
+
+  // Documents in voting phase
+  const votingDocuments = documents.filter(d => d.status === 'voting');
+
+  // Most discussed paragraphs (from documents with most proposals/comments)
+  const mostDiscussedParagraphs = documents
+    .flatMap(doc => 
+      (doc.paragraphs || []).map(para => ({
+        documentId: doc.id,
+        documentTitle: doc.title,
+        paragraphId: para.id,
+        paragraphText: para.text.substring(0, 100),
+        proposalCount: para.proposals?.length || 0,
+        commentCount: para.proposals?.reduce((sum, p) => sum + (p.comments?.length || 0), 0) || 0,
+        totalActivity: (para.proposals?.length || 0) + (para.proposals?.reduce((sum, p) => sum + (p.comments?.length || 0), 0) || 0)
+      }))
+    )
+    .sort((a, b) => b.totalActivity - a.totalActivity)
+    .slice(0, 5);
 
   return (
     <div className="space-y-6">
-      {/* Organization Summary */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <CardTitle className="text-2xl">{organization.name}</CardTitle>
-              {organization.description && (
-                <CardDescription className="mt-2 text-base">
-                  {organization.description}
-                </CardDescription>
-              )}
-            </div>
-            <div className="flex gap-2 ml-4">
-              <OrganizationStatusBadge isActive={organization.isActive} />
-              <VotingStatusBadge votingEnabled={organization.votingEnabled} />
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div>
-              <span className="text-gray-600">Membership Policy:</span>
-              <span className="font-medium ml-2 capitalize">{organization.membershipPolicy}</span>
-            </div>
-            <div>
-              <span className="text-gray-600">Vote Threshold:</span>
-              <span className="font-medium ml-2">{Math.round((organization.votingThreshold || 0.5) * 100)}%</span>
-            </div>
-            <div>
-              <span className="text-gray-600">Created:</span>
-              <span className="font-medium ml-2">{new Date(organization.createdAt).toLocaleDateString()}</span>
-            </div>
-            <div>
-              <span className="text-gray-600">Representatives:</span>
-              <span className="font-medium ml-2">{organization.representatives?.length || 0}</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Key Statistics */}
-      <OrganizationStats organization={organization} />
-
-      {/* Documents & Activity Summary */}
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Documents
-            </CardTitle>
-            <CardDescription>
-              Organization documents and policies
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className="text-2xl font-bold text-blue-600">{totalDocuments}</div>
-                  <div className="text-sm text-gray-600">Total Documents</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-orange-600">{activeDocuments}</div>
-                  <div className="text-sm text-gray-600">Active Votes</div>
-                </div>
-              </div>
-              {onNavigateToDocuments && (
-                <Button variant="outline" className="w-full" onClick={onNavigateToDocuments}>
-                  <FileText className="h-4 w-4 mr-2" />
-                  View All Documents
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Vote className="h-5 w-5" />
-              Elections
-            </CardTitle>
-            <CardDescription>
-              Representative elections
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className="text-2xl font-bold text-purple-600">{activeElections}</div>
-                  <div className="text-sm text-gray-600">Active</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-yellow-600">{upcomingElections}</div>
-                  <div className="text-sm text-gray-600">Upcoming</div>
-                </div>
-              </div>
-              {nextElection && (
-                <div className="text-sm text-gray-600">
-                  <Calendar className="h-4 w-4 inline mr-1" />
-                  Next: {nextElection.startDate ? new Date(nextElection.startDate).toLocaleDateString() : 'TBD'}
-                </div>
-              )}
-              {onNavigateToGovernance && (
-                <Button variant="outline" className="w-full" onClick={onNavigateToGovernance}>
-                  <Vote className="h-4 w-4 mr-2" />
-                  View Elections
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+      {/* Organization Header */}
+      <div>
+        <h1 className="text-3xl font-bold">{organization.name}</h1>
+        {organization.description && (
+          <p className="text-gray-600 mt-2">{organization.description}</p>
+        )}
       </div>
 
-      {/* Current Representatives Section */}
+      {/* Open Votes on Document Rules */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            Current Representatives
+            <Settings className="h-5 w-5" />
+            Open Votes on Document Rules
           </CardTitle>
-          <CardDescription>
-            Elected representatives who govern this organization
-          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex -space-x-2 mb-4">
-            {organization.representatives?.map((repId, index) => (
-              <Avatar key={repId} className="h-12 w-12 border-2 border-white">
-                <AvatarFallback className="text-sm">
-                  R{index + 1}
-                </AvatarFallback>
-              </Avatar>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-gray-600">Total Representatives:</span>
-              <span className="font-medium ml-2">{organization.representatives?.length || 0}</span>
+          {activeRuleProposals.length > 0 ? (
+            <div className="space-y-3">
+              {activeRuleProposals.map(proposal => (
+                <div key={proposal.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex-1">
+                    <h4 className="font-medium">{proposal.title}</h4>
+                    <p className="text-sm text-gray-600">
+                      Proposed by {proposal.createdBy.name}
+                      {proposal.votingDeadline && (
+                        <span> • Ends {formatDistanceToNow(new Date(proposal.votingDeadline), { addSuffix: true })}</span>
+                      )}
+                    </p>
+                  </div>
+                  {onNavigateToGovernance && (
+                    <Button size="sm" variant="outline" onClick={onNavigateToGovernance}>
+                      Vote
+                      <ArrowRight className="h-4 w-4 ml-2" />
+                    </Button>
+                  )}
+                </div>
+              ))}
             </div>
-            <div>
-              <span className="text-gray-600">Next Election:</span>
-              <span className="font-medium ml-2">
-                {nextElection?.startDate 
-                  ? new Date(nextElection.startDate).toLocaleDateString()
-                  : governanceRules?.representativeTermMonths 
-                    ? `Every ${governanceRules.representativeTermMonths} months`
-                    : 'TBD'
-                }
-              </span>
+          ) : (
+            <div className="text-center py-8">
+              <Settings className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600 mb-2">No active rule proposals</p>
+              <p className="text-sm text-gray-500 mb-4">
+                There are currently no active votes on document rules. Rule proposals will appear here when they're open for voting.
+              </p>
+              {onNavigateToGovernance && (
+                <Button variant="outline" size="sm" onClick={onNavigateToGovernance}>
+                  View Governance
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
+              )}
             </div>
-          </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Election Due Warning */}
-      {permissions.isRepresentative && governanceRules && (() => {
-        // Simple check: if no recent elections, suggest creating one
-        const recentElections = elections.filter(e =>
-          new Date(e.createdAt || '').getTime() > Date.now() - (governanceRules.representativeTermMonths * 30 * 24 * 60 * 60 * 1000)
-        );
-        const needsElection = recentElections.length === 0;
-
-        return needsElection && (
-          <Card className="border-yellow-200 bg-gradient-to-r from-yellow-50 to-orange-50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-orange-900">
-                <Clock className="h-5 w-5" />
-                Election Due
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-orange-800 mb-4">
-                It's time to hold a representative election. The last election was more than {governanceRules.representativeTermMonths} months ago.
+      {/* Documents in Voting Phase */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Vote className="h-5 w-5" />
+            Documents in Voting Phase
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {votingDocuments.length > 0 ? (
+            <div className="space-y-3">
+              {votingDocuments.map(doc => (
+                <div key={doc.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex-1">
+                    <h4 className="font-medium">{doc.title}</h4>
+                    <p className="text-sm text-gray-600">
+                      {doc.documentVotes?.length || 0} votes cast
+                      {doc.votingDeadline && (
+                        <span> • Ends {formatDistanceToNow(new Date(doc.votingDeadline), { addSuffix: true })}</span>
+                      )}
+                    </p>
+                  </div>
+                  {onNavigateToDocuments && (
+                    <Button size="sm" variant="outline" onClick={() => onNavigateToDocuments()}>
+                      View
+                      <ArrowRight className="h-4 w-4 ml-2" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Vote className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600 mb-2">No documents in voting phase</p>
+              <p className="text-sm text-gray-500 mb-4">
+                Documents that are currently open for voting will appear here. Once a document enters the voting phase, members can cast their votes.
               </p>
-              {permissions.canCreateElections && (
-                <Button
-                  className="bg-orange-600 hover:bg-orange-700"
-                  onClick={onCreateElection}
-                >
-                  <Vote className="h-4 w-4 mr-2" />
-                  Create Election
+              {onNavigateToDocuments && (
+                <Button variant="outline" size="sm" onClick={() => onNavigateToDocuments()}>
+                  View Documents
+                  <ArrowRight className="h-4 w-4 ml-2" />
                 </Button>
               )}
-            </CardContent>
-          </Card>
-        );
-      })()}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-      {/* Active Elections Overlay */}
-      {elections.some(e => e.status === 'active') && (
-        <Card className="border-orange-200 bg-gradient-to-r from-orange-50 to-yellow-50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-orange-900">
-              <Vote className="h-5 w-5" />
-              Representative Election Active
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {(() => {
-              const activeElection = elections.find(e => e.status === 'active');
-              if (!activeElection) return null;
-
-              return (
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="font-medium">{activeElection.electionTitle}</h3>
-                    <p className="text-sm text-gray-600">{activeElection.electionDescription}</p>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div className="text-center">
-                      <div className="text-lg font-bold">{activeElection.positionsAvailable}</div>
-                      <div className="text-gray-600">Positions</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-lg font-bold">
-                        {activeElection.votesCast || 0}/{activeElection.totalVoters || 0}
+      {/* Most Discussed Paragraphs */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MessageSquare className="h-5 w-5" />
+            Most Discussed Paragraphs
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {mostDiscussedParagraphs.length > 0 ? (
+            <div className="space-y-3">
+              {mostDiscussedParagraphs.map((item, index) => (
+                <div key={`${item.documentId}-${item.paragraphId}`} className="p-3 border rounded-lg">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge variant="outline" className="text-xs">
+                          #{index + 1}
+                        </Badge>
+                        <span className="text-sm font-medium text-gray-700">{item.documentTitle}</span>
                       </div>
-                      <div className="text-gray-600">Votes</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-lg font-bold">
-                        {activeElection.totalVoters ? Math.round(((activeElection.votesCast || 0) / activeElection.totalVoters) * 100) : 0}%
+                      <p className="text-sm text-gray-600 line-clamp-2">{item.paragraphText}...</p>
+                      <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
+                        <span>{item.proposalCount} proposals</span>
+                        <span>•</span>
+                        <span>{item.commentCount} comments</span>
                       </div>
-                      <div className="text-gray-600">Participation</div>
                     </div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    {permissions.canVoteInElections && (
-                      <Button size="sm" variant="outline">
-                        <Vote className="h-4 w-4 mr-2" />
-                        Cast Vote
-                      </Button>
-                    )}
-                    <Badge variant="secondary">
-                      Ends: {activeElection.endDate ? new Date(activeElection.endDate).toLocaleDateString() : 'TBD'}
-                    </Badge>
                   </div>
                 </div>
-              );
-            })()}
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600 mb-2">No discussions yet</p>
+              <p className="text-sm text-gray-500">
+                Paragraphs with the most proposals and comments will appear here. Start engaging with documents to see activity.
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Overall Empty State - Only show if all sections are empty */}
+      {activeRuleProposals.length === 0 && 
+       votingDocuments.length === 0 && 
+       mostDiscussedParagraphs.length === 0 && (
+        <Card>
+          <CardContent className="pt-6 text-center text-gray-500">
+            <p>No active votes or discussions at the moment</p>
+            <p className="text-sm mt-2">Check back later for updates</p>
           </CardContent>
         </Card>
       )}
-
-      {/* Quick Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-          <CardDescription>
-            Common tasks for managing your organization
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {permissions.canCreateDocuments && (
-              <Button variant="outline" className="justify-start gap-2">
-                <Vote className="h-4 w-4" />
-                Create Policy Vote
-              </Button>
-            )}
-
-            {permissions.canInviteMembers && (
-              <Button variant="outline" className="justify-start gap-2">
-                <Users className="h-4 w-4" />
-                Invite Members
-              </Button>
-            )}
-
-
-            {permissions.canViewAnalytics && (
-              <Button variant="outline" className="justify-start gap-2">
-                <Clock className="h-4 w-4" />
-                View Analytics
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }

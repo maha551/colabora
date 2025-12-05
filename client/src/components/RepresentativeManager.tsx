@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
-import { Avatar, AvatarFallback } from './ui/avatar';
+import { Avatar, AvatarImage, AvatarFallback } from './ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Alert, AlertDescription } from './ui/alert';
-import { Users, UserPlus, UserMinus, Crown, AlertTriangle } from 'lucide-react';
+import { Users, UserPlus, UserMinus, Crown, AlertTriangle, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Organization, User } from '../types';
@@ -21,15 +21,18 @@ interface RepresentativeManagerProps {
 
 export function RepresentativeManager({ organization, currentUser, onUpdate }: RepresentativeManagerProps) {
   const [nominateDialogOpen, setNominateDialogOpen] = useState(false);
-  const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
+  const [removeDialogOpen, setRemoveDialogOpen] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState('');
-  const [searchEmail, setSearchEmail] = useState('');
-  const [searchResults, setSearchResults] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [removingRep, setRemovingRep] = useState<string | null>(null);
 
   const isRepresentative = organization.representatives?.includes(currentUser.id);
   const currentRepCount = organization.representatives?.length || 0;
+
+  // Get member data for each representative
+  const getRepresentativeMember = (repId: string) => {
+    return organization.members?.find(m => m.userId === repId);
+  };
 
   const handleNominate = async () => {
     if (!selectedUserId) {
@@ -43,12 +46,11 @@ export function RepresentativeManager({ organization, currentUser, onUpdate }: R
       toast.success('Representative nominated successfully');
       setNominateDialogOpen(false);
       setSelectedUserId('');
-      setSearchEmail('');
-      setSearchResults([]);
       onUpdate();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to nominate representative:', error);
-      toast.error('Failed to nominate representative');
+      const errorMessage = error?.response?.data?.error || error?.message || 'Failed to nominate representative';
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -64,7 +66,7 @@ export function RepresentativeManager({ organization, currentUser, onUpdate }: R
       setRemovingRep(repId);
       await organizationsApi.removeRepresentative(organization.id, repId);
       toast.success('Representative removed successfully');
-      setRemoveDialogOpen(false);
+      setRemoveDialogOpen(null);
       onUpdate();
     } catch (error) {
       console.error('Failed to remove representative:', error);
@@ -74,23 +76,16 @@ export function RepresentativeManager({ organization, currentUser, onUpdate }: R
     }
   };
 
-  const searchUsers = async () => {
-    // In a real implementation, this would search for users
-    // For now, we'll simulate finding users by email
-    if (!searchEmail.trim()) return;
-
-    try {
-      // This is a placeholder - in production you'd have a user search API
-      setSearchResults([{
-        id: `user-${Date.now()}`,
-        name: searchEmail.split('@')[0],
-        email: searchEmail
-      }]);
-    } catch (error) {
-      console.error('Failed to search users:', error);
-      toast.error('Failed to search users');
-    }
+  // Get available members (active members who are not already representatives)
+  const getAvailableMembers = () => {
+    const activeMembers = organization.members?.filter(m => m.status === 'active') || [];
+    const existingRepIds = organization.representatives || [];
+    
+    // Filter out existing representatives
+    return activeMembers.filter(member => !existingRepIds.includes(member.userId));
   };
+
+  const availableMembers = getAvailableMembers();
 
   if (!isRepresentative) {
     return (
@@ -129,51 +124,61 @@ export function RepresentativeManager({ organization, currentUser, onUpdate }: R
                 <DialogHeader>
                   <DialogTitle>Nominate New Representative</DialogTitle>
                   <DialogDescription>
-                    Search for a user to nominate as a representative. They will gain executive powers.
+                    Select an active member to nominate as a representative. Only active members can be nominated.
                   </DialogDescription>
                 </DialogHeader>
 
                 <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="email">User Email</Label>
-                    <div className="flex gap-2 mt-1">
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="user@example.com"
-                        value={searchEmail}
-                        onChange={(e) => setSearchEmail(e.target.value)}
-                      />
-                      <Button onClick={searchUsers} variant="outline">
-                        Search
-                      </Button>
-                    </div>
-                  </div>
-
-                  {searchResults.length > 0 && (
+                  {availableMembers.length === 0 ? (
+                    <Alert>
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertDescription>
+                        No available members to nominate. All active members are already representatives, or there are no active members in the organization.
+                      </AlertDescription>
+                    </Alert>
+                  ) : (
                     <div className="space-y-2">
-                      <Label>Select User</Label>
-                      {searchResults.map((user) => (
-                        <div
-                          key={user.id}
-                          className={`p-3 border rounded cursor-pointer hover:bg-gray-50 ${
-                            selectedUserId === user.id ? 'border-blue-500 bg-blue-50' : ''
-                          }`}
-                          onClick={() => setSelectedUserId(user.id)}
-                        >
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-8 w-8">
-                              <AvatarFallback>
-                                {user.name.charAt(0).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <div className="font-medium">{user.name}</div>
-                              <div className="text-sm text-gray-500">{user.email}</div>
+                      <Label>Select Active Member</Label>
+                      <div className="max-h-[300px] overflow-y-auto space-y-2 border rounded-md p-2">
+                        {availableMembers.map((member) => {
+                          const user = member.user;
+                          const isSelected = selectedUserId === member.userId;
+                          return (
+                            <div
+                              key={member.userId}
+                              className={`p-3 border rounded cursor-pointer hover:bg-gray-50 transition-colors ${
+                                isSelected ? 'border-blue-500 bg-blue-50' : ''
+                              }`}
+                              onClick={() => setSelectedUserId(member.userId)}
+                            >
+                              <div className="flex items-center gap-3">
+                                <Avatar className="h-8 w-8">
+                                  {user?.avatar ? (
+                                    <AvatarImage src={user.avatar} alt={user.name} />
+                                  ) : null}
+                                  <AvatarFallback>
+                                    {user?.name?.charAt(0).toUpperCase() || '?'}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1">
+                                  <div className="font-medium">{user?.name || 'Unknown User'}</div>
+                                  <div className="text-sm text-gray-500">{user?.email || ''}</div>
+                                  {member.joinedAt && (
+                                    <div className="text-xs text-gray-400 mt-1">
+                                      Member since {new Date(member.joinedAt).toLocaleDateString()}
+                                    </div>
+                                  )}
+                                </div>
+                                {isSelected && (
+                                  <div className="text-blue-600">
+                                    <Users className="h-5 w-5" />
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        </div>
-                      ))}
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
 
@@ -199,75 +204,148 @@ export function RepresentativeManager({ organization, currentUser, onUpdate }: R
         </CardHeader>
 
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {organization.representatives?.map((repId) => (
-              <Card key={repId} className="relative">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    <Avatar>
-                      <AvatarFallback>
-                        <Crown className="h-4 w-4" />
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <div className="font-medium">
-                        Representative {organization.representatives?.indexOf(repId) + 1}
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+            {organization.representatives?.map((repId) => {
+              const member = getRepresentativeMember(repId);
+              const user = member?.user;
+              const displayName = user?.name || `Representative ${organization.representatives?.indexOf(repId)! + 1}`;
+              const email = user?.email || '';
+              const avatar = user?.avatar;
+              const initials = displayName
+                .split(' ')
+                .map(n => n[0])
+                .join('')
+                .toUpperCase()
+                .slice(0, 2);
+              const isCurrentUser = repId === currentUser.id;
+
+              return (
+                <Card key={repId} className="relative overflow-hidden hover:shadow-lg transition-shadow border-2">
+                  {/* Crown badge overlay */}
+                  <div className="absolute top-2 right-2 z-10">
+                    <div className="bg-yellow-100 rounded-full p-1.5">
+                      <Crown className="h-4 w-4 text-yellow-600" />
+                    </div>
+                  </div>
+
+                  <CardContent className="p-6">
+                    <div className="flex flex-col items-center text-center space-y-4">
+                      {/* Avatar */}
+                      <div className="relative">
+                        <Avatar className="h-20 w-20 border-4 border-yellow-100 shadow-md">
+                          {avatar ? (
+                            <AvatarImage src={avatar} alt={displayName} />
+                          ) : null}
+                          <AvatarFallback className="bg-gradient-to-br from-yellow-400 to-yellow-600 text-white text-xl font-semibold">
+                            {initials || <Crown className="h-8 w-8" />}
+                          </AvatarFallback>
+                        </Avatar>
+                        {isCurrentUser && (
+                          <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2">
+                            <Badge variant="default" className="text-xs px-2 py-0.5">
+                              You
+                            </Badge>
+                          </div>
+                        )}
                       </div>
-                      <div className="text-sm text-gray-500">ID: {repId}</div>
-                      {repId === currentUser.id && (
-                        <Badge variant="secondary" className="mt-1">You</Badge>
+
+                      {/* Name */}
+                      <div className="space-y-1">
+                        <h3 className="font-semibold text-lg text-gray-900">
+                          {displayName}
+                        </h3>
+                        {member?.status && (
+                          <Badge 
+                            variant={member.status === 'active' ? 'default' : 'secondary'}
+                            className="text-xs"
+                          >
+                            {member.status === 'active' ? 'Active' : 'Legacy'} Member
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* Contact Information */}
+                      {email && (
+                        <div className="w-full space-y-2 pt-2 border-t">
+                          <div className="flex items-center gap-2 text-sm text-gray-600 justify-center">
+                            <Mail className="h-4 w-4" />
+                            <a 
+                              href={`mailto:${email}`}
+                              className="hover:text-blue-600 hover:underline truncate max-w-[200px]"
+                              title={email}
+                            >
+                              {email}
+                            </a>
+                          </div>
+                          {member?.joinedAt && (
+                            <div className="text-xs text-gray-500">
+                              Joined {new Date(member.joinedAt).toLocaleDateString('en-US', { 
+                                year: 'numeric', 
+                                month: 'short', 
+                                day: 'numeric' 
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Remove Button */}
+                      {currentRepCount > 3 && !isCurrentUser && (
+                        <div className="pt-2 w-full">
+                          <Dialog 
+                            open={removeDialogOpen === repId} 
+                            onOpenChange={(open) => setRemoveDialogOpen(open ? repId : null)}
+                          >
+                            <DialogTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-full text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                              >
+                                <UserMinus className="h-4 w-4 mr-2" />
+                                Remove
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Remove Representative</DialogTitle>
+                                <DialogDescription>
+                                  Are you sure you want to remove {displayName} as a representative? This requires approval from all other representatives.
+                                </DialogDescription>
+                              </DialogHeader>
+
+                              <Alert>
+                                <AlertTriangle className="h-4 w-4" />
+                                <AlertDescription>
+                                  This action requires unanimous consent from all remaining representatives.
+                                </AlertDescription>
+                              </Alert>
+
+                              <div className="flex gap-2 pt-4">
+                                <Button
+                                  variant="destructive"
+                                  onClick={() => handleRemove(repId)}
+                                  disabled={removingRep === repId}
+                                  className="flex-1"
+                                >
+                                  {removingRep === repId ? 'Removing...' : 'Remove Representative'}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  onClick={() => setRemoveDialogOpen(null)}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        </div>
                       )}
                     </div>
-
-                    {currentRepCount > 3 && repId !== currentUser.id && (
-                      <Dialog open={removeDialogOpen} onOpenChange={setRemoveDialogOpen}>
-                        <DialogTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <UserMinus className="h-4 w-4" />
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Remove Representative</DialogTitle>
-                            <DialogDescription>
-                              Are you sure you want to remove this representative? This requires approval from all other representatives.
-                            </DialogDescription>
-                          </DialogHeader>
-
-                          <Alert>
-                            <AlertTriangle className="h-4 w-4" />
-                            <AlertDescription>
-                              This action requires unanimous consent from all remaining representatives.
-                            </AlertDescription>
-                          </Alert>
-
-                          <div className="flex gap-2 pt-4">
-                            <Button
-                              variant="destructive"
-                              onClick={() => handleRemove(repId)}
-                              disabled={removingRep === repId}
-                              className="flex-1"
-                            >
-                              {removingRep === repId ? 'Removing...' : 'Remove Representative'}
-                            </Button>
-                            <Button
-                              variant="outline"
-                              onClick={() => setRemoveDialogOpen(false)}
-                            >
-                              Cancel
-                            </Button>
-                          </div>
-                        </DialogContent>
-                      </Dialog>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
 
           {currentRepCount < 3 && (

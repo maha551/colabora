@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
 import { Button } from '../../ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
-import { Users, Mail } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
+import { Users, Mail, UserPlus } from 'lucide-react';
 import { Organization, User } from '../../../types';
 import { OrganizationPermissions } from '../../../hooks/useOrganizationPermissions';
-import { RepresentativeManager } from '../../RepresentativeManager';
 import { EmailInviteSystem } from '../../EmailInviteSystem';
-import { OrganizationStats } from '../shared/OrganizationStats';
 import { MemberCard } from '../shared/MemberCard';
 
 interface MembersTabProps {
@@ -29,80 +27,71 @@ export function MembersTab({
 
   return (
     <div className="space-y-6">
-      {/* Member Statistics */}
-      <OrganizationStats 
-        organization={organization}
-        activeMembersCount={activeMembers.length}
-        legacyMembersCount={legacyMembers.length}
-      />
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Members</h2>
+          <p className="text-gray-600">
+            {activeMembers.length} active member{activeMembers.length !== 1 ? 's' : ''}
+          </p>
+        </div>
+        {permissions.canInviteMembers && (
+          <Button onClick={() => setShowInviteDialog(true)}>
+            <UserPlus className="h-4 w-4 mr-2" />
+            Invite Members
+          </Button>
+        )}
+      </div>
 
-      {/* Member List and Management */}
+      {/* Member List */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            Organization Members
-            {permissions.canInviteMembers && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowInviteDialog(true)}
-              >
-                <Mail className="h-4 w-4 mr-2" />
-                Invite Members
-              </Button>
-            )}
-          </CardTitle>
-          <CardDescription>
-            Manage organization membership and roles
-          </CardDescription>
+          <CardTitle>Organization Members</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {activeMembers.map((member) => (
-              <MemberCard
-                key={member.id}
-                member={member}
-                organization={organization}
-              />
-            ))}
-
-            {legacyMembers.map((member) => (
-              <MemberCard
-                key={member.id}
-                member={member}
-                organization={organization}
-              />
-            ))}
-
-            {activeMembers.length === 0 && legacyMembers.length === 0 && (
-              <div className="text-center py-8 text-gray-500">
-                <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                <p>No members yet</p>
-                <p className="text-sm">Invite members to get started</p>
-              </div>
-            )}
-          </div>
+          {activeMembers.length > 0 || legacyMembers.length > 0 ? (
+            <div className="space-y-6">
+              {activeMembers.map((member) => (
+                <MemberCard
+                  key={member.id}
+                  member={member}
+                  organization={organization}
+                />
+              ))}
+              {legacyMembers.length > 0 && (
+                <>
+                  <div className="border-t my-4 pt-4">
+                    <h3 className="text-sm font-medium text-gray-500 mb-3">Legacy Members</h3>
+                    {legacyMembers.map((member) => (
+                      <MemberCard
+                        key={member.id}
+                        member={member}
+                        organization={organization}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-12 text-gray-500">
+              <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
+              <p className="mb-1">No members yet</p>
+              <p className="text-sm">Invite members to get started</p>
+              {permissions.canInviteMembers && (
+                <Button
+                  variant="outline"
+                  className="mt-4"
+                  onClick={() => setShowInviteDialog(true)}
+                >
+                  <Mail className="h-4 w-4 mr-2" />
+                  Invite Members
+                </Button>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
-
-      {/* Representative Management */}
-      {permissions.isRepresentative && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Representative Management</CardTitle>
-            <CardDescription>
-              Manage representative roles and assignments
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <RepresentativeManager
-              organization={organization}
-              currentUser={currentUser}
-              onUpdate={onUpdate}
-            />
-          </CardContent>
-        </Card>
-      )}
 
       {/* Invite Dialog */}
       {showInviteDialog && (

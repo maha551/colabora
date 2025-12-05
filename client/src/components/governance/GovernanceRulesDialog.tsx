@@ -138,16 +138,16 @@ export function GovernanceRulesDialog({
           </div>
         ) : (
           <Tabs defaultValue="elections" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="elections" className="gap-2">
+            <TabsList className="flex flex-row w-full">
+              <TabsTrigger value="elections" className="flex-1 gap-2">
                 <Vote className="h-4 w-4" />
                 Elections
               </TabsTrigger>
-              <TabsTrigger value="voting" className="gap-2">
+              <TabsTrigger value="voting" className="flex-1 gap-2">
                 <Settings className="h-4 w-4" />
                 Voting
               </TabsTrigger>
-              <TabsTrigger value="permissions" className="gap-2">
+              <TabsTrigger value="permissions" className="flex-1 gap-2">
                 <Users className="h-4 w-4" />
                 Permissions
               </TabsTrigger>
@@ -391,9 +391,9 @@ export function GovernanceRulesDialog({
                 <CardContent className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
-                      <Label>Create Policy Votes</Label>
+                      <Label>Create Votes</Label>
                       <p className="text-sm text-gray-600">
-                        Representatives can create policy implementation votes
+                        Representatives can create votes for organizational decisions
                       </p>
                     </div>
                     <Switch

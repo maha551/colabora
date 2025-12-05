@@ -60,12 +60,20 @@ class DocumentScheduler {
       });
     }, 60 * 60 * 1000)); // 1 hour
 
+    // Check expired rule proposals every 2 hours
+    this.jobs.set('rule-proposal-expiration-check', setInterval(() => {
+      this.processExpiredRuleProposals().catch(err => {
+        logger.error('Error in rule proposal expiration check', { error: err.message, stack: err.stack });
+      });
+    }, 2 * 60 * 60 * 1000)); // 2 hours
+
     // Run initial checks immediately
     setTimeout(() => {
       this.checkProposalDeadlines().catch(err => logger.error('Error in proposal deadline check', { error: err.message }));
       this.checkProposalCutoff().catch(err => logger.error('Error in proposal cutoff check', { error: err.message }));
       this.checkVotingDeadlines().catch(err => logger.error('Error in voting deadline check', { error: err.message }));
       this.checkDeletionDeadlines().catch(err => logger.error('Error in deletion deadline check', { error: err.message }));
+      this.processExpiredRuleProposals().catch(err => logger.error('Error in rule proposal expiration check', { error: err.message }));
     }, 5000); // 5 seconds after startup
 
     logger.info('Document Scheduler started successfully');
@@ -647,6 +655,137 @@ class DocumentScheduler {
         'expired-check': new Date(Date.now() + 60 * 60 * 1000).toISOString()
       }
     };
+  }
+
+  /**
+   * Process expired rule proposals
+   * Auto-rejects proposals where voting deadline has passed
+   */
+  async processExpiredRuleProposals() {
+    logger.debug('Processing expired rule proposals');
+
+    try {
+      const now = new Date().toISOString();
+
+      // Find active proposals past their voting deadline
+      const expiredProposals = await new Promise((resolve, reject) => {
+        this.db.all(`
+          SELECT id, organization_id, title, current_rule_field, voting_ends_at, votes_yes, votes_no, votes_abstain, votes_cast
+          FROM governance_rule_proposals
+          WHERE status = 'active'
+            AND voting_ends_at IS NOT NULL
+            AND voting_ends_at < ?
+        `, [now], (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        });
+      });
+
+      logger.debug('Found expired rule proposals', { count: expiredProposals.length });
+
+      for (const proposal of expiredProposals) {
+        try {
+          // Recalculate vote counts to ensure accuracy
+          const voteCounts = await new Promise((resolve, reject) => {
+            this.db.get(`
+              SELECT 
+                COUNT(CASE WHEN vote_choice = 'yes' THEN 1 END) as votes_yes,
+                COUNT(CASE WHEN vote_choice = 'no' THEN 1 END) as votes_no,
+                COUNT(CASE WHEN vote_choice = 'abstain' THEN 1 END) as votes_abstain,
+                COUNT(*) as votes_cast
+              FROM governance_rule_proposal_votes
+              WHERE proposal_id = ?
+            `, [proposal.id], (err, row) => {
+              if (err) reject(err);
+              else resolve(row || { votes_yes: 0, votes_no: 0, votes_abstain: 0, votes_cast: 0 });
+            });
+          });
+
+          // Update proposal with final counts and mark as expired
+          await new Promise((resolve, reject) => {
+            this.db.run(`
+              UPDATE governance_rule_proposals SET
+                status = 'expired',
+                votes_yes = ?,
+                votes_no = ?,
+                votes_abstain = ?,
+                votes_cast = ?,
+                updated_at = ?
+              WHERE id = ?
+            `, [
+              voteCounts.votes_yes,
+              voteCounts.votes_no,
+              voteCounts.votes_abstain,
+              voteCounts.votes_cast,
+              now,
+              proposal.id
+            ], function(err) {
+              if (err) reject(err);
+              else resolve();
+            });
+          });
+
+          // Log audit event (using direct database insert since we can't easily access logAudit)
+          try {
+            const auditId = uuidv4();
+            this.db.run(`
+              INSERT INTO organization_audit (
+                id, organization_id, action_type, performed_by_user_id, affected_user_id,
+                details, ip_address, user_agent, created_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+              auditId,
+              proposal.organization_id,
+              'rule_proposal_expired',
+              'system',
+              null,
+              JSON.stringify({
+                proposalId: proposal.id,
+                title: proposal.title,
+                field: proposal.current_rule_field,
+                votesYes: voteCounts.votes_yes,
+                votesNo: voteCounts.votes_no,
+                votesAbstain: voteCounts.votes_abstain
+              }),
+              null,
+              null,
+              now
+            ]);
+          } catch (auditErr) {
+            logger.warn('Failed to log audit event for expired proposal', { error: auditErr.message, proposalId: proposal.id });
+          }
+
+          // Broadcast WebSocket update
+          try {
+            const webSocketManager = require('./websocket');
+            webSocketManager.broadcastOrganizationUpdate(proposal.organization_id, 'rule-proposal-expired', {
+              proposalId: proposal.id,
+              organizationId: proposal.organization_id,
+              status: 'expired'
+            });
+          } catch (wsErr) {
+            logger.warn('Failed to broadcast rule proposal expiration', { error: wsErr.message, proposalId: proposal.id });
+          }
+
+          logger.info('Marked rule proposal as expired', {
+            proposalId: proposal.id,
+            organizationId: proposal.organization_id,
+            title: proposal.title
+          });
+        } catch (error) {
+          logger.error('Failed to expire rule proposal', {
+            error: error.message,
+            stack: error.stack,
+            proposalId: proposal.id
+          });
+        }
+      }
+    } catch (error) {
+      logger.error('Error processing expired rule proposals', {
+        error: error.message,
+        stack: error.stack
+      });
+    }
   }
 }
 

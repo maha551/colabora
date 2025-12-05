@@ -1,6 +1,6 @@
 import React from 'react';
 import { AppHeader } from './AppHeader';
-import { User } from '../../types';
+import { User, Organization } from '../../types';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -16,6 +16,7 @@ interface AppLayoutProps {
   title?: string;
   showCreateButton?: boolean;
   onCreateDocument?: () => void;
+  organization?: Organization | null;
 }
 
 export function AppLayout({
@@ -32,10 +33,11 @@ export function AppLayout({
   title,
   showCreateButton = false,
   onCreateDocument,
+  organization,
 }: AppLayoutProps) {
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Global Header */}
+      {/* Global Header with integrated organization branding */}
       <AppHeader
         currentUser={currentUser}
         onLogout={onLogout}
@@ -49,6 +51,7 @@ export function AppLayout({
         title={title}
         showCreateButton={showCreateButton}
         onCreateDocument={onCreateDocument}
+        organization={organization}
       />
 
       {/* Main Content */}

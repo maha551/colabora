@@ -1,11 +1,11 @@
-import { Suggestion, User, HeadingLevel, DocumentOptions } from "../types";
+import { Suggestion, User, HeadingLevel, DocumentOptions, Organization } from "../types";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Badge } from "./ui/badge";
 import { Checkbox } from "./ui/checkbox";
 import { Progress } from "./ui/progress";
-import { ThumbsUp, ThumbsDown, MessageSquare, CheckCircle2, Users, FileText, History } from "lucide-react";
+import { ThumbsUp, ThumbsDown, MessageSquare, CheckCircle2, Users, FileText, History, TrendingUp } from "lucide-react";
 import { Textarea } from "./ui/textarea";
 import { DiffViewer } from "./DiffViewer";
 import { useState, useEffect, useRef } from "react";
@@ -40,6 +40,13 @@ interface SuggestionCardProps {
   diffHighlightColor?: 'yellow' | 'green';
   key?: React.Key;
   documentOptions?: DocumentOptions;
+  organization?: Organization | null;
+  organizationBorderColor?: string | null;
+  ranking?: {
+    index: number;
+    score: number;
+    isControversial?: boolean;
+  };
 }
 
 // Helper function to get relative time
@@ -75,6 +82,9 @@ export function SuggestionCard({
   historyCount,
   onToggleHistory,
   diffHighlightColor = 'yellow',
+  organization,
+  organizationBorderColor,
+  ranking,
 }: SuggestionCardProps) {
   const [commentText, setCommentText] = useState("");
   const [showVoteDetails, setShowVoteDetails] = useState(false);
@@ -230,8 +240,15 @@ export function SuggestionCard({
     return "";
   };
 
+  const cardStyle = organizationBorderColor 
+    ? { borderColor: organizationBorderColor, borderWidth: '2px' }
+    : undefined;
+
   return (
-    <Card className={cn("p-0 overflow-hidden transition-all", getBorderColor())}>
+    <Card 
+      className={cn("p-0 overflow-hidden transition-all", getBorderColor())}
+      style={cardStyle}
+    >
       {/* Progress Bar at the very top */}
       <div 
         className="flex h-3 w-full overflow-hidden cursor-pointer border-b"
@@ -298,44 +315,71 @@ export function SuggestionCard({
       </div>
 
       {/* Compact Header with inline vote buttons */}
-      <div className="p-4">
+      <div className="p-3">
         {/* Document Context - Integrated into header */}
         {documentContext && (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3 pb-2 border-b">
-            <FileText className="h-3 w-3 flex-shrink-0" />
+          <div className="flex items-center gap-2 text-xs mb-2 pb-1.5 border-b flex-wrap">
+            <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
             <button
               onClick={() => onNavigateToDocument?.(documentContext.documentId)}
-              className="font-medium hover:text-foreground transition-colors text-left"
+              className="font-semibold text-blue-600 hover:text-blue-800 hover:underline transition-colors text-left cursor-pointer text-sm"
             >
               {documentContext.documentTitle}
             </button>
+            {organization && (
+              <Badge
+                className="text-xs px-2 py-0.5 font-medium border"
+                style={{
+                  backgroundColor: organization.brandingColor ? `${organization.brandingColor}15` : undefined,
+                  borderColor: organization.brandingColor || undefined,
+                  color: organization.brandingColor || undefined,
+                }}
+              >
+                {organization.name}
+              </Badge>
+            )}
             {documentContext.paragraphTitle && (
               <>
                 <span className="text-muted-foreground/50">•</span>
                 <span className="text-muted-foreground">{documentContext.paragraphTitle}</span>
               </>
             )}
-            {tabBadge && (
-              <div className="ml-auto">
-                {tabBadge}
-              </div>
-            )}
-            {showHistoryButton && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onToggleHistory}
-                className="h-6 px-2 text-xs ml-auto"
-              >
-                <History className="h-3 w-3 mr-1" />
-                History ({historyCount})
-              </Button>
-            )}
+            <div className="ml-auto flex items-center gap-2 flex-shrink-0">
+              {ranking && (
+                <div className="flex items-center gap-1.5 text-xs text-purple-700">
+                  <Badge className="font-bold bg-purple-100 text-purple-700 border-purple-200 px-1.5 py-0.5 text-xs">
+                    #{ranking.index}
+                  </Badge>
+                  <TrendingUp className="h-3 w-3" />
+                  <span className="text-muted-foreground">Score: {ranking.score}</span>
+                  {ranking.isControversial && (
+                    <>
+                      <span className="text-muted-foreground/50">•</span>
+                      <Badge className="bg-orange-100 text-orange-700 border-orange-200 px-1.5 py-0.5 text-xs font-semibold">
+                        ⚖️ Controversial
+                      </Badge>
+                    </>
+                  )}
+                </div>
+              )}
+              {tabBadge && tabBadge}
+              {showHistoryButton && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onToggleHistory}
+                  className="h-6 px-2 text-xs"
+                >
+                  <History className="h-3 w-3 mr-1" />
+                  History ({historyCount})
+                </Button>
+              )}
+            </div>
           </div>
         )}
         
-        <div className="flex items-start justify-between gap-4 mb-3">
-          <div className="flex items-start gap-3 flex-1 min-w-0">
+        <div className="flex items-start justify-between gap-3 mb-2">
+          <div className="flex items-start gap-2.5 flex-1 min-w-0">
             {onToggleSelect && (
               <div className="pt-1">
                 <Checkbox
@@ -348,8 +392,8 @@ export function SuggestionCard({
                 />
               </div>
             )}
-            <Avatar className="h-8 w-8 flex-shrink-0">
-              <AvatarFallback>
+            <Avatar className="h-7 w-7 flex-shrink-0">
+              <AvatarFallback className="text-xs">
                 {suggestion.user.name
                   .split(" ")
                   .map((n) => n[0])
@@ -357,27 +401,27 @@ export function SuggestionCard({
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1 flex-wrap">
-                <span className="text-sm font-normal text-muted-foreground">{suggestion.user.name}</span>
+              <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                <span className="text-sm font-medium text-foreground">{suggestion.user.name}</span>
                 {suggestion.type === 'TITLE' && (
-                  <Badge variant="outline" className="text-xs">
+                  <Badge variant="outline" className="text-xs px-1.5 py-0">
                     Heading{suggestion.headingLevel ? ` (${suggestion.headingLevel.toUpperCase()})` : ''}
                   </Badge>
                 )}
                 {isAccepted && (
-                  <Badge variant="default" className="bg-green-600 text-xs">
-                    Accepted ({acceptanceThreshold}%)
+                  <Badge variant="default" className="bg-green-600 text-xs px-1.5 py-0">
+                    Accepted ({Math.round(approvalPercentage)}%)
                   </Badge>
                 )}
                 {isSelected && selectionIndex === 0 && (
-                  <Badge className="bg-amber-500 text-xs">Compare 1</Badge>
+                  <Badge className="bg-amber-500 text-xs px-1.5 py-0">Compare 1</Badge>
                 )}
                 {isSelected && selectionIndex === 1 && (
-                  <Badge className="bg-blue-500 text-xs">Compare 2</Badge>
+                  <Badge className="bg-blue-500 text-xs px-1.5 py-0">Compare 2</Badge>
                 )}
               </div>
               {showDiffInline && originalText !== undefined ? (
-                <div className="mt-2">
+                <div className="mt-1">
                   <DiffViewer
                     originalText={originalText || ''}
                     suggestion1Text={suggestion.text}
@@ -386,7 +430,7 @@ export function SuggestionCard({
                   />
                 </div>
               ) : (
-                <p className="text-sm text-gray-900 font-normal line-clamp-2">
+                <p className="text-sm text-foreground font-normal line-clamp-2 mt-0.5">
                   "{suggestion.text}"
                 </p>
               )}
@@ -563,7 +607,7 @@ export function SuggestionCard({
 
         {/* Vote Details (collapsible) */}
         {showVoteDetails && (
-          <div className="space-y-2 pb-3 border-b animate-in slide-in-from-top-2 duration-200">
+          <div className="space-y-2 pb-2.5 border-b animate-in slide-in-from-top-2 duration-200 mt-2">
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-muted-foreground">Requires {acceptanceThreshold}% approval</span>
@@ -589,7 +633,7 @@ export function SuggestionCard({
             </div>
 
             {/* Vote details expansion */}
-            <div className="space-y-2 p-3 bg-muted/30 rounded-lg text-xs">
+            <div className="space-y-2 p-2.5 bg-muted/30 rounded-lg text-xs">
               {proVotes.length > 0 && (
                 <div>
                   <p className="font-medium text-green-600 dark:text-green-400 mb-1">
@@ -676,10 +720,10 @@ export function SuggestionCard({
         )}
 
         {/* Collapsible Comment Section */}
-        <div className="border-t pt-3">
+        <div className="border-t pt-2">
         <button
           onClick={() => setIsThreadExpanded(!isThreadExpanded)}
-          className="flex items-center justify-between w-full text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center justify-between w-full text-sm font-medium text-muted-foreground hover:text-foreground transition-colors py-0.5"
         >
           <div className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4" />
@@ -701,7 +745,7 @@ export function SuggestionCard({
 
         {/* Expanded Discussion Thread */}
         {isThreadExpanded && (
-          <div className="mt-4 space-y-4 animate-in slide-in-from-top-2 duration-200">
+          <div className="mt-3 space-y-3 animate-in slide-in-from-top-2 duration-200">
             {suggestion.comments.length > 0 && (
               <div className="space-y-3">
                 {topLevelComments.map((comment) => {
@@ -712,7 +756,7 @@ export function SuggestionCard({
                   return (
                     <div key={comment.id} className="space-y-2">
                       {/* Top-level Comment */}
-                      <div className="flex gap-3 p-3 rounded-lg bg-muted/30">
+                      <div className="flex gap-2.5 p-2.5 rounded-lg bg-muted/30">
                         <Avatar className="h-8 w-8 flex-shrink-0">
                           <AvatarFallback className="bg-primary/10 text-xs">
                             {comment.user.name.split(' ').map(n => n[0]).join('')}
@@ -763,7 +807,7 @@ export function SuggestionCard({
                       {/* Reply Form */}
                       {replyingTo === comment.id && (
                         <div className="ml-12 pl-6 border-l-2 border-border/50 space-y-2 animate-in slide-in-from-top-2 duration-200">
-                          <div className="flex gap-2 p-3 bg-background rounded-lg border border-border">
+                          <div className="flex gap-2 p-2.5 bg-background rounded-lg border border-border">
                             <Textarea
                               placeholder={`Reply to ${comment.user.name}...`}
                               value={replyText}
@@ -810,7 +854,7 @@ export function SuggestionCard({
 
             {/* New Comment Form */}
             <div className="space-y-2 pt-2 border-t">
-              <div className="flex gap-2 p-3 bg-muted/30 rounded-lg border border-border">
+              <div className="flex gap-2 p-2.5 bg-muted/30 rounded-lg border border-border">
                 <Textarea
                   placeholder="Write a comment..."
                   value={commentText}

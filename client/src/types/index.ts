@@ -141,6 +141,7 @@ export interface Document {
   createdAt: string;
   updatedAt: string;
   parentId?: string; // For hierarchical document structure
+  sortOrder?: number; // Sort order for tree positioning (REAL type from database)
   ownershipType?: 'personal' | 'shared' | 'organizational'; // Document ownership type
   organizationId?: string; // Organization ID for organizational documents
   status?: 'proposal' | 'draft' | 'agreed' | 'voting' | 'rejected' | 'expired'; // Document status
@@ -163,6 +164,49 @@ export interface Document {
   paragraphs: Paragraph[];
   options?: DocumentOptions;
   documentVotes?: DocumentVote[]; // Document-level votes for real-time updates
+}
+
+// Document Tree Proposal Types
+export type DocumentTreeOperationType = 'MOVE' | 'DELETE' | 'REORDER';
+
+export interface DocumentTreeProposal {
+  id: string;
+  documentId: string;
+  organizationId: string;
+  proposedByUserId: string;
+  operationType: DocumentTreeOperationType;
+  targetParentId?: string;
+  newOrder?: number;
+  reason?: string;
+  status: 'pending' | 'approved' | 'rejected' | 'applied';
+  createdAt: string;
+  updatedAt: string;
+  proposedByName?: string;
+  proposedByEmail?: string;
+  votes: TreeProposalVote[];
+  voteCounts: {
+    pro: number;
+    neutral: number;
+    contra: number;
+  };
+}
+
+export interface TreeProposalVote {
+  id: string;
+  userId: string;
+  vote: 'PRO' | 'NEUTRAL' | 'CONTRA';
+  createdAt: string;
+  updatedAt: string;
+  voterName?: string;
+  voterEmail?: string;
+}
+
+export interface TreeProposalOperation {
+  documentId: string;
+  operationType: DocumentTreeOperationType;
+  targetParentId?: string;
+  newOrder?: number;
+  reason?: string;
 }
 
 // Structure Proposal Types
@@ -352,6 +396,9 @@ export interface Organization {
   isActive: boolean;
   createdAt: string;
   members?: OrganizationMember[];
+  brandingColor?: string;
+  brandingLogoUrl?: string;
+  brandingTitle?: string;
 }
 
 export interface OrganizationMember {
@@ -429,8 +476,90 @@ export interface OrganizationGovernanceRules {
   representativeApprovalRequired: boolean;
   tamperProofEnabled: boolean;
   auditTrailEnabled: boolean;
+  
+  // Member permission flags
+  membersCanProposeRules: boolean;
+  membersCanProposeRulesThreshold: number;
+  membersCanCreateDocuments: boolean;
+  membersCanCreateDocumentsThreshold: number;
+  membersCanInitializeElections: boolean;
+  membersCanInitializeElectionsThreshold: number;
+  membersCanInviteMembers: boolean;
+  membersCanInviteMembersThreshold: number;
+  membersCanManageRuleProposals: boolean;
+  membersCanManageRuleProposalsThreshold: number;
+  
+  // Minimum safeguards (system-enforced)
+  minimumQuorumPercentage: number;
+  minimumApprovalThreshold: number;
+  minimumVotingPeriodHours: number;
+  
+  // Bootstrap mode
+  bootstrapMode: boolean;
+  bootstrapCompletedAt: string | null;
+  
+  // Recovery mode
+  recoveryMode: boolean;
+  recoveryModeEnteredAt: string | null;
+  recoveryModeReason: string | null;
+  
+  // Safety tracking
+  lastSuccessfulVoteAt: string | null;
+  failedProposalsCount: number;
+  lastFailedProposalAt: string | null;
+  ruleChangesThisMonth: number;
+  lastRuleChangeAt: string | null;
+  
   createdAt: string;
   updatedAt: string;
+}
+
+// Bootstrap mode status
+export interface BootstrapStatus {
+  mode: boolean;
+  completedAt: string | null;
+  progress: {
+    completed: number;
+    total: number;
+    checklist: Array<{
+      rule: string;
+      completed: boolean;
+      proposalId?: string;
+    }>;
+  };
+  canComplete: boolean;
+  daysRemaining: number | null;
+}
+
+// Recovery mode status
+export interface RecoveryStatus {
+  mode: boolean;
+  enteredAt: string | null;
+  reason: string | null;
+  canExit: boolean;
+}
+
+// Rule history entry
+export interface RuleHistoryEntry {
+  id: string;
+  ruleField: string;
+  oldValue: any;
+  newValue: any;
+  changedBy: {
+    userId: string;
+    userName: string;
+    proposalId?: string;
+  };
+  changedAt: string;
+}
+
+// Permission context
+export interface PermissionContext {
+  isRepresentative: boolean;
+  isActiveMember: boolean;
+  isAdmin: boolean;
+  bootstrapMode: boolean;
+  recoveryMode: boolean;
 }
 
 export interface RepresentativeElection {
@@ -453,6 +582,7 @@ export interface RepresentativeElection {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  candidates?: ElectionCandidate[]; // Nominees/candidates for this election
 }
 
 export interface ElectionCandidate {
@@ -514,6 +644,17 @@ export interface VoterToken {
   tokenIssuedAt: string;
   tokenUsed: boolean;
   tokenUsedAt?: string;
+}
+
+// Document Tree Proposal Response Types
+export interface TreeProposalsResponse {
+  success: boolean;
+  proposals: DocumentTreeProposal[];
+}
+
+export interface TreeProposalResponse {
+  success: boolean;
+  proposal: DocumentTreeProposal;
 }
 
 export interface RepresentativeTerm {

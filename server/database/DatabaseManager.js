@@ -184,6 +184,9 @@ class DatabaseManager {
           is_active BOOLEAN DEFAULT true,
           created_by_admin_id TEXT NOT NULL,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          branding_color TEXT,
+          branding_logo_url TEXT,
+          branding_title TEXT,
           FOREIGN KEY (created_by_admin_id) REFERENCES users(id)
         )`
       },

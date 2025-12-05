@@ -179,23 +179,32 @@ router.get('/', requireAuth, (req, res) => {
   const userId = req.user.id;
 
   // Get organizations where user is a member or representative
+  // Check if user is a member OR if user ID is in the representatives JSON array
+  // Use json_each to properly check array membership (representatives is stored as JSON array string)
   const query = `
     SELECT DISTINCT o.*,
            om.status as membership_status,
            om.joined_at
     FROM organizations o
     LEFT JOIN organization_members om ON o.id = om.organization_id AND om.user_id = ?
-    WHERE om.user_id = ? OR json_extract(o.representatives, '$') LIKE ?
+    WHERE om.user_id = ? 
+       OR EXISTS (
+         SELECT 1 
+         FROM json_each(o.representatives) AS je
+         WHERE je.value = ?
+       )
     ORDER BY o.created_at DESC
   `;
 
-  db.all(query, [userId, userId, `%${userId}%`], (err, rows) => {
+  db.all(query, [userId, userId, userId], (err, rows) => {
     if (err) {
       logger.error('Error fetching organizations', { error: err.message, userId: req.user.id });
       return res.status(500).json({ error: 'Failed to fetch organizations' });
     }
 
-    const organizations = rows.map(row => ({
+    // Fallback: If SQL json_each didn't work, filter in JavaScript
+    // This handles cases where the user is a representative but not a member
+    const allOrgs = rows.map(row => ({
       id: row.id,
       name: row.name,
       description: row.description,
@@ -208,6 +217,20 @@ router.get('/', requireAuth, (req, res) => {
       joinedAt: row.joined_at,
       createdAt: row.created_at
     }));
+
+    // Additional filter: Include organizations where user is a representative (if not already included)
+    // This is a safety net in case the SQL query didn't catch all cases
+    const organizations = allOrgs.filter(org => {
+      const isMember = org.membershipStatus !== null && org.membershipStatus !== undefined;
+      const isRepresentative = org.representatives && Array.isArray(org.representatives) && org.representatives.includes(userId);
+      return isMember || isRepresentative;
+    });
+
+    logger.info('Fetched user organizations', { 
+      userId, 
+      totalFound: organizations.length,
+      organizations: organizations.map(o => ({ id: o.id, name: o.name }))
+    });
 
     res.json({ organizations });
   });
@@ -257,6 +280,9 @@ router.get('/:organizationId', requireAuth, ...paramValidation.organizationId, a
             id: org.id,
             name: org.name,
             description: org.description,
+            brandingColor: org.branding_color || null,
+            brandingLogoUrl: org.branding_logo_url || null,
+            brandingTitle: org.branding_title || null,
             representatives: JSON.parse(org.representatives || '[]'),
             membershipPolicy: org.membership_policy,
             votingThreshold: org.voting_threshold,
@@ -290,7 +316,7 @@ router.put('/:organizationId', requireAuth, ...paramValidation.organizationId, .
   const db = req.app.locals.db;
   const { organizationId } = req.params;
   const userId = req.user.id;
-  const { name, description, membershipPolicy, votingThreshold } = req.body;
+  const { name, description, membershipPolicy, votingThreshold, brandingColor, brandingLogoUrl, brandingTitle } = req.body;
 
   try {
     const isRep = await isRepresentative(db, userId, organizationId);
@@ -298,18 +324,103 @@ router.put('/:organizationId', requireAuth, ...paramValidation.organizationId, .
       return res.status(403).json({ error: 'Only representatives can update organization' });
     }
 
-    db.run(`UPDATE organizations SET
-      name = ?, description = ?, membership_policy = ?, voting_threshold = ?
-      WHERE id = ?`, [
-      name, description, membershipPolicy, votingThreshold, organizationId
-    ], function(err) {
+    // Build dynamic UPDATE query based on provided fields
+    const updateFields = [];
+    const updateValues = [];
+    const auditDetails = {};
+
+    if (name !== undefined) {
+      updateFields.push('name = ?');
+      updateValues.push(name);
+      auditDetails.name = name;
+    }
+    if (description !== undefined) {
+      updateFields.push('description = ?');
+      updateValues.push(description);
+      auditDetails.description = description;
+    }
+    if (membershipPolicy !== undefined) {
+      updateFields.push('membership_policy = ?');
+      updateValues.push(membershipPolicy);
+      auditDetails.membershipPolicy = membershipPolicy;
+    }
+    if (votingThreshold !== undefined) {
+      updateFields.push('voting_threshold = ?');
+      updateValues.push(votingThreshold);
+      auditDetails.votingThreshold = votingThreshold;
+    }
+    if (brandingColor !== undefined) {
+      updateFields.push('branding_color = ?');
+      updateValues.push(brandingColor);
+      auditDetails.brandingColor = brandingColor;
+    }
+    if (brandingLogoUrl !== undefined) {
+      updateFields.push('branding_logo_url = ?');
+      updateValues.push(brandingLogoUrl || null);
+      auditDetails.brandingLogoUrl = brandingLogoUrl || null;
+    }
+    if (brandingTitle !== undefined) {
+      updateFields.push('branding_title = ?');
+      updateValues.push(brandingTitle || null);
+      auditDetails.brandingTitle = brandingTitle || null;
+    }
+
+    if (updateFields.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    updateValues.push(organizationId);
+
+    db.run(`UPDATE organizations SET ${updateFields.join(', ')} WHERE id = ?`, updateValues, function(err) {
       if (err) {
         logger.error('Error updating organization', { error: err.message, organizationId: req.params.organizationId });
         return res.status(500).json({ error: 'Failed to update organization' });
       }
 
-      logAudit(db, organizationId, 'org_updated', userId, null, { name, membershipPolicy, votingThreshold }, req);
-      res.json({ success: true });
+      logAudit(db, organizationId, 'org_updated', userId, null, auditDetails, req);
+
+      // Return updated organization data and broadcast WebSocket event
+      db.get('SELECT * FROM organizations WHERE id = ?', [organizationId], (getErr, org) => {
+        if (getErr) {
+          logger.error('Error fetching updated organization', { error: getErr.message });
+          return res.json({ success: true });
+        }
+
+        // Format organization data to match frontend interface
+        let orgData;
+        try {
+          orgData = {
+            id: org.id,
+            name: org.name,
+            description: org.description,
+            representatives: JSON.parse(org.representatives || '[]'),
+            membershipPolicy: org.membership_policy,
+            votingThreshold: org.voting_threshold,
+            isActive: org.is_active === 1,
+            createdAt: org.created_at,
+            brandingColor: org.branding_color || null,
+            brandingLogoUrl: org.branding_logo_url || null,
+            brandingTitle: org.branding_title || null,
+          };
+        } catch (e) {
+          logger.error('Error parsing organization data', { error: e.message });
+          return res.json({ success: true });
+        }
+
+        // Broadcast WebSocket event if branding was updated (use actual database values)
+        if (brandingColor !== undefined || brandingLogoUrl !== undefined || brandingTitle !== undefined) {
+          const webSocketManager = require('../modules/websocket');
+          webSocketManager.broadcastOrganizationUpdate(organizationId, 'branding-updated', {
+            organizationId,
+            brandingColor: orgData.brandingColor,
+            brandingLogoUrl: orgData.brandingLogoUrl,
+            brandingTitle: orgData.brandingTitle,
+            updatedBy: userId
+          });
+        }
+
+        res.json({ success: true, organization: orgData });
+      });
     });
   } catch (error) {
     logger.error('Error updating organization', { error: error.message, stack: error.stack, organizationId: req.params.organizationId });
@@ -342,18 +453,31 @@ router.post('/:organizationId/representatives', requireAuth, ...paramValidation.
         return res.status(400).json({ error: 'User is already a representative' });
       }
 
-      // Add new representative
-      currentReps.push(newRepresentativeId);
-      const updatedReps = JSON.stringify(currentReps);
-
-      db.run('UPDATE organizations SET representatives = ? WHERE id = ?', [updatedReps, organizationId], function(err) {
-        if (err) {
-          logger.error('Error updating representatives', { error: err.message, organizationId: req.params.organizationId });
-          return res.status(500).json({ error: 'Failed to add representative' });
+      // Validate that the new representative is already an active member
+      isActiveMember(db, newRepresentativeId, organizationId).then(isMember => {
+        if (!isMember) {
+          return res.status(400).json({ 
+            error: 'Only active members can be nominated as representatives. The user must be a member of the organization first.' 
+          });
         }
 
-        logAudit(db, organizationId, 'rep_added', userId, newRepresentativeId, {}, req);
-        res.json({ representatives: currentReps });
+        // Add new representative
+        currentReps.push(newRepresentativeId);
+        const updatedReps = JSON.stringify(currentReps);
+
+        // Update representatives list
+        db.run('UPDATE organizations SET representatives = ? WHERE id = ?', [updatedReps, organizationId], function(err) {
+          if (err) {
+            logger.error('Error updating representatives', { error: err.message, organizationId: req.params.organizationId });
+            return res.status(500).json({ error: 'Failed to add representative' });
+          }
+
+          logAudit(db, organizationId, 'rep_added', userId, newRepresentativeId, {}, req);
+          res.json({ representatives: currentReps });
+        });
+      }).catch(err => {
+        logger.error('Error checking member status', { error: err.message, organizationId, newRepresentativeId });
+        return res.status(500).json({ error: 'Failed to verify member status' });
       });
     });
   } catch (error) {
@@ -419,9 +543,17 @@ router.post('/:organizationId/members/invite', requireAuth, ...paramValidation.o
   const { emails } = req.body; // Array of email addresses
 
   try {
-    const isRep = await isRepresentative(db, userId, organizationId);
-    if (!isRep) {
-      return res.status(403).json({ error: 'Only representatives can invite members' });
+    // Check dynamic permission for inviting members
+    const { canInviteMembers } = require('../modules/permissions');
+    const { getGovernanceRules } = require('../routes/governance');
+    
+    const rules = await getGovernanceRules(db, organizationId);
+    const canInvite = await canInviteMembers(db, userId, organizationId, rules, req.user.role);
+    if (!canInvite) {
+      return res.status(403).json({ 
+        error: 'You do not have permission to invite members',
+        details: 'Check your organization\'s governance rules to see who can invite members'
+      });
     }
 
     // For now, just log the invitations (in production, would send actual emails)

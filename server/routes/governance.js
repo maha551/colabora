@@ -3,6 +3,19 @@ const { v4: uuidv4 } = require('uuid');
 const crypto = require('crypto');
 const { requireAuth } = require('../middleware/auth');
 const { logger } = require('../middleware/logger');
+const {
+  isRepresentative: isRepHelper,
+  isActiveMember: isActiveMemberHelper,
+  canProposeRules,
+  canCreateDocuments,
+  canInitializeElections,
+  canInviteMembers,
+  canManageRuleProposals
+} = require('../modules/permissions');
+
+// Use permission module functions, but keep local functions for backward compatibility
+const isRepresentativeFromModule = isRepHelper;
+const isActiveMemberFromModule = isActiveMemberHelper;
 
 const router = express.Router();
 
@@ -58,6 +71,40 @@ function transformGovernanceRules(row) {
     representativeApprovalRequired: row.representative_approval_required === 1 || row.representative_approval_required === true,
     tamperProofEnabled: row.tamper_proof_enabled === 1 || row.tamper_proof_enabled === true,
     auditTrailEnabled: row.audit_trail_enabled === 1 || row.audit_trail_enabled === true,
+    
+    // Member permission flags
+    membersCanProposeRules: row.members_can_propose_rules === 1 || row.members_can_propose_rules === true,
+    membersCanProposeRulesThreshold: row.members_can_propose_rules_threshold ?? 0.5,
+    membersCanCreateDocuments: row.members_can_create_documents === 1 || row.members_can_create_documents === true,
+    membersCanCreateDocumentsThreshold: row.members_can_create_documents_threshold ?? 0.5,
+    membersCanInitializeElections: row.members_can_initialize_elections === 1 || row.members_can_initialize_elections === true,
+    membersCanInitializeElectionsThreshold: row.members_can_initialize_elections_threshold ?? 0.5,
+    membersCanInviteMembers: row.members_can_invite_members === 1 || row.members_can_invite_members === true,
+    membersCanInviteMembersThreshold: row.members_can_invite_members_threshold ?? 0.5,
+    membersCanManageRuleProposals: row.members_can_manage_rule_proposals === 1 || row.members_can_manage_rule_proposals === true,
+    membersCanManageRuleProposalsThreshold: row.members_can_manage_rule_proposals_threshold ?? 0.5,
+    
+    // Minimum safeguards
+    minimumQuorumPercentage: row.minimum_quorum_percentage ?? 0.1,
+    minimumApprovalThreshold: row.minimum_approval_threshold ?? 0.5,
+    minimumVotingPeriodHours: row.minimum_voting_period_hours ?? 24,
+    
+    // Bootstrap mode
+    bootstrapMode: row.bootstrap_mode === 1 || row.bootstrap_mode === true,
+    bootstrapCompletedAt: row.bootstrap_completed_at || null,
+    
+    // Recovery mode
+    recoveryMode: row.recovery_mode === 1 || row.recovery_mode === true,
+    recoveryModeEnteredAt: row.recovery_mode_entered_at || null,
+    recoveryModeReason: row.recovery_mode_reason || null,
+    
+    // Safety tracking
+    lastSuccessfulVoteAt: row.last_successful_vote_at || null,
+    failedProposalsCount: row.failed_proposals_count ?? 0,
+    lastFailedProposalAt: row.last_failed_proposal_at || null,
+    ruleChangesThisMonth: row.rule_changes_this_month ?? 0,
+    lastRuleChangeAt: row.last_rule_change_at || null,
+    
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -162,6 +209,323 @@ router.get('/:organizationId/governance-rules', requireAuth, async (req, res) =>
   } catch (error) {
     logger.error('Error fetching governance rules', { error: error.message, stack: error.stack, organizationId: req.params.organizationId });
     res.status(500).json({ error: 'Failed to fetch governance rules' });
+  }
+});
+
+// Get organization permissions for current user
+router.get('/:organizationId/permissions', requireAuth, async (req, res) => {
+  const db = req.app.locals.db;
+  const { organizationId } = req.params;
+  const userId = req.user.id;
+  const userRole = req.user.role;
+
+  try {
+    const rules = await getGovernanceRules(db, organizationId);
+    const isRep = await isRepresentativeFromModule(db, userId, organizationId);
+    const isMember = await isActiveMemberFromModule(db, userId, organizationId);
+    const isAdmin = userRole === 'admin';
+
+    const permissions = {
+      canProposeRules: await canProposeRules(db, userId, organizationId, rules, userRole),
+      canCreateDocuments: await canCreateDocuments(db, userId, organizationId, rules, userRole),
+      canInitializeElections: await canInitializeElections(db, userId, organizationId, rules, userRole),
+      canInviteMembers: await canInviteMembers(db, userId, organizationId, rules, userRole),
+      canManageRuleProposals: await canManageRuleProposals(db, userId, organizationId, rules, userRole),
+      canVoteInElections: isMember || isRep || isAdmin,
+      canViewAnalytics: isMember || isRep || isAdmin,
+      canExportData: isRep || isAdmin,
+      canManageOrganization: isRep || isAdmin
+    };
+
+    res.json({
+      success: true,
+      permissions,
+      context: {
+        isRepresentative: isRep,
+        isActiveMember: isMember,
+        isAdmin,
+        bootstrapMode: rules?.bootstrapMode ?? false,
+        recoveryMode: rules?.recoveryMode ?? false
+      }
+    });
+  } catch (error) {
+    logger.error('Error fetching permissions', { error: error.message, organizationId, userId });
+    res.status(500).json({ error: 'Failed to fetch permissions' });
+  }
+});
+
+// Get bootstrap status for organization
+router.get('/:organizationId/bootstrap-status', requireAuth, async (req, res) => {
+  const db = req.app.locals.db;
+  const { organizationId } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const rules = await getGovernanceRules(db, organizationId);
+    const isBootstrap = rules?.bootstrapMode ?? true; // Default to true for new orgs
+    
+    // Core rules that should be set during bootstrap
+    const coreRules = ['membersCanProposeRules', 'membersCanCreateDocuments', 'defaultQuorumPercentage'];
+    
+    const checklist = await Promise.all(coreRules.map(async (rule) => {
+      const proposal = await new Promise((resolve, reject) => {
+        db.get(`
+          SELECT id, status FROM governance_rule_proposals
+          WHERE organization_id = ? 
+            AND current_rule_field = ?
+            AND status IN ('approved', 'active')
+          ORDER BY created_at DESC
+          LIMIT 1
+        `, [organizationId, rule], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+      
+      return {
+        rule,
+        completed: !!proposal && proposal.status === 'approved',
+        proposalId: proposal?.id
+      };
+    }));
+    
+    const completed = checklist.filter(c => c.completed).length;
+    const isRep = await isRepresentativeFromModule(db, userId, organizationId);
+    const isAdmin = req.user.role === 'admin';
+    
+    let daysRemaining = null;
+    if (isBootstrap && !rules?.bootstrapCompletedAt) {
+      const org = await new Promise((resolve, reject) => {
+        db.get('SELECT created_at FROM organizations WHERE id = ?', [organizationId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+      
+      if (org) {
+        const created = new Date(org.created_at);
+        const daysSince = (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
+        daysRemaining = Math.max(0, 90 - daysSince);
+      }
+    }
+    
+    res.json({
+      success: true,
+      bootstrap: {
+        mode: isBootstrap,
+        completedAt: rules?.bootstrapCompletedAt || null,
+        progress: {
+          completed,
+          total: 3,
+          checklist
+        },
+        canComplete: isRep || isAdmin,
+        daysRemaining: daysRemaining ? Math.ceil(daysRemaining) : null
+      }
+    });
+  } catch (error) {
+    logger.error('Error fetching bootstrap status', { error: error.message, organizationId });
+    res.status(500).json({ error: 'Failed to fetch bootstrap status' });
+  }
+});
+
+// Complete bootstrap mode
+router.post('/:organizationId/bootstrap/complete', requireAuth, async (req, res) => {
+  const db = req.app.locals.db;
+  const { organizationId } = req.params;
+  const userId = req.user.id;
+  const { confirm } = req.body;
+
+  if (!confirm) {
+    return res.status(400).json({ error: 'Confirmation required' });
+  }
+
+  try {
+    const isRep = await isRepresentativeFromModule(db, userId, organizationId);
+    if (!isRep && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only representatives can complete bootstrap' });
+    }
+
+    const rules = await getGovernanceRules(db, organizationId);
+    if (!rules?.bootstrapMode) {
+      return res.status(400).json({ error: 'Organization is not in bootstrap mode' });
+    }
+
+    const now = new Date().toISOString();
+    
+    await new Promise((resolve, reject) => {
+      db.run(`
+        UPDATE organization_governance_rules
+        SET 
+          bootstrap_mode = 0,
+          bootstrap_completed_at = ?,
+          updated_at = ?
+        WHERE organization_id = ?
+      `, [now, now, organizationId], function(err) {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    logAudit(db, organizationId, 'bootstrap_completed', userId, null, {
+      completedAt: now
+    }, req);
+
+    res.json({
+      success: true,
+      message: 'Bootstrap completed successfully',
+      bootstrap: {
+        mode: false,
+        completedAt: now
+      }
+    });
+  } catch (error) {
+    logger.error('Error completing bootstrap', { error: error.message, organizationId });
+    res.status(500).json({ error: 'Failed to complete bootstrap' });
+  }
+});
+
+// Validate rule change before creating proposal
+router.post('/:organizationId/validate-rule-change', requireAuth, async (req, res) => {
+  const db = req.app.locals.db;
+  const { organizationId } = req.params;
+  const { ruleField, proposedValue } = req.body;
+
+  try {
+    const errors = [];
+    const warnings = [];
+    const conflicts = [];
+    
+    const { validateGovernanceRuleValue, checkRuleDependencies, checkDeadlockConditions, checkDuplicateProposal } = require('../modules/rule-validation');
+
+    // 1. Validate value format
+    const validation = validateGovernanceRuleValue(ruleField, proposedValue);
+    if (!validation.valid) {
+      errors.push(validation.error);
+    }
+
+    // 2. Check for duplicates (includes cooldown check)
+    const duplicate = await checkDuplicateProposal(db, organizationId, ruleField);
+    if (duplicate.exists) {
+      conflicts.push({
+        type: 'duplicate',
+        message: duplicate.message,
+        details: duplicate.details
+      });
+    }
+
+    // 3. Check dependencies
+    const dependencyCheck = await checkRuleDependencies(db, organizationId, ruleField, proposedValue);
+    if (!dependencyCheck.valid) {
+      conflicts.push({
+        type: 'dependency',
+        message: dependencyCheck.error,
+        details: dependencyCheck.details
+      });
+    }
+
+    // 4. Check for deadlock conditions
+    const deadlockCheck = checkDeadlockConditions(ruleField, proposedValue);
+    if (deadlockCheck.isDeadlock) {
+      conflicts.push({
+        type: 'deadlock',
+        message: deadlockCheck.message,
+        details: deadlockCheck.details
+      });
+    }
+
+    res.json({
+      valid: errors.length === 0 && conflicts.filter(c => c.type !== 'cooldown').length === 0,
+      errors,
+      warnings,
+      conflicts
+    });
+  } catch (error) {
+    logger.error('Error validating rule change', { error: error.message, organizationId });
+    res.status(500).json({ error: 'Failed to validate rule change' });
+  }
+});
+
+// Get rule change history
+router.get('/:organizationId/rule-history', requireAuth, async (req, res) => {
+  const db = req.app.locals.db;
+  const { organizationId } = req.params;
+  const { ruleField, limit = 50, offset = 0 } = req.query;
+  const parsedLimit = parseInt(limit);
+  const parsedOffset = parseInt(offset);
+
+  try {
+    // Check access
+    const userId = req.user.id;
+    const hasAccess = await isRepresentativeFromModule(db, userId, organizationId) ||
+                     await isActiveMemberFromModule(db, userId, organizationId);
+    
+    if (!hasAccess && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    let query = `
+      SELECT grh.*, u.name as changed_by_user_name
+      FROM governance_rule_history grh
+      LEFT JOIN users u ON grh.changed_by_user_id = u.id
+      WHERE grh.organization_id = ?
+    `;
+    const params = [organizationId];
+    
+    if (ruleField) {
+      query += ` AND grh.rule_field = ?`;
+      params.push(ruleField);
+    }
+    
+    query += ` ORDER BY grh.changed_at DESC LIMIT ? OFFSET ?`;
+    params.push(parsedLimit, parsedOffset);
+
+    const history = await new Promise((resolve, reject) => {
+      db.all(query, params, (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    const totalCount = await new Promise((resolve, reject) => {
+      let countQuery = `SELECT COUNT(*) as total FROM governance_rule_history WHERE organization_id = ?`;
+      const countParams = [organizationId];
+      if (ruleField) {
+        countQuery += ` AND rule_field = ?`;
+        countParams.push(ruleField);
+      }
+      db.get(countQuery, countParams, (err, row) => {
+        if (err) reject(err);
+        else resolve(row?.total || 0);
+      });
+    });
+
+    const formattedHistory = history.map(entry => ({
+      id: entry.id,
+      ruleField: entry.rule_field,
+      oldValue: JSON.parse(entry.old_value),
+      newValue: JSON.parse(entry.new_value),
+      changedBy: {
+        userId: entry.changed_by_user_id,
+        userName: entry.changed_by_user_name,
+        proposalId: entry.changed_by_proposal_id
+      },
+      changedAt: entry.changed_at
+    }));
+
+    res.json({
+      success: true,
+      history: formattedHistory,
+      pagination: {
+        total: totalCount,
+        limit: parsedLimit,
+        offset: parsedOffset,
+        hasMore: (parsedOffset + formattedHistory.length) < totalCount
+      }
+    });
+  } catch (error) {
+    logger.error('Error fetching rule history', { error: error.message, organizationId });
+    res.status(500).json({ error: 'Failed to fetch rule history' });
   }
 });
 
@@ -587,10 +951,52 @@ router.post('/:organizationId/rule-proposals', requireAuth, async (req, res) => 
   const { title, description, ruleField, proposedValue, options } = req.body;
 
   try {
-    // Check if user is representative
-    const isRep = await isRepresentative(db, userId, organizationId);
-    if (!isRep) {
-      return res.status(403).json({ error: 'Only representatives can create rule proposals' });
+    // 1. Check dynamic permission
+    const rules = await getGovernanceRules(db, organizationId);
+    const canPropose = await canProposeRules(db, userId, organizationId, rules, req.user.role);
+    if (!canPropose) {
+      return res.status(403).json({ 
+        error: 'You do not have permission to create rule proposals',
+        details: 'Check your organization\'s governance rules to see who can propose changes'
+      });
+    }
+
+    // 2. Validate rule change
+    const { validateGovernanceRuleValue, checkRuleDependencies, checkDeadlockConditions, checkDuplicateProposal } = require('../modules/rule-validation');
+    
+    const validation = validateGovernanceRuleValue(ruleField, proposedValue);
+    if (!validation.valid) {
+      return res.status(400).json({
+        error: 'Invalid rule change',
+        details: [validation.error]
+      });
+    }
+
+    // 3. Check for duplicates (including cooldown)
+    const duplicate = await checkDuplicateProposal(db, organizationId, ruleField);
+    if (duplicate.exists) {
+      return res.status(409).json({
+        error: duplicate.message,
+        details: duplicate.details
+      });
+    }
+
+    // 4. Check dependencies
+    const dependencyCheck = await checkRuleDependencies(db, organizationId, ruleField, proposedValue);
+    if (!dependencyCheck.valid) {
+      return res.status(400).json({
+        error: 'Rule change would create invalid state',
+        details: [dependencyCheck.error]
+      });
+    }
+
+    // 5. Check for deadlock conditions (warn but allow)
+    const deadlockCheck = checkDeadlockConditions(ruleField, proposedValue);
+    if (deadlockCheck.isDeadlock) {
+      return res.status(400).json({
+        error: deadlockCheck.message,
+        details: deadlockCheck.details
+      });
     }
 
     const proposalId = uuidv4();
@@ -721,37 +1127,65 @@ router.post('/:organizationId/rule-proposals/:proposalId/start-voting', requireA
   const userId = req.user.id;
 
   try {
-    // Check if user is representative
-    const isRep = await isRepresentative(db, userId, organizationId);
-    if (!isRep) {
-      return res.status(403).json({ error: 'Only representatives can start rule proposal voting' });
+    // 1. Check dynamic permission
+    const rules = await getGovernanceRules(db, organizationId);
+    const canManage = await canManageRuleProposals(db, userId, organizationId, rules, req.user.role);
+    if (!canManage) {
+      return res.status(403).json({ error: 'You do not have permission to start voting' });
     }
 
+    // 2. Get proposal
+    const proposal = await new Promise((resolve, reject) => {
+      db.get(`
+        SELECT * FROM governance_rule_proposals
+        WHERE id = ? AND organization_id = ? AND status = 'draft'
+      `, [proposalId, organizationId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (!proposal) {
+      return res.status(404).json({ error: 'Proposal not found or not in draft status' });
+    }
+
+    // 3. Get current rules and create snapshot
+    const currentRules = await getGovernanceRules(db, organizationId);
+    const snapshotRules = JSON.stringify(currentRules);
+
+    // 4. Calculate voting period (enforce minimum)
+    const minPeriod = rules?.minimumVotingPeriodHours || 24;
+    const defaultPeriod = 14 * 24; // 14 days default
+    const votingPeriodHours = Math.max(minPeriod, defaultPeriod);
+
     const now = new Date();
-    const votingEnd = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000); // 14 days
+    const votingEnd = new Date(now.getTime() + votingPeriodHours * 60 * 60 * 1000);
 
-    // Get total voters (active members)
-    db.get('SELECT COUNT(*) as total FROM organization_members WHERE organization_id = ? AND status = "active"',
-      [organizationId], (err, result) => {
-        if (err) {
-          logger.error('Error counting members', { error: err.message, organizationId: req.params.organizationId });
-          return res.status(500).json({ error: 'Failed to count members' });
-        }
+    // 5. Get total voters (active members)
+    const result = await new Promise((resolve, reject) => {
+      db.get('SELECT COUNT(*) as total FROM organization_members WHERE organization_id = ? AND status = "active"',
+        [organizationId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+    });
 
-        const totalVoters = result.total;
+    const totalVoters = result.total;
 
-        db.run(`
-          UPDATE governance_rule_proposals SET
-            status = 'active',
-            voting_starts_at = ?,
-            voting_ends_at = ?,
-            total_voters = ?,
-            updated_at = ?
-          WHERE id = ? AND organization_id = ? AND status = 'draft'
-        `, [
-          now.toISOString(), votingEnd.toISOString(), totalVoters,
-          now.toISOString(), proposalId, organizationId
-        ], function(err) {
+    // 6. Update proposal with snapshot and voting period
+    db.run(`
+      UPDATE governance_rule_proposals SET
+        status = 'active',
+        voting_starts_at = ?,
+        voting_ends_at = ?,
+        snapshot_rules = ?,
+        total_voters = ?,
+        updated_at = ?
+      WHERE id = ? AND organization_id = ? AND status = 'draft'
+    `, [
+      now.toISOString(), votingEnd.toISOString(), snapshotRules, totalVoters,
+      now.toISOString(), proposalId, organizationId
+    ], function(err) {
           if (err) {
             logger.error('Error starting rule proposal voting', { error: err.message, proposalId, organizationId: req.params.organizationId });
             return res.status(500).json({ error: 'Failed to start voting' });
@@ -771,7 +1205,6 @@ router.post('/:organizationId/rule-proposals/:proposalId/start-voting', requireA
             success: true,
             message: 'Rule proposal voting started',
             votingEndsAt: votingEnd.toISOString()
-          });
         });
       });
 
@@ -795,13 +1228,35 @@ router.post('/:organizationId/rule-proposals/:proposalId/vote', requireAuth, asy
       return res.status(403).json({ error: 'Only active members can vote on rule proposals' });
     }
 
-    // Check if proposal exists and is active
+    // Check if proposal exists and is active (and not expired)
+    const now = new Date().toISOString();
     db.get(`
       SELECT * FROM governance_rule_proposals
       WHERE id = ? AND organization_id = ? AND status = 'active'
-    `, [proposalId, organizationId], (err, proposal) => {
+        AND (voting_ends_at IS NULL OR voting_ends_at > ?)
+    `, [proposalId, organizationId, now], (err, proposal) => {
       if (err || !proposal) {
-        return res.status(404).json({ error: 'Rule proposal not found or not active' });
+        if (err) {
+          logger.error('Error checking proposal status', { error: err.message, proposalId, organizationId });
+          return res.status(500).json({ error: 'Failed to check proposal status' });
+        }
+        // Check if proposal exists but is expired
+        db.get(`
+          SELECT id, voting_ends_at, status FROM governance_rule_proposals
+          WHERE id = ? AND organization_id = ?
+        `, [proposalId, organizationId], (checkErr, checkProposal) => {
+          if (checkErr || !checkProposal) {
+            return res.status(404).json({ error: 'Rule proposal not found' });
+          }
+          if (checkProposal.status !== 'active') {
+            return res.status(400).json({ error: `Rule proposal is ${checkProposal.status}, cannot vote` });
+          }
+          if (checkProposal.voting_ends_at && checkProposal.voting_ends_at < now) {
+            return res.status(400).json({ error: 'Voting deadline has passed for this proposal' });
+          }
+          return res.status(404).json({ error: 'Rule proposal not found or not active' });
+        });
+        return;
       }
 
       // Check if user already voted
@@ -842,6 +1297,20 @@ router.post('/:organizationId/rule-proposals/:proposalId/vote', requireAuth, asy
             voteChoice
           }, req);
 
+          // Broadcast WebSocket update for real-time vote count updates
+          try {
+            const webSocketManager = require('../modules/websocket');
+            webSocketManager.broadcastOrganizationUpdate(organizationId, 'rule-proposal-vote-cast', {
+              organizationId,
+              proposalId,
+              userId,
+              selectedOptionId,
+              voteChoice
+            });
+          } catch (wsErr) {
+            logger.warn('Failed to broadcast vote update', { error: wsErr.message, proposalId, organizationId });
+          }
+
           res.json({ success: true, message: 'Vote recorded successfully' });
         });
       });
@@ -860,30 +1329,192 @@ router.post('/:organizationId/rule-proposals/:proposalId/complete', requireAuth,
   const userId = req.user.id;
 
   try {
-    // Check if user is representative
-    const isRep = await isRepresentative(db, userId, organizationId);
-    if (!isRep) {
-      return res.status(403).json({ error: 'Only representatives can complete rule proposal voting' });
+    // 1. Check dynamic permission
+    const rules = await getGovernanceRules(db, organizationId);
+    const canManage = await canManageRuleProposals(db, userId, organizationId, rules, req.user.role);
+    if (!canManage) {
+      return res.status(403).json({ error: 'You do not have permission to complete voting' });
     }
 
-    // Get proposal and results
-    db.get(`
-      SELECT * FROM governance_rule_proposals
-      WHERE id = ? AND organization_id = ? AND status = 'active'
-    `, [proposalId, organizationId], (err, proposal) => {
-      if (err || !proposal) {
-        return res.status(404).json({ error: 'Rule proposal not found or not active' });
-      }
+    // 2. Get proposal with snapshot (check expiration)
+    const now = new Date().toISOString();
+    const proposal = await new Promise((resolve, reject) => {
+      db.get(`
+        SELECT * FROM governance_rule_proposals
+        WHERE id = ? AND organization_id = ? AND status = 'active'
+          AND (voting_ends_at IS NULL OR voting_ends_at > ?)
+      `, [proposalId, organizationId, now], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
 
-      const totalVotes = proposal.votes_yes + proposal.votes_no + proposal.votes_abstain;
-      const approvalRate = totalVotes > 0 ? (proposal.votes_yes / totalVotes) * 100 : 0;
+    if (!proposal) {
+      // Check if proposal exists but is expired
+      const checkProposal = await new Promise((resolve, reject) => {
+        db.get(`
+          SELECT id, voting_ends_at, status FROM governance_rule_proposals
+          WHERE id = ? AND organization_id = ?
+        `, [proposalId, organizationId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+      
+      if (!checkProposal) {
+        return res.status(404).json({ error: 'Proposal not found' });
+      }
+      if (checkProposal.status !== 'active') {
+        return res.status(400).json({ error: `Proposal is ${checkProposal.status}, cannot complete` });
+      }
+      if (checkProposal.voting_ends_at && checkProposal.voting_ends_at < now) {
+        return res.status(400).json({ 
+          error: 'Voting deadline has passed for this proposal',
+          details: 'Please wait for the scheduler to automatically process expired proposals, or create a new proposal'
+        });
+      }
+      return res.status(404).json({ error: 'Proposal not found or not active' });
+    }
+
+    // 3. Use snapshot rules for calculation (not current rules)
+    const snapshotRules = proposal.snapshot_rules 
+      ? JSON.parse(proposal.snapshot_rules)
+      : await getGovernanceRules(db, organizationId);
+
+    // 4. Calculate approval with snapshot rules
+    // Ensure vote counts are numbers (handle null/undefined)
+    const votesYes = Number(proposal.votes_yes) || 0;
+    const votesNo = Number(proposal.votes_no) || 0;
+    const votesAbstain = Number(proposal.votes_abstain) || 0;
+    const totalVotes = votesYes + votesNo + votesAbstain;
+    const approvalRate = totalVotes > 0 ? (votesYes / totalVotes) * 100 : 0;
       const threshold = proposal.threshold_percentage || 75.0;
 
-      const approved = approvalRate >= threshold;
-      const now = new Date();
+    // 5. Check minimum safeguards
+    const { getActiveMemberCount } = require('../modules/safety-mechanisms');
+    const activeMemberCount = await getActiveMemberCount(db, organizationId);
+    const minQuorum = rules?.minimumQuorumPercentage || 0.1;
+    const minApproval = rules?.minimumApprovalThreshold || 0.5;
+    const totalVoters = Number(proposal.total_voters) || 0;
+    const minVotesRequired = Math.ceil(totalVoters * minQuorum);
+    const quorumMet = totalVotes >= minVotesRequired;
+    const approvalMet = (approvalRate / 100) >= minApproval;
 
-      if (approved) {
-        // Update governance rules
+    if (!quorumMet) {
+      return res.status(400).json({
+        error: 'Minimum quorum not met',
+        details: `Required: ${minVotesRequired} votes (${minQuorum * 100}%), Actual: ${totalVotes} votes`,
+        quorumMet: false,
+        minVotesRequired,
+        actualVotes: totalVotes
+      });
+    }
+
+    if (!approvalMet) {
+      return res.status(400).json({
+        error: 'Minimum approval threshold not met',
+        details: `Required: ${minApproval * 100}%, Actual: ${approvalRate.toFixed(1)}%`,
+        approvalMet: false,
+        minApproval: minApproval * 100,
+        actualApproval: approvalRate
+      });
+    }
+
+    // 6. Check if approved (using snapshot threshold)
+    const approved = approvalRate >= threshold;
+    const completionTime = new Date();
+
+    if (approved) {
+      // 6.5. Check for conflicts - verify rule hasn't changed since proposal was created
+      const currentRules = await getGovernanceRules(db, organizationId);
+      const fieldName = proposal.current_rule_field;
+      
+      // Map camelCase to snake_case for database field name
+      const fieldNameMapping = {
+        'thresholdCalculationMethod': 'threshold_calculation_method',
+        'defaultAcceptanceThreshold': 'default_acceptance_threshold',
+        'documentProposalPeriodDays': 'document_proposal_period_days',
+        'defaultVotingDeadlineHours': 'default_voting_deadline_hours',
+        'defaultQuorumPercentage': 'default_quorum_percentage',
+        'anonymousVotingEnabled': 'anonymous_voting_enabled',
+        'voteChangeAllowed': 'vote_change_allowed',
+        'representativeTermMonths': 'representative_term_months',
+        'representativeTermLimits': 'representative_term_limits',
+        'electionVotingMethod': 'election_voting_method',
+        'electionQuorumPercentage': 'election_quorum_percentage',
+        'electionNoticeDays': 'election_notice_days',
+        'representativeCanCreateVotes': 'representative_can_create_votes',
+        'representativeCanInviteMembers': 'representative_can_invite_members',
+        'representativeCanManageDocuments': 'representative_can_manage_documents',
+        'representativeApprovalRequired': 'representative_approval_required',
+        'tamperProofEnabled': 'tamper_proof_enabled',
+        'auditTrailEnabled': 'audit_trail_enabled',
+        'membersCanProposeRules': 'members_can_propose_rules',
+        'membersCanCreateDocuments': 'members_can_create_documents',
+        'membersCanInitializeElections': 'members_can_initialize_elections',
+        'membersCanInviteMembers': 'members_can_invite_members',
+        'membersCanManageRuleProposals': 'members_can_manage_rule_proposals'
+      };
+      
+      const dbFieldName = fieldNameMapping[fieldName] || fieldName;
+      
+      // Get snapshot value and current value
+      let snapshotValue, currentValue;
+      try {
+        const snapshotRulesParsed = proposal.snapshot_rules ? JSON.parse(proposal.snapshot_rules) : null;
+        snapshotValue = snapshotRulesParsed ? snapshotRulesParsed[fieldName] : null;
+        currentValue = currentRules ? currentRules[dbFieldName] : null;
+        
+        // Normalize values for comparison (handle boolean 0/1 vs true/false)
+        const normalizeValue = (val) => {
+          if (val === 1 || val === true) return true;
+          if (val === 0 || val === false) return false;
+          return val;
+        };
+        
+        const normalizedSnapshot = normalizeValue(snapshotValue);
+        const normalizedCurrent = normalizeValue(currentValue);
+        
+        // Compare values (using JSON.stringify for deep comparison)
+        if (JSON.stringify(normalizedSnapshot) !== JSON.stringify(normalizedCurrent)) {
+          // Rule has changed - reject completion
+          logAudit(db, organizationId, 'rule_proposal_rejected_conflict', userId, null, {
+            proposalId,
+            field: fieldName,
+            snapshotValue: snapshotValue,
+            currentValue: currentValue
+          }, req);
+          
+          return res.status(409).json({
+            success: false,
+            error: 'Rule has changed since proposal was created',
+            details: `The ${fieldName} rule was modified after this proposal was created. The proposal cannot be applied to avoid overwriting recent changes.`,
+            snapshotValue: snapshotValue,
+            currentValue: currentValue,
+            suggestion: 'Please create a new proposal with the current rule value'
+          });
+        }
+      } catch (conflictErr) {
+        logger.warn('Error checking rule conflict, proceeding anyway', { 
+          error: conflictErr.message, 
+          proposalId, 
+          organizationId 
+        });
+        // Continue if conflict check fails - better to allow than block
+      }
+
+      // 7. Validate dependencies before applying
+      const { checkRuleDependencies } = require('../modules/rule-validation');
+      const proposedValue = JSON.parse(proposal.proposed_rule_value);
+      const dependencyCheck = await checkRuleDependencies(db, organizationId, proposal.current_rule_field, proposedValue);
+      if (!dependencyCheck.valid) {
+        return res.status(400).json({
+          error: 'Rule change would create invalid state',
+          details: dependencyCheck.error
+        });
+      }
+
+        // 8. Update governance rules
         const updates = {};
         try {
           const fieldName = proposal.current_rule_field;
@@ -906,13 +1537,28 @@ router.post('/:organizationId/rule-proposals/:proposalId/complete', requireAuth,
             'representativeCanManageDocuments': 'representative_can_manage_documents',
             'representativeApprovalRequired': 'representative_approval_required',
             'tamperProofEnabled': 'tamper_proof_enabled',
-            'auditTrailEnabled': 'audit_trail_enabled'
+            'auditTrailEnabled': 'audit_trail_enabled',
+            'membersCanProposeRules': 'members_can_propose_rules',
+            'membersCanProposeRulesThreshold': 'members_can_propose_rules_threshold',
+            'membersCanCreateDocuments': 'members_can_create_documents',
+            'membersCanCreateDocumentsThreshold': 'members_can_create_documents_threshold',
+            'membersCanInitializeElections': 'members_can_initialize_elections',
+            'membersCanInitializeElectionsThreshold': 'members_can_initialize_elections_threshold',
+            'membersCanInviteMembers': 'members_can_invite_members',
+            'membersCanInviteMembersThreshold': 'members_can_invite_members_threshold',
+            'membersCanManageRuleProposals': 'members_can_manage_rule_proposals',
+            'membersCanManageRuleProposalsThreshold': 'members_can_manage_rule_proposals_threshold'
           };
           
           // Use mapping if available, otherwise assume fieldName is already snake_case
           const dbFieldName = fieldNameMapping[fieldName] || fieldName;
           
-          updates[dbFieldName] = JSON.parse(proposal.proposed_rule_value);
+          // Convert boolean values to 0/1 for SQLite
+          if (typeof proposedValue === 'boolean') {
+            updates[dbFieldName] = proposedValue ? 1 : 0;
+          } else {
+            updates[dbFieldName] = proposedValue;
+          }
         } catch (parseErr) {
           logger.error('Error parsing proposed_rule_value', { error: parseErr.message, proposalId, organizationId: req.params.organizationId });
           return res.status(500).json({ error: 'Invalid rule value format' });
@@ -922,83 +1568,162 @@ router.post('/:organizationId/rule-proposals/:proposalId/complete', requireAuth,
         const updateValues = Object.values(updates);
         const setClause = updateFields.map(field => `${field} = ?`).join(', ');
 
-        db.run(`UPDATE organization_governance_rules SET ${setClause}, updated_at = ? WHERE organization_id = ?`,
-          [...updateValues, now.toISOString(), organizationId], (err) => {
-            if (err) {
-              logger.error('Error updating governance rules', { error: err.message, proposalId, organizationId: req.params.organizationId });
-              return res.status(500).json({ error: 'Failed to update governance rules' });
+        // Use transaction to prevent race conditions
+        db.serialize(() => {
+          db.run('BEGIN TRANSACTION');
+          
+          // First, verify proposal is still active (prevent double-completion)
+          db.get(`
+            SELECT status FROM governance_rule_proposals
+            WHERE id = ? AND organization_id = ? AND status = 'active'
+          `, [proposalId, organizationId], (checkErr, checkRow) => {
+            if (checkErr) {
+              db.run('ROLLBACK');
+              logger.error('Error checking proposal status in transaction', { error: checkErr.message, proposalId, organizationId });
+              return res.status(500).json({ error: 'Failed to complete proposal' });
             }
-
-            // Mark proposal as approved and implemented
-            db.run(`
-              UPDATE governance_rule_proposals SET
-                status = 'approved',
-                approved_at = ?,
-                implemented_at = ?,
-                updated_at = ?
-              WHERE id = ?
-            `, [now.toISOString(), now.toISOString(), now.toISOString(), proposalId]);
-
-            // Log audit event
-            logAudit(db, organizationId, 'rule_proposal_approved', userId, null, {
-              proposalId,
-              ruleField: proposal.current_rule_field,
-              oldValue: proposal.current_rule_value,
-              newValue: proposal.proposed_rule_value,
-              approvalRate
-            }, req);
-
-            // Broadcast WebSocket update to organization members
-            const webSocketManager = require('../modules/websocket');
-            // Broadcast to organization room
-            webSocketManager.broadcastOrganizationUpdate(organizationId, 'rule-proposal-approved', {
-              organizationId,
-              proposalId,
-              ruleField: proposal.current_rule_field,
-              newValue: proposal.proposed_rule_value,
-              approvalRate
-            });
             
-            // Also broadcast to all org documents for backward compatibility
-            db.all(`
-              SELECT id FROM documents WHERE organization_id = ?
-            `, [organizationId], (docErr, docs) => {
-              if (!docErr && docs) {
-                docs.forEach(doc => {
-                  webSocketManager.broadcastDocumentUpdate(doc.id, 'rule-proposal-approved', {
-                    organizationId,
-                    proposalId,
-                    ruleField: proposal.current_rule_field,
-                    newValue: proposal.proposed_rule_value,
-                    approvalRate
+            if (!checkRow) {
+              db.run('ROLLBACK');
+              return res.status(400).json({ error: 'Proposal is no longer active or has already been completed' });
+            }
+            
+            // Update governance rules
+            db.run(`UPDATE organization_governance_rules SET ${setClause}, updated_at = ? WHERE organization_id = ?`,
+              [...updateValues, completionTime.toISOString(), organizationId], (updateErr) => {
+                if (updateErr) {
+                  db.run('ROLLBACK');
+                  logger.error('Error updating governance rules', { error: updateErr.message, proposalId, organizationId: req.params.organizationId });
+                  return res.status(500).json({ error: 'Failed to update governance rules' });
+                }
+
+                // 9. Log to rule history
+                const historyId = uuidv4();
+                db.run(`
+                  INSERT INTO governance_rule_history (
+                    id, organization_id, rule_field, old_value, new_value,
+                    changed_by_proposal_id, changed_by_user_id, changed_at
+                  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                `, [
+                  historyId, organizationId, proposal.current_rule_field,
+                  proposal.current_rule_value, proposal.proposed_rule_value,
+                  proposalId, userId, completionTime.toISOString()
+                ], (historyErr) => {
+                  if (historyErr) {
+                    db.run('ROLLBACK');
+                    logger.error('Error logging rule history', { error: historyErr.message, proposalId, organizationId });
+                    return res.status(500).json({ error: 'Failed to log rule history' });
+                  }
+
+                  // Mark proposal as approved and implemented (within transaction)
+                  db.run(`
+                    UPDATE governance_rule_proposals SET
+                      status = 'approved',
+                      approved_at = ?,
+                      implemented_at = ?,
+                      cooldown_until = ?,
+                      updated_at = ?
+                    WHERE id = ? AND status = 'active'
+                  `, [
+                    completionTime.toISOString(), 
+                    completionTime.toISOString(), 
+                    new Date(completionTime.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7-day cooldown
+                    completionTime.toISOString(), 
+                    proposalId
+                  ], (proposalUpdateErr) => {
+                    if (proposalUpdateErr) {
+                      db.run('ROLLBACK');
+                      logger.error('Error updating proposal status', { error: proposalUpdateErr.message, proposalId, organizationId });
+                      return res.status(500).json({ error: 'Failed to update proposal status' });
+                    }
+                    
+                    // Commit transaction
+                    db.run('COMMIT', (commitErr) => {
+                      if (commitErr) {
+                        logger.error('Error committing transaction', { error: commitErr.message, proposalId, organizationId });
+                        return res.status(500).json({ error: 'Failed to complete proposal' });
+                      }
+                      
+                      // Post-transaction operations (logging, WebSocket, etc.)
+                      // 10. Update safety tracking
+                      const { updateSafetyTracking } = require('../modules/safety-mechanisms');
+                      updateSafetyTracking(db, organizationId, true).catch(err => {
+                        logger.warn('Failed to update safety tracking', { error: err.message, proposalId, organizationId });
+                      });
+
+                      // 11. Invalidate permission cache
+                      const { invalidatePermissionCache } = require('../modules/permissions');
+                      invalidatePermissionCache(organizationId);
+
+                      // Log audit event
+                      logAudit(db, organizationId, 'rule_proposal_approved', userId, null, {
+                        proposalId,
+                        ruleField: proposal.current_rule_field,
+                        oldValue: proposal.current_rule_value,
+                        newValue: proposal.proposed_rule_value,
+                        approvalRate
+                      }, req);
+
+                      // Broadcast WebSocket update to organization members
+                      const webSocketManager = require('../modules/websocket');
+                      // Broadcast to organization room
+                      webSocketManager.broadcastOrganizationUpdate(organizationId, 'rule-proposal-approved', {
+                        organizationId,
+                        proposalId,
+                        ruleField: proposal.current_rule_field,
+                        newValue: proposal.proposed_rule_value,
+                        approvalRate
+                      });
+                      
+                      // Also broadcast to all org documents for backward compatibility
+                      db.all(`
+                        SELECT id FROM documents WHERE organization_id = ?
+                      `, [organizationId], (docErr, docs) => {
+                        if (!docErr && docs) {
+                          docs.forEach(doc => {
+                            webSocketManager.broadcastDocumentUpdate(doc.id, 'rule-proposal-approved', {
+                              organizationId,
+                              proposalId,
+                              ruleField: proposal.current_rule_field,
+                              newValue: proposal.proposed_rule_value,
+                              approvalRate
+                            });
+                          });
+                        }
+                      });
+
+                      let newRuleValue;
+                      try {
+                        newRuleValue = JSON.parse(proposal.proposed_rule_value);
+                      } catch (e) {
+                        logger.error('Error parsing proposed_rule_value for response', { error: e.message, proposalId, organizationId: req.params.organizationId });
+                        newRuleValue = proposal.proposed_rule_value; // Return raw value if parse fails
+                      }
+                      res.json({
+                        success: true,
+                        message: 'Rule proposal approved and implemented',
+                        approved: true,
+                        approvalRate,
+                        newRuleValue
+                      });
+                    });
                   });
                 });
-              }
-            });
-
-            let newRuleValue;
-            try {
-              newRuleValue = JSON.parse(proposal.proposed_rule_value);
-            } catch (e) {
-              logger.error('Error parsing proposed_rule_value for response', { error: e.message, proposalId, organizationId: req.params.organizationId });
-              newRuleValue = proposal.proposed_rule_value; // Return raw value if parse fails
-            }
-            res.json({
-              success: true,
-              message: 'Rule proposal approved and implemented',
-              approved: true,
-              approvalRate,
-              newRuleValue
+              });
             });
           });
-      } else {
+        } else {
+        // Update safety tracking for rejection
+        const { updateSafetyTracking } = require('../modules/safety-mechanisms');
+        await updateSafetyTracking(db, organizationId, false);
+
         // Mark as rejected
         db.run(`
           UPDATE governance_rule_proposals SET
             status = 'rejected',
             updated_at = ?
           WHERE id = ?
-        `, [now.toISOString(), proposalId]);
+        `, [completionTime.toISOString(), proposalId]);
 
         // Log audit event
         logAudit(db, organizationId, 'rule_proposal_rejected', userId, null, {
@@ -1006,6 +1731,19 @@ router.post('/:organizationId/rule-proposals/:proposalId/complete', requireAuth,
           approvalRate,
           threshold
         }, req);
+
+        // Broadcast WebSocket update
+        try {
+          const webSocketManager = require('../modules/websocket');
+          webSocketManager.broadcastOrganizationUpdate(organizationId, 'rule-proposal-rejected', {
+            organizationId,
+            proposalId,
+            approvalRate,
+            threshold
+          });
+        } catch (wsErr) {
+          logger.warn('Failed to broadcast rule proposal rejection', { error: wsErr.message, proposalId, organizationId });
+        }
 
         res.json({
           success: true,
@@ -1015,7 +1753,6 @@ router.post('/:organizationId/rule-proposals/:proposalId/complete', requireAuth,
           threshold
         });
       }
-    });
 
   } catch (error) {
     logger.error('Error completing rule proposal', { error: error.message, stack: error.stack, proposalId: req.params.proposalId, organizationId: req.params.organizationId });
@@ -1079,19 +1816,73 @@ router.put('/:organizationId/governance-rules', requireAuth, async (req, res) =>
       return res.status(404).json({ error: 'Governance rules not found' });
     }
 
-    // Build update query
+    // Map camelCase field names from frontend to snake_case database field names
+    const fieldNameMapping = {
+      // Representative Elections
+      'representativeTermMonths': 'representative_term_months',
+      'representativeTermLimits': 'representative_term_limits',
+      'electionVotingMethod': 'election_voting_method',
+      'electionQuorumPercentage': 'election_quorum_percentage',
+      'electionNoticeDays': 'election_notice_days',
+      
+      // General Voting Rules
+      'defaultVotingDeadlineHours': 'default_voting_deadline_hours',
+      'defaultQuorumPercentage': 'default_quorum_percentage',
+      'defaultAcceptanceThreshold': 'default_acceptance_threshold',
+      'documentProposalPeriodDays': 'document_proposal_period_days',
+      'thresholdCalculationMethod': 'threshold_calculation_method',
+      'anonymousVotingEnabled': 'anonymous_voting_enabled',
+      'voteChangeAllowed': 'vote_change_allowed',
+      
+      // Representative Powers
+      'representativeCanCreateVotes': 'representative_can_create_votes',
+      'representativeCanInviteMembers': 'representative_can_invite_members',
+      'representativeCanManageDocuments': 'representative_can_manage_documents',
+      'representativeApprovalRequired': 'representative_approval_required',
+      
+      // Audit & Compliance
+      'tamperProofEnabled': 'tamper_proof_enabled',
+      'auditTrailEnabled': 'audit_trail_enabled',
+      
+      // Member Permissions (new fields)
+      'membersCanProposeRules': 'members_can_propose_rules',
+      'membersCanCreateDocuments': 'members_can_create_documents',
+      'membersCanInitializeElections': 'members_can_initialize_elections',
+      'membersCanInviteMembers': 'members_can_invite_members',
+      'membersCanManageRuleProposals': 'members_can_manage_rule_proposals'
+    };
+
+    // Build update query - convert camelCase to snake_case
     const updateFields = [];
     const updateValues = [];
+    const allowedFields = Object.values(fieldNameMapping);
+
+    // Filter out non-updatable fields
+    const nonUpdatableFields = ['id', 'organizationId', 'createdAt', 'updatedAt', 'bootstrapMode', 
+                                 'bootstrapCompletedAt', 'recoveryMode', 'recoveryModeEnteredAt', 
+                                 'recoveryModeReason', 'lastSuccessfulVoteAt', 'failedProposalsCount',
+                                 'lastFailedProposalAt', 'ruleChangesThisMonth', 'lastRuleChangeAt'];
 
     Object.keys(updates).forEach(key => {
-      if (['representative_term_months', 'representative_term_limits', 'election_voting_method',
-           'election_quorum_percentage', 'election_notice_days', 'default_voting_deadline_hours',
-           'default_quorum_percentage', 'anonymous_voting_enabled', 'vote_change_allowed',
-           'representative_can_create_votes', 'representative_can_invite_members',
-           'representative_can_manage_documents', 'representative_approval_required',
-           'tamper_proof_enabled', 'audit_trail_enabled'].includes(key)) {
-        updateFields.push(`${key} = ?`);
-        updateValues.push(updates[key]);
+      // Skip non-updatable fields
+      if (nonUpdatableFields.includes(key)) {
+        return;
+      }
+      
+      // Check if key is already snake_case or needs mapping
+      const dbFieldName = fieldNameMapping[key] || key;
+      
+      if (allowedFields.includes(dbFieldName) || fieldNameMapping[key]) {
+        updateFields.push(`${dbFieldName} = ?`);
+        // Convert boolean values to 0/1 for SQLite
+        const value = updates[key];
+        if (typeof value === 'boolean') {
+          updateValues.push(value ? 1 : 0);
+        } else if (value === null || value === undefined) {
+          updateValues.push(null);
+        } else {
+          updateValues.push(value);
+        }
       }
     });
 
@@ -1151,14 +1942,17 @@ router.post('/:organizationId/elections', requireAuth, async (req, res) => {
   const { title, description, positionsAvailable, termMonths } = req.body;
 
   try {
-    // Check if user is representative
-    const isRep = await isRepresentative(db, userId, organizationId);
-    if (!isRep) {
-      return res.status(403).json({ error: 'Only representatives can create elections' });
+    // Check dynamic permission
+    const rules = await getGovernanceRules(db, organizationId);
+    const canInitialize = await canInitializeElections(db, userId, organizationId, rules, req.user.role);
+    if (!canInitialize) {
+      return res.status(403).json({ 
+        error: 'You do not have permission to create elections',
+        details: 'Check your organization\'s governance rules to see who can initialize elections'
+      });
     }
 
-    // Get governance rules
-    const rules = await getGovernanceRules(db, organizationId);
+    // Verify governance rules exist
     if (!rules) {
       return res.status(400).json({ error: 'Organization governance rules not configured' });
     }
@@ -1257,44 +2051,107 @@ router.get('/:organizationId/elections', requireAuth, async (req, res) => {
         logger.error('Error fetching elections', { error: err.message, organizationId: req.params.organizationId });
         return res.status(500).json({ error: 'Failed to fetch elections' });
       }
+      if (err) {
+        logger.error('Error fetching elections', { error: err.message, organizationId: req.params.organizationId });
+        return res.status(500).json({ error: 'Failed to fetch elections' });
+      }
 
-      // Map snake_case to camelCase and handle status mapping
-      const mappedElections = (elections || []).map(election => {
-        // Map status: backend uses 'nomination'/'voting', frontend expects 'announced'/'active'
-        let status = election.status;
-        if (status === 'nomination') {
-          status = 'announced';
-        } else if (status === 'voting') {
-          status = 'active';
+      // Get candidates for all elections
+      const electionIds = (elections || []).map(e => e.id);
+      const candidatesMap = {};
+      
+      if (electionIds.length === 0) {
+        // No elections, return empty array
+        return res.json({ elections: [] });
+      }
+      
+      // Fetch candidates for all elections
+      const placeholders = electionIds.map(() => '?').join(',');
+      db.all(`
+        SELECT 
+          ec.*,
+          u.name as user_name,
+          u.email as user_email,
+          u.avatar as user_avatar,
+          nb.name as nominated_by_name
+        FROM election_candidates ec
+        LEFT JOIN users u ON ec.user_id = u.id
+        LEFT JOIN users nb ON ec.nominated_by = nb.id
+        WHERE ec.election_id IN (${placeholders})
+        ORDER BY ec.created_at ASC
+      `, electionIds, (err, candidates) => {
+        if (err) {
+          logger.error('Error fetching candidates for elections', { error: err.message });
+          // Continue with empty candidates map if query fails
+        } else {
+          // Group candidates by election ID
+          (candidates || []).forEach(candidate => {
+            if (!candidatesMap[candidate.election_id]) {
+              candidatesMap[candidate.election_id] = [];
+            }
+            candidatesMap[candidate.election_id].push({
+              id: candidate.id,
+              electionId: candidate.election_id,
+              userId: candidate.user_id,
+              candidateStatement: candidate.candidate_statement,
+              acceptedNomination: candidate.accepted_nomination === 1 || candidate.accepted_nomination === true,
+              nominatedBy: candidate.nominated_by,
+              nominatedByName: candidate.nominated_by_name,
+              nominationAcceptedAt: candidate.nomination_accepted_at,
+              votesReceived: candidate.votes_received || 0,
+              elected: candidate.elected === 1 || candidate.elected === true,
+              electedPosition: candidate.elected_position,
+              createdAt: candidate.created_at,
+              updatedAt: candidate.updated_at,
+              user: {
+                id: candidate.user_id,
+                name: candidate.user_name,
+                email: candidate.user_email,
+                avatar: candidate.user_avatar
+              }
+            });
+          });
         }
+        
+        // Map snake_case to camelCase and handle status mapping
+        const mappedElections = (elections || []).map(election => {
+          // Map status: backend uses 'nomination'/'voting', frontend expects 'announced'/'active'
+          let status = election.status;
+          if (status === 'nomination') {
+            status = 'announced';
+          } else if (status === 'voting') {
+            status = 'active';
+          }
 
-        return {
-          id: election.id,
-          organizationId: election.organization_id,
-          electionTitle: election.election_title,
-          electionDescription: election.election_description,
-          status: status,
-          positionsAvailable: election.positions_available,
-          termStartDate: election.term_start_date,
-          termEndDate: election.term_end_date,
-          nominationStartsAt: election.nomination_starts_at,
-          nominationEndsAt: election.nomination_ends_at,
-          votingStartsAt: election.voting_starts_at,
-          votingEndsAt: election.voting_ends_at,
-          quorumRequired: election.quorum_required || 0,
-          totalVoters: election.total_voters || 0,
-          votesCast: election.votes_cast || 0,
-          quorumMet: election.quorum_met === 1 || election.quorum_met === true,
-          anonymousVoting: election.anonymous_voting === 1 || election.anonymous_voting === true,
-          electionCompletedAt: election.election_completed_at,
-          createdBy: election.created_by,
-          createdByName: election.created_by_name,
-          createdAt: election.created_at,
-          updatedAt: election.updated_at
-        };
+          return {
+            id: election.id,
+            organizationId: election.organization_id,
+            electionTitle: election.election_title,
+            electionDescription: election.election_description,
+            status: status,
+            positionsAvailable: election.positions_available,
+            termStartDate: election.term_start_date,
+            termEndDate: election.term_end_date,
+            nominationStartsAt: election.nomination_starts_at,
+            nominationEndsAt: election.nomination_ends_at,
+            votingStartsAt: election.voting_starts_at,
+            votingEndsAt: election.voting_ends_at,
+            quorumRequired: election.quorum_required || 0,
+            totalVoters: election.total_voters || 0,
+            votesCast: election.votes_cast || 0,
+            quorumMet: election.quorum_met === 1 || election.quorum_met === true,
+            anonymousVoting: election.anonymous_voting === 1 || election.anonymous_voting === true,
+            electionCompletedAt: election.election_completed_at,
+            createdBy: election.created_by,
+            createdByName: election.created_by_name,
+            createdAt: election.created_at,
+            updatedAt: election.updated_at,
+            candidates: candidatesMap[election.id] || []
+          };
+        });
+
+        res.json({ elections: mappedElections });
       });
-
-      res.json({ elections: mappedElections });
     });
   } catch (error) {
     logger.error('Error fetching elections', { error: error.message, stack: error.stack, organizationId: req.params.organizationId });
@@ -1329,8 +2186,9 @@ router.post('/:organizationId/elections/:electionId/candidates', requireAuth, as
           return res.status(404).json({ error: 'Election not found' });
         }
 
-        if (election.status !== 'draft') {
-          return res.status(400).json({ error: 'Cannot nominate candidates for elections that are not in draft status' });
+        // Allow nominations during draft OR nomination phase
+        if (election.status !== 'draft' && election.status !== 'nomination') {
+          return res.status(400).json({ error: 'Cannot nominate candidates. Elections must be in draft or nomination phase.' });
         }
 
         const candidateId = uuidv4();
@@ -1691,10 +2549,100 @@ router.post('/:organizationId/elections/:electionId/update-phase', requireAuth, 
             if (election.status !== 'nomination') {
               return res.status(400).json({ error: 'Can only start voting from nomination status' });
             }
-            updates.status = 'voting';
-            updates.voting_starts_at = now.toISOString();
-            updates.voting_ends_at = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 days
-            break;
+            
+            // Helper function to perform the actual update (defined before use)
+            const performVotingPhaseUpdate = (votingUpdates) => {
+              const updateFields = Object.keys(votingUpdates);
+              const updateValues = Object.values(votingUpdates);
+              const setClause = updateFields.map(field => `${field} = ?`).join(', ');
+
+              db.run(`UPDATE representative_elections SET ${setClause} WHERE id = ?`,
+                [...updateValues, electionId], function(err) {
+                  if (err) {
+                    logger.error('Error updating election phase', { error: err.message, electionId: req.params.electionId });
+                    return res.status(500).json({ error: 'Failed to update election phase' });
+                  }
+
+                  // Create voter tokens for anonymous voting
+                  createVoterTokensForElection(db, electionId, organizationId, (tokenErr) => {
+                    if (tokenErr) {
+                      logger.error('Error creating voter tokens', { error: tokenErr.message, electionId });
+                    }
+                  });
+
+                  // Log audit event
+                  logAudit(db, organizationId, 'election_phase_updated', userId, null, {
+                    electionId,
+                    oldPhase: election.status,
+                    newPhase,
+                    updates: votingUpdates
+                  }, req);
+
+                  // Broadcast WebSocket update
+                  const webSocketManager = require('../modules/websocket');
+                  webSocketManager.broadcastOrganizationUpdate(organizationId, 'election-updated', {
+                    organizationId,
+                    electionId,
+                    oldPhase: election.status,
+                    newPhase,
+                    status: votingUpdates.status || election.status
+                  });
+
+                  res.json({
+                    success: true,
+                    message: `Election moved to ${newPhase} phase`,
+                    election: { ...election, ...votingUpdates }
+                  });
+                });
+            };
+            
+            // Get governance rules for voting period
+            getGovernanceRules(db, organizationId).then(rules => {
+              const defaultVotingDays = rules?.defaultVotingDeadlineHours 
+                ? Math.ceil(rules.defaultVotingDeadlineHours / 24) 
+                : 7;
+              
+              const votingUpdates = {
+                ...updates,
+                status: 'voting',
+                voting_starts_at: now.toISOString(),
+                voting_ends_at: new Date(now.getTime() + defaultVotingDays * 24 * 60 * 60 * 1000).toISOString()
+              };
+              
+              // Get active member count for quorum
+              db.get('SELECT COUNT(*) as count FROM organization_members WHERE organization_id = ? AND status = "active"',
+                [organizationId], (err, row) => {
+                  if (err) {
+                    logger.error('Error counting members for election', { error: err.message, organizationId });
+                  }
+                  if (row) {
+                    votingUpdates.total_voters = row.count;
+                  }
+                  
+                  // Perform the update
+                  performVotingPhaseUpdate(votingUpdates);
+                });
+            }).catch(err => {
+              logger.error('Error getting governance rules for election phase update', { error: err.message });
+              // Use defaults if rules fetch fails
+              const votingUpdates = {
+                ...updates,
+                status: 'voting',
+                voting_starts_at: now.toISOString(),
+                voting_ends_at: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
+              };
+              
+              db.get('SELECT COUNT(*) as count FROM organization_members WHERE organization_id = ? AND status = "active"',
+                [organizationId], (err, row) => {
+                  if (!err && row) {
+                    votingUpdates.total_voters = row.count;
+                  }
+                  performVotingPhaseUpdate(votingUpdates);
+                });
+            });
+            
+            // Return early for voting phase (handled asynchronously above)
+            return;
 
           case 'completed':
             return res.status(400).json({ error: 'Use the /complete endpoint to finish elections' });

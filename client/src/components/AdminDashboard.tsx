@@ -268,14 +268,18 @@ export function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="text-center">Loading admin dashboard...</div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading admin dashboard...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-4xl mx-auto px-4 py-8">
       {/* Description */}
       <div className="mb-8">
         <p className="text-gray-600">Manage organizations, users, and system settings</p>
@@ -658,6 +662,7 @@ export function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
           </Card>
         </TabsContent>
       </Tabs>
+      </div>
     </div>
   );
 }

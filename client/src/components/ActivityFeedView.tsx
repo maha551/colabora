@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { User, Document, Proposal, Comment, Vote } from "../types";
+import { User, Document, Proposal, Comment, Vote, Organization } from "../types";
 import { DocumentUpdate } from "../hooks/useWebSocket";
 import { Card } from "./ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
@@ -193,9 +193,10 @@ interface ActivityFeedViewProps {
   onNavigateToDocument: (documentId: string) => void;
   onAddComment?: (proposalId: string, documentId: string, paragraphId: string, text: string, parentId?: string) => Promise<void>;
   onWebSocketUpdate?: (handler: (update: DocumentUpdate) => void) => void;
+  organizations: Organization[];
 }
 
-export function ActivityFeedView({ documents, currentUser, onNavigateToDocument, onAddComment, onWebSocketUpdate }: ActivityFeedViewProps) {
+export function ActivityFeedView({ documents, currentUser, onNavigateToDocument, onAddComment, onWebSocketUpdate, organizations }: ActivityFeedViewProps) {
   const [activePanel, setActivePanel] = useState<'agreed' | 'pending' | 'debated'>('agreed');
   const [agreedVersions, setAgreedVersions] = useState<AgreedVersion[]>([]);
   const [loadingAgreed, setLoadingAgreed] = useState(false);
@@ -616,6 +617,21 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
     return collaborators;
   };
 
+  // Get organization for a document (only show indicators for multi-org users)
+  const getOrganizationForDocument = (documentId: string): Organization | null => {
+    // Only show indicators when user is member of multiple organizations
+    if (organizations.length <= 1) {
+      return null;
+    }
+    
+    const doc = documents.find(d => d.id === documentId);
+    if (!doc?.organizationId) {
+      return null;
+    }
+    
+    return organizations.find(o => o.id === doc.organizationId) || null;
+  };
+
   const formatTimestamp = (timestamp: string): string => {
     const date = new Date(timestamp);
     const now = new Date();
@@ -773,13 +789,14 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
                 </div>
               </Card>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 {getDisplayedItems(agreedVersions, 'agreed').map((version: AgreedVersion) => {
                   const adaptedSuggestion = adaptAgreedVersionToSuggestion(version);
                   const documentContext = extractDocumentContextFromVersion(version);
                   const originalText = version.previousText;
                   const allCollaborators = getAllCollaborators(version.documentId);
                   const history = paragraphHistories[version.paragraphId] || [];
+                  const organization = getOrganizationForDocument(version.documentId);
 
                   return (
                     <ActivityFeedProposalCard
@@ -792,6 +809,7 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
                       originalText={originalText}
                       history={history}
                       tabType="accepted"
+                      organization={organization}
                       onVote={(proposalId, documentId, paragraphId, voteType) => {
                         // Voting disabled for accepted proposals
                         toast.info('This proposal has already been accepted');
@@ -837,7 +855,7 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
                 </div>
               </Card>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 {getDisplayedItems(debatedProposals, 'debated').map((proposal: Proposal, index: number) => {
                   // Adjust index for filtered results
                   const filtered = filterByDocument(debatedProposals);
@@ -845,42 +863,37 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
                   const adaptedSuggestion = adaptProposalToSuggestion(proposal);
                   const documentContext = extractDocumentContext(proposal);
                   const originalText = getOriginalText(proposal);
-                  const allCollaborators = getAllCollaborators(proposal.documentId);
+                  const allCollaborators = getAllCollaborators(documentContext.documentId);
+                  const organization = getOrganizationForDocument(documentContext.documentId);
+                  
+                  // Extract ranking information
+                  const ranking = {
+                    index: actualIndex + 1,
+                    score: (proposal as any).debateScore || 0,
+                    isControversial: (proposal as any).engagement?.proPercentage > 30 && 
+                                    (proposal as any).engagement?.contraPercentage > 30,
+                  };
 
                   return (
-                    <div key={proposal.id} className="space-y-2">
-                      {/* Debate Ranking Badge */}
-                      <div className="flex items-center gap-2 text-xs text-purple-700">
-                        <span className="font-bold bg-purple-100 px-1.5 py-0.5 rounded">#{actualIndex + 1}</span>
-                        <TrendingUp className="h-3 w-3" />
-                        <span>Score: {proposal.debateScore}</span>
-                        {proposal.engagement?.proPercentage > 30 && proposal.engagement?.contraPercentage > 30 && (
-                          <>
-                            <span>•</span>
-                            <Badge className="bg-orange-100 text-orange-700 border-orange-200 px-1.5 py-0.5 text-xs font-semibold">
-                              ⚖️ Controversial
-                            </Badge>
-                          </>
-                        )}
-                      </div>
-                      
-                      <ActivityFeedProposalCard
-                        proposal={adaptedSuggestion}
-                        documentContext={documentContext}
-                        currentUser={currentUser}
-                        totalUsers={proposal.totalUsers || 1}
-                        allCollaborators={allCollaborators}
-                        originalText={originalText}
-                        tabType="debated"
-                        onVote={(proposalId, documentId, paragraphId, voteType) => 
-                          handleVote(proposalId, documentId, paragraphId, voteType)
-                        }
-                        onComment={(proposalId, documentId, paragraphId, text, parentId) => 
-                          handleAddComment(proposalId, documentId, paragraphId, text, parentId)
-                        }
-                        onNavigateToDocument={onNavigateToDocument}
-                      />
-                    </div>
+                    <ActivityFeedProposalCard
+                      key={proposal.id}
+                      proposal={adaptedSuggestion}
+                      documentContext={documentContext}
+                      currentUser={currentUser}
+                      totalUsers={proposal.totalUsers || 1}
+                      allCollaborators={allCollaborators}
+                      originalText={originalText}
+                      tabType="debated"
+                      organization={organization}
+                      ranking={ranking}
+                      onVote={(proposalId, documentId, paragraphId, voteType) => 
+                        handleVote(proposalId, documentId, paragraphId, voteType)
+                      }
+                      onComment={(proposalId, documentId, paragraphId, text, parentId) => 
+                        handleAddComment(proposalId, documentId, paragraphId, text, parentId)
+                      }
+                      onNavigateToDocument={onNavigateToDocument}
+                    />
                   );
                 })}
                 {hasMore(debatedProposals, 'debated') && (
@@ -917,12 +930,13 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
                 </div>
               </Card>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 {getDisplayedItems(pendingProposals, 'pending').map((proposal: Proposal) => {
                   const adaptedSuggestion = adaptProposalToSuggestion(proposal);
                   const documentContext = extractDocumentContext(proposal);
                   const originalText = getOriginalText(proposal);
-                  const allCollaborators = getAllCollaborators(proposal.documentId);
+                  const allCollaborators = getAllCollaborators(documentContext.documentId);
+                  const organization = getOrganizationForDocument(documentContext.documentId);
 
                   return (
                     <ActivityFeedProposalCard
@@ -934,11 +948,12 @@ export function ActivityFeedView({ documents, currentUser, onNavigateToDocument,
                       allCollaborators={allCollaborators}
                       originalText={originalText}
                       tabType="pending"
+                      organization={organization}
                       onVote={(proposalId, voteType) => 
-                        handleVote(proposalId, proposal.documentId, proposal.paragraphId, voteType)
+                        handleVote(proposalId, documentContext.documentId, documentContext.paragraphId, voteType)
                       }
                       onComment={(proposalId, text, parentId) => 
-                        handleAddComment(proposalId, proposal.documentId, proposal.paragraphId, text, parentId)
+                        handleAddComment(proposalId, documentContext.documentId, documentContext.paragraphId, text, parentId)
                       }
                       onNavigateToDocument={onNavigateToDocument}
                     />

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -17,6 +17,7 @@ interface RuleProposalVotingInterfaceProps {
   proposalId: string;
   onBack?: () => void;
   onVoteComplete?: () => void;
+  refreshTrigger?: number; // When this changes, refresh data
 }
 
 interface RuleProposal {
@@ -30,8 +31,9 @@ interface RuleProposal {
     optionTitle: string;
     optionDescription?: string;
     proposedValue: any;
+    votesReceived?: number;
   }>;
-      status: 'draft' | 'active' | 'completed' | 'approved' | 'rejected';
+      status: 'draft' | 'active' | 'completed' | 'approved' | 'rejected' | 'expired';
   createdBy: {
     id: string;
     name: string;
@@ -42,6 +44,11 @@ interface RuleProposal {
     selectedOptionId?: string;
     voteChoice?: 'yes' | 'no' | 'abstain';
   }>;
+  votesYes?: number;
+  votesNo?: number;
+  votesAbstain?: number;
+  votesCast?: number;
+  totalVoters?: number;
   createdAt: string;
 }
 
@@ -50,7 +57,8 @@ export function RuleProposalVotingInterface({
   currentUser,
   proposalId,
   onBack,
-  onVoteComplete
+  onVoteComplete,
+  refreshTrigger
 }: RuleProposalVotingInterfaceProps) {
   const [proposal, setProposal] = useState<RuleProposal | null>(null);
   const [loading, setLoading] = useState(true);
@@ -60,7 +68,7 @@ export function RuleProposalVotingInterface({
 
   useEffect(() => {
     loadProposal();
-  }, [proposalId]);
+  }, [proposalId, refreshTrigger]);
 
   const loadProposal = async () => {
     setLoading(true);
@@ -68,14 +76,34 @@ export function RuleProposalVotingInterface({
       const response = await governanceApi.ruleProposalsApi.getRuleProposals(organization.id);
       const foundProposal = response.ruleProposals?.find(p => p.id === proposalId);
       if (foundProposal) {
-        setProposal(foundProposal);
+        // Ensure all required fields are present - API response may have different structure
+        const proposalAny = foundProposal as any;
+        const proposalData: RuleProposal = {
+          id: foundProposal.id,
+          title: foundProposal.title || '',
+          description: foundProposal.description || '',
+          ruleField: foundProposal.ruleField || proposalAny.current_rule_field || '',
+          proposedValue: foundProposal.proposedValue || proposalAny.proposed_rule_value,
+          options: proposalAny.options || [],
+          status: foundProposal.status as 'draft' | 'active' | 'completed' | 'approved' | 'rejected',
+          createdBy: proposalAny.createdBy || { id: proposalAny.created_by || '', name: proposalAny.created_by_name || 'Unknown' },
+          votingDeadline: proposalAny.votingDeadline || proposalAny.voting_ends_at,
+          votes: proposalAny.votes || [],
+          votesYes: proposalAny.votesYes || proposalAny.votes_yes || 0,
+          votesNo: proposalAny.votesNo || proposalAny.votes_no || 0,
+          votesAbstain: proposalAny.votesAbstain || proposalAny.votes_abstain || 0,
+          votesCast: proposalAny.votesCast || proposalAny.votes_cast || 0,
+          totalVoters: proposalAny.totalVoters || proposalAny.total_voters || 0,
+          createdAt: foundProposal.createdAt || proposalAny.created_at || new Date().toISOString()
+        };
+        setProposal(proposalData);
         // Check if user already voted
-        const userVote = foundProposal.votes?.find((v: { userId: string; vote: string }) => v.userId === currentUser.id);
+        const userVote = proposalData.votes?.find((v) => v.userId === currentUser?.id);
         if (userVote) {
           if (userVote.selectedOptionId) {
             setSelectedOption(userVote.selectedOptionId);
           } else if (userVote.voteChoice) {
-            setVoteChoice(userVote.voteChoice);
+            setVoteChoice(userVote.voteChoice as 'yes' | 'no' | 'abstain');
           }
         }
       } else {
@@ -142,7 +170,7 @@ export function RuleProposalVotingInterface({
       },
       representativeCanCreateVotes: {
         label: 'Representatives Can Create Votes',
-        description: 'Representatives can create policy implementation votes'
+        description: 'Representatives can create votes for organizational decisions'
       },
       representativeCanInviteMembers: {
         label: 'Representatives Can Invite Members',
@@ -201,7 +229,7 @@ export function RuleProposalVotingInterface({
 
     setVoting(true);
     try {
-      let voteData: { selectedOptionId?: string; voteChoice?: string } = {};
+      let voteData: { selectedOptionId?: string; voteChoice?: 'yes' | 'no' | 'abstain' } = {};
 
       if (proposal.options && proposal.options.length > 0) {
         // Multiple choice voting
@@ -212,7 +240,7 @@ export function RuleProposalVotingInterface({
         voteData.selectedOptionId = selectedOption;
       } else {
         // Yes/No/Abstain voting
-        voteData.voteChoice = voteChoice;
+        voteData.voteChoice = voteChoice as 'yes' | 'no' | 'abstain';
       }
 
       await governanceApi.ruleProposalsApi.voteOnRuleProposal(organization.id, proposalId, voteData);
@@ -228,37 +256,38 @@ export function RuleProposalVotingInterface({
   };
 
   const getVoteCounts = () => {
-    if (!proposal?.votes) return { total: 0, yes: 0, no: 0, abstain: 0 };
+    if (!proposal) return { total: 0, yes: 0, no: 0, abstain: 0 };
 
     if (proposal.options && proposal.options.length > 0) {
-      // Count votes for each option
+      // Count votes for each option - use votesReceived from API or calculate from votes array
       const optionCounts: Record<string, number> = {};
       proposal.options.forEach(option => {
-        optionCounts[option.id] = 0;
-      });
-
-      proposal.votes.forEach(vote => {
-        if (vote.selectedOptionId) {
-          optionCounts[vote.selectedOptionId] = (optionCounts[vote.selectedOptionId] || 0) + 1;
+        // Use votesReceived from API if available, otherwise calculate from votes array
+        if (option.votesReceived !== undefined) {
+          optionCounts[option.id] = option.votesReceived;
+        } else if (proposal.votes) {
+          optionCounts[option.id] = proposal.votes.filter(v => v.selectedOptionId === option.id).length;
+        } else {
+          optionCounts[option.id] = 0;
         }
       });
 
       return optionCounts;
     } else {
-      // Count yes/no/abstain votes
-      let yes = 0, no = 0, abstain = 0;
-      proposal.votes.forEach(vote => {
-        if (vote.voteChoice === 'yes') yes++;
-        else if (vote.voteChoice === 'no') no++;
-        else if (vote.voteChoice === 'abstain') abstain++;
-      });
+      // Use vote counts from API if available, otherwise calculate from votes array
+      const yes = proposal.votesYes ?? (proposal.votes?.filter(v => v.voteChoice === 'yes').length || 0);
+      const no = proposal.votesNo ?? (proposal.votes?.filter(v => v.voteChoice === 'no').length || 0);
+      const abstain = proposal.votesAbstain ?? (proposal.votes?.filter(v => v.voteChoice === 'abstain').length || 0);
+      const total = proposal.votesCast ?? (proposal.votes?.length || 0);
 
-      return { total: proposal.votes.length, yes, no, abstain };
+      return { total, yes, no, abstain };
     }
   };
 
   const hasUserVoted = () => {
-    return proposal?.votes?.some(vote => vote.userId === currentUser.id);
+    if (!proposal || !currentUser) return false;
+    // Check if user has voted - either from votes array or infer from API
+    return proposal.votes?.some(vote => vote.userId === currentUser.id) ?? false;
   };
 
   if (loading) {
@@ -351,7 +380,7 @@ export function RuleProposalVotingInterface({
           <CardContent className="space-y-6">
             {/* Multiple Choice Voting */}
             {proposal.options && proposal.options.length > 0 ? (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <Label className="text-base font-medium">Select your preferred option:</Label>
                 <RadioGroup
                   value={selectedOption}
@@ -463,7 +492,11 @@ export function RuleProposalVotingInterface({
           )}
 
           <div className="mt-4 text-center text-sm text-gray-600">
-            Total votes: {Array.isArray(voteCounts) ? voteCounts.total : Object.values(voteCounts).reduce((a, b) => a + b, 0)}
+            Total votes: {typeof voteCounts === 'object' && 'total' in voteCounts 
+              ? voteCounts.total 
+              : typeof voteCounts === 'object' 
+                ? Object.values(voteCounts).reduce((a: number, b: number) => a + b, 0)
+                : 0}
           </div>
         </CardContent>
       </Card>

@@ -1,6 +1,6 @@
-import React, { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Users, Vote, FileText, BarChart3, Building2 } from 'lucide-react';
+import { Users, Vote, FileText, Eye, Building2 } from 'lucide-react';
 
 import { Organization, User, Document } from '../../types';
 import { useOrganizationPermissions } from '../../hooks/useOrganizationPermissions';
@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import { GovernanceTab } from './tabs/GovernanceTab';
 import { DocumentsTab } from './tabs/DocumentsTab';
 import { MembersTab } from './tabs/MembersTab';
-import { AnalyticsTab } from './tabs/AnalyticsTab';
+import { TransparencyTab } from './tabs/TransparencyTab';
 import { DashboardTab } from './tabs/DashboardTab';
 
 interface OrganizationManagementProps {
@@ -20,23 +20,33 @@ interface OrganizationManagementProps {
   currentUser: User;
   onBack: () => void;
   onSelectDocument?: (document: Document) => void;
+  onBrandingUpdate?: (organizationId: string) => void;
 }
 
 export function OrganizationManagement({
   organization,
   currentUser,
-  onBack,
-  onSelectDocument
+  onSelectDocument,
+  onBrandingUpdate
 }: OrganizationManagementProps) {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [governanceRefreshTrigger, setGovernanceRefreshTrigger] = useState(0);
+  
+  // Maintain local organization state that can be updated immediately
+  const [localOrganization, setLocalOrganization] = useState<Organization>(organization);
+
+  // Sync local organization state with prop changes
+  useEffect(() => {
+    setLocalOrganization(organization);
+  }, [organization]);
 
   // Use our custom hooks for data and permissions
-  const permissions = useOrganizationPermissions(currentUser, organization);
-  const { data, actions } = useOrganizationData(organization.id, activeTab);
+  const { data, actions } = useOrganizationData(localOrganization.id, activeTab);
+  const permissions = useOrganizationPermissions(currentUser, localOrganization, data.governanceRules);
 
   // Handle organization WebSocket updates
   const handleOrganizationUpdate = useCallback((update: OrganizationUpdate) => {
-    if (update.organizationId !== organization.id) return;
+    if (update.organizationId !== localOrganization.id) return;
 
     console.log('Received organization update:', update);
 
@@ -44,6 +54,7 @@ export function OrganizationManagement({
       case 'governance-rules-updated':
         toast.success('Governance rules updated');
         actions.refreshGovernance();
+        setGovernanceRefreshTrigger(prev => prev + 1);
         break;
       case 'election-created':
         toast.success('New election created');
@@ -61,21 +72,47 @@ export function OrganizationManagement({
         toast.success('Member removed from organization');
         actions.refreshAll(); // Refresh all to update members list
         break;
-      case 'member-invited':
-        toast.success(`${update.data.invitationCount || 1} invitation(s) sent`);
+      case 'member-invited': {
+        const invitationData = update.data as { invitationCount?: number } | undefined;
+        toast.success(`${invitationData?.invitationCount || 1} invitation(s) sent`);
         break;
+      }
       case 'rule-proposal-created':
       case 'rule-proposal-approved':
+      case 'rule-proposal-rejected':
+      case 'rule-proposal-expired':
+      case 'rule-proposal-vote-cast':
         actions.refreshGovernance();
+        setGovernanceRefreshTrigger(prev => prev + 1);
+        break;
+      case 'branding-updated':
+        toast.success('Organization branding updated');
+        // Update local organization state immediately with branding data from WebSocket
+        const brandingData = update.data as { brandingColor?: string; brandingLogoUrl?: string; brandingTitle?: string } | undefined;
+        if (brandingData) {
+          setLocalOrganization(prev => ({
+            ...prev,
+            brandingColor: brandingData.brandingColor !== undefined ? brandingData.brandingColor : prev.brandingColor,
+            brandingLogoUrl: brandingData.brandingLogoUrl !== undefined ? brandingData.brandingLogoUrl : prev.brandingLogoUrl,
+            brandingTitle: brandingData.brandingTitle !== undefined ? brandingData.brandingTitle : prev.brandingTitle,
+          }));
+        }
+        if (onBrandingUpdate) {
+          onBrandingUpdate(localOrganization.id);
+        }
+        break;
+      case 'document-created':
+        // Refresh documents list to show newly created document
+        actions.refreshDocuments();
         break;
       default:
         console.log('Unhandled organization update:', update.eventType);
     }
-  }, [organization.id, actions]);
+  }, [localOrganization.id, localOrganization, actions, onBrandingUpdate]);
 
   // Subscribe to organization WebSocket updates
   useOrganizationWebSocket({
-    organizationId: organization.id,
+    organizationId: localOrganization.id,
     userId: currentUser?.id || null,
     authToken: localStorage.getItem('authToken'),
     onOrganizationUpdate: handleOrganizationUpdate
@@ -87,7 +124,8 @@ export function OrganizationManagement({
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-4xl mx-auto px-4 py-8">
       <ErrorBoundary>
         {/* Navigation Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -108,9 +146,9 @@ export function OrganizationManagement({
               <Users className="h-4 w-4" />
               Members
             </TabsTrigger>
-            <TabsTrigger value="analytics" className="gap-2">
-              <BarChart3 className="h-4 w-4" />
-              Analytics
+            <TabsTrigger value="transparency" className="gap-2">
+              <Eye className="h-4 w-4" />
+              Transparency
             </TabsTrigger>
           </TabsList>
 
@@ -119,13 +157,16 @@ export function OrganizationManagement({
           <TabsContent value="dashboard" className="mt-6">
             <ErrorBoundary>
               <DashboardTab
-                organization={organization}
+                organization={localOrganization}
                 currentUser={currentUser}
                 permissions={permissions}
                 governanceRules={data.governanceRules}
                 elections={data.elections}
                 documents={data.documents}
-                onCreateElection={actions.createElection}
+                onCreateElection={(): void => {
+                  // Navigate to governance tab where election creation is available
+                  setActiveTab('governance');
+                }}
                 onNavigateToDocuments={() => setActiveTab('documents')}
                 onNavigateToMembers={() => setActiveTab('members')}
                 onNavigateToGovernance={() => setActiveTab('governance')}
@@ -136,7 +177,7 @@ export function OrganizationManagement({
           <TabsContent value="governance" className="mt-6">
             <ErrorBoundary>
               <GovernanceTab
-                organization={organization}
+                organization={localOrganization}
                 currentUser={currentUser}
                 permissions={permissions}
                 governanceRules={data.governanceRules}
@@ -144,6 +185,7 @@ export function OrganizationManagement({
                 onRefreshGovernance={actions.refreshGovernance}
                 onRefreshElections={actions.refreshElections}
                 onCreateElection={actions.createElection}
+                governanceRefreshTrigger={governanceRefreshTrigger}
               />
             </ErrorBoundary>
           </TabsContent>
@@ -151,19 +193,17 @@ export function OrganizationManagement({
           <TabsContent value="documents" className="mt-6">
             <ErrorBoundary>
               <DocumentsTab
-                organization={organization}
+                organization={localOrganization}
                 currentUser={currentUser}
                 permissions={permissions}
                 governanceRules={data.governanceRules}
                 documents={data.documents}
-                policyVotes={data.policyVotes}
                 loading={data.loading.documents}
                 error={data.errors.documents}
                 onCreateDocument={actions.createDocument}
                 onCreateChildDocument={actions.createDocument}
                 onSelectDocument={onSelectDocument}
                 onRefreshDocuments={actions.refreshDocuments}
-                onRefreshPolicyVotes={actions.refreshPolicyVotes}
               />
             </ErrorBoundary>
           </TabsContent>
@@ -171,7 +211,7 @@ export function OrganizationManagement({
           <TabsContent value="members" className="mt-6">
             <ErrorBoundary>
               <MembersTab
-                organization={organization}
+                organization={localOrganization}
                 currentUser={currentUser}
                 permissions={permissions}
                 onUpdate={handleUpdate}
@@ -179,10 +219,11 @@ export function OrganizationManagement({
             </ErrorBoundary>
           </TabsContent>
 
-          <TabsContent value="analytics" className="mt-6">
+          <TabsContent value="transparency" className="mt-6">
             <ErrorBoundary>
-              <AnalyticsTab
-                organization={organization}
+              <TransparencyTab
+                organization={localOrganization}
+                currentUser={currentUser}
                 permissions={permissions}
                 analytics={data.analytics}
                 elections={data.elections}
@@ -192,6 +233,7 @@ export function OrganizationManagement({
           </TabsContent>
         </Tabs>
       </ErrorBoundary>
+      </div>
     </div>
   );
 }

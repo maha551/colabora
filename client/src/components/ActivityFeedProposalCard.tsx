@@ -5,7 +5,7 @@ import { DiffViewer } from './DiffViewer';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { FileText, History, ChevronDown, ChevronUp } from 'lucide-react';
-import { Suggestion, User, VersionHistory } from '../types';
+import { Suggestion, User, VersionHistory, Organization } from '../types';
 import { DocumentContext } from '../utils/proposalAdapter';
 import { cn } from './ui/utils';
 import { Card } from './ui/card';
@@ -19,6 +19,12 @@ interface ActivityFeedProposalCardProps {
   originalText: string;
   history?: VersionHistory[];
   tabType: 'accepted' | 'debated' | 'pending';
+  organization?: Organization | null;
+  ranking?: {
+    index: number;
+    score: number;
+    isControversial?: boolean;
+  };
   onVote: (proposalId: string, documentId: string, paragraphId: string, voteType: 'PRO' | 'NEUTRAL' | 'CONTRA') => void;
   onComment: (proposalId: string, documentId: string, paragraphId: string, text: string, parentId?: string) => void;
   onNavigateToDocument: (documentId: string) => void;
@@ -33,6 +39,8 @@ export function ActivityFeedProposalCard({
   originalText,
   history = [],
   tabType,
+  organization,
+  ranking,
   onVote,
   onComment,
   onNavigateToDocument,
@@ -43,11 +51,8 @@ export function ActivityFeedProposalCard({
   const getTabBadge = () => {
     switch (tabType) {
       case 'accepted':
-        return (
-          <Badge className="bg-green-600 text-white text-xs px-2 py-0.5 font-medium">
-            Accepted
-          </Badge>
-        );
+        // Don't show badge for accepted - the "Accepted (X%)" badge next to proposer name is sufficient
+        return null;
       case 'debated':
         return (
           <Badge className="bg-purple-600 text-white text-xs px-2 py-0.5 font-medium">
@@ -63,11 +68,17 @@ export function ActivityFeedProposalCard({
     }
   };
 
+  // Get organization color for border
+  const orgBorderColor = organization?.brandingColor || null;
+
   return (
     <div className="space-y-3">
       {/* SuggestionCard with integrated document context and inline diff for pending */}
       {tabType === 'pending' ? (
-        <Card className="p-0 overflow-hidden">
+        <Card 
+          className="p-0 overflow-hidden"
+          style={orgBorderColor ? { borderColor: orgBorderColor, borderWidth: '2px' } : undefined}
+        >
           <SuggestionCard
             suggestion={proposal}
             totalUsers={totalUsers}
@@ -84,6 +95,8 @@ export function ActivityFeedProposalCard({
             historyCount={history.length}
             onToggleHistory={() => setShowHistory(!showHistory)}
             diffHighlightColor="yellow"
+            organization={organization}
+            ranking={ranking}
           />
         </Card>
       ) : (
@@ -102,6 +115,9 @@ export function ActivityFeedProposalCard({
           historyCount={history.length}
           onToggleHistory={() => setShowHistory(!showHistory)}
           diffHighlightColor={tabType === 'accepted' ? 'green' : 'yellow'}
+          organization={organization}
+          organizationBorderColor={orgBorderColor}
+          ranking={ranking}
         />
       )}
 

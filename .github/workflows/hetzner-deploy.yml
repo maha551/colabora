@@ -62,6 +62,19 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.KAMAL_SSH_PRIVATE_KEY }}
 
+      - name: Configure deploy SSH key for Kamal
+        env:
+          KAMAL_SSH_PRIVATE_KEY: ${{ secrets.KAMAL_SSH_PRIVATE_KEY }}
+        run: |
+          # Kamal uses net-ssh, not the OpenSSH CLI — it needs a key file path in
+          # deploy.yml (see config/deploy.yml CI block). ssh-agent alone is not enough.
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KAMAL_SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/kamal_ci_key
+          chmod 600 ~/.ssh/kamal_ci_key
+          ssh-add ~/.ssh/kamal_ci_key
+          echo "SSH agent keys:"
+          ssh-add -l
+
       - name: Add app servers to known_hosts
         run: |
           # Do NOT use ssh-keyscan -H: Kamal/SSHKit cannot verify hashed known_hosts
@@ -85,6 +98,22 @@ jobs:
           chmod 600 ~/.ssh/known_hosts
           echo "Known hosts entries:"
           cat ~/.ssh/known_hosts
+
+      - name: Verify SSH to app servers
+        run: |
+          DEST="${KAMAL_DESTINATION}"
+          if [ "$DEST" = "pilot" ]; then
+            CONFIG="config/deploy.pilot.yml"
+          elif [ "$DEST" = "staging" ]; then
+            CONFIG="config/deploy.staging.yml"
+          else
+            CONFIG="config/deploy.yml"
+          fi
+          for ip in $(ruby -ryaml -e "puts YAML.load_file('$CONFIG').dig('servers','web','hosts') || []"); do
+            echo "Testing deploy@${ip}..."
+            ssh -i ~/.ssh/kamal_ci_key -o BatchMode=yes -o IdentitiesOnly=yes \
+              deploy@"$ip" "echo OK deploy@${ip}"
+          done
 
       - name: Write Kamal secrets
         env:

@@ -18,6 +18,13 @@ image: maha551/colabora
 
 ssh:
   user: deploy
+<% if ENV["CI"] == "true" %>
+  # Kamal/net-ssh does not reliably use ssh-agent in GitHub Actions; point at the
+  # key file written in hetzner-deploy.yml (avoids password fallback / ENOTTY).
+  keys:
+    - ~/.ssh/kamal_ci_key
+  keys_only: true
+<% end %>
 
 servers:
   web:

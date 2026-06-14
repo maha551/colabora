@@ -67,18 +67,16 @@ jobs:
         env:
           KAMAL_SSH_PRIVATE_KEY: ${{ secrets.KAMAL_SSH_PRIVATE_KEY }}
         run: |
-          # Kamal uses net-ssh, not the OpenSSH CLI — it needs a key file path in
-          # deploy.yml (see config/deploy.yml CI block). ssh-agent alone is not enough.
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$KAMAL_SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/kamal_ci_key
-          chmod 600 ~/.ssh/kamal_ci_key
-          if ! ssh-keygen -y -f ~/.ssh/kamal_ci_key >/dev/null 2>&1; then
-            echo "::error::KAMAL_SSH_PRIVATE_KEY is missing or not a valid private key. Re-set it from ~/.ssh/colabora_deploy."
+          printf '%s\n' "$KAMAL_SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/colabora_deploy
+          chmod 600 ~/.ssh/colabora_deploy
+          if ! ssh-keygen -y -f ~/.ssh/colabora_deploy >/dev/null 2>&1; then
+            echo "::error::KAMAL_SSH_PRIVATE_KEY is missing or not a valid private key."
             exit 1
           fi
           echo "Deploy key fingerprint:"
-          ssh-keygen -lf ~/.ssh/kamal_ci_key
-          ssh-add ~/.ssh/kamal_ci_key
+          ssh-keygen -lf ~/.ssh/colabora_deploy
+          ssh-add ~/.ssh/colabora_deploy
           echo "SSH agent keys:"
           ssh-add -l
 
@@ -98,7 +96,7 @@ jobs:
             CONFIG="config/deploy.yml"
           fi
           echo "Using host list from $CONFIG (destination: $DEST)"
-          for ip in $(ruby -ryaml -e "puts YAML.load_file('$CONFIG').dig('servers','web','hosts') || []"); do
+          for ip in $(grep -E '^\s+-\s+[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' "$CONFIG" | awk '{print $2}'); do
             echo "Adding $ip (unhashed host keys for Kamal/net-ssh)"
             ssh-keyscan -T 10 -t ed25519,ecdsa,rsa "$ip" >> ~/.ssh/known_hosts 2>/dev/null || true
           done
@@ -116,11 +114,15 @@ jobs:
           else
             CONFIG="config/deploy.yml"
           fi
-          for ip in $(ruby -ryaml -e "puts YAML.load_file('$CONFIG').dig('servers','web','hosts') || []"); do
+          # deploy.yml contains ERB; extract host IPs without loading it as plain YAML.
+          for ip in $(grep -E '^\s+-\s+[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' "$CONFIG" | awk '{print $2}'); do
             echo "Testing deploy@${ip}..."
-            ssh -i ~/.ssh/kamal_ci_key -o BatchMode=yes -o IdentitiesOnly=yes \
+            ssh -i ~/.ssh/colabora_deploy -o BatchMode=yes -o IdentitiesOnly=yes \
               deploy@"$ip" "echo OK deploy@${ip}"
           done
+
+      - name: Show Kamal SSH config
+        run: kamal config | ruby -ryaml -e "c=YAML.load(STDIN.read); puts c.dig('ssh').to_yaml"
 
       - name: Write Kamal secrets
         env:

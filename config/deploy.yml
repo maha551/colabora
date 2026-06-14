@@ -18,13 +18,10 @@ image: maha551/colabora
 
 ssh:
   user: deploy
-<% if ENV["CI"] == "true" %>
-  # Kamal/net-ssh does not reliably use ssh-agent in GitHub Actions; point at the
-  # key file written in hetzner-deploy.yml (avoids password fallback / ENOTTY).
+  # Same path locally (~/.ssh/colabora_deploy) and in GitHub Actions (workflow writes the secret there).
   keys:
-    - <%= File.expand_path("~/.ssh/kamal_ci_key") %>
+    - ~/.ssh/colabora_deploy
   keys_only: true
-<% end %>
 
 servers:
   web:

@@ -121,9 +121,6 @@ jobs:
               deploy@"$ip" "echo OK deploy@${ip}"
           done
 
-      - name: Show Kamal SSH config
-        run: kamal config | ruby -ryaml -e "c=YAML.load(STDIN.read); puts c.dig('ssh').to_yaml"
-
       - name: Write Kamal secrets
         env:
           KAMAL_REGISTRY_PASSWORD: ${{ secrets.KAMAL_REGISTRY_PASSWORD || github.token }}

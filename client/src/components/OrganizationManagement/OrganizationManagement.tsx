@@ -67,6 +67,7 @@ export function OrganizationManagement({
   // Use debounced tab to prevent excessive API requests when rapidly switching tabs
   const [activeTab, debouncedTab, setActiveTab, setActiveTabImmediate] = useDebouncedTab('dashboard', 200);
   const [governanceRefreshTrigger, setGovernanceRefreshTrigger] = useState(0);
+  const [schedulePollRefreshKey, setSchedulePollRefreshKey] = useState(0);
   const [autoOpenGovernanceRules, setAutoOpenGovernanceRules] = useState(false);
   // Track current request to prevent race conditions when organization changes
   const currentOrgRequestRef = useRef<string | null>(null);
@@ -428,6 +429,11 @@ export function OrganizationManagement({
         actions.refreshAll();
         toast.success(t('resignationFinalized'));
         break;
+      case 'scheduling-poll-participation-closed':
+      case 'scheduling-poll-deadline-extended':
+      case 'scheduling-poll-opened':
+        setSchedulePollRefreshKey((k) => k + 1);
+        break;
       default:
         // Debug logging removed - use logger if needed
         // logger.debug('Unhandled organization update:', update.eventType);
@@ -611,6 +617,7 @@ export function OrganizationManagement({
                 isActive
                 detailOnlyMode
                 initialPollId={pollPagePollId}
+                pollRefreshKey={schedulePollRefreshKey}
                 onBack={handleBackFromPollPage}
                 onMeetingCreated={(meeting) => {
                   setLastCreatedMeeting(meeting);
@@ -806,6 +813,7 @@ export function OrganizationManagement({
                 currentUser={currentUser}
                 permissions={permissions}
                 isActive={activeTab === 'schedule'}
+                pollRefreshKey={schedulePollRefreshKey}
                 onNavigateToDocument={onNavigateToDocument}
                 onNavigateToRepresentatives={permissions.isRepresentative && onNavigateToHash ? () => onNavigateToHash(buildHash({ view: 'organization', organizationId: localOrganization.id, orgTab: 'representatives' })) : undefined}
                 onNavigateToHash={onNavigateToHash}

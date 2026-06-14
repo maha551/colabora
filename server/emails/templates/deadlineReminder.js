@@ -9,6 +9,7 @@ function deadlineTypeKey(deadlineType) {
     rule_proposal: 'deadlineReminder.typeRuleProposal',
     election_voting: 'deadlineReminder.typeElectionVoting',
     election_nomination: 'deadlineReminder.typeElectionNomination',
+    scheduling_poll: 'deadlineReminder.typeSchedulingPoll',
   };
   return map[deadlineType] || 'deadlineReminder.typeDefault';
 }

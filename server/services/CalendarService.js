@@ -367,6 +367,38 @@ async function getEvents(db, { organizationId, userId, from, to, meetingId, base
     }
   }
 
+  if (!meetingId) {
+    try {
+      const openPollPlaceholders = orgIdsToQuery.map(() => '?').join(',');
+      const openPollRows = await TransactionManager.queryAll(db, `
+        SELECT sp.id, sp.organization_id, sp.title, sp.response_deadline
+        FROM scheduling_polls sp
+        WHERE sp.organization_id IN (${openPollPlaceholders})
+          AND sp.status = 'open'
+          AND sp.response_deadline IS NOT NULL
+          AND sp.response_deadline >= ?
+          AND sp.response_deadline <= ?
+      `, [...orgIdsToQuery, fromParam, toParam]);
+      for (const row of openPollRows) {
+        const deadlineIso = (row.response_deadline instanceof Date
+          ? row.response_deadline
+          : new Date(row.response_deadline)).toISOString();
+        events.push({
+          id: `poll-deadline-${row.id}`,
+          type: 'scheduling_poll_participation_deadline',
+          title: `Respond: ${(row.title || 'Poll').trim()}`,
+          start: deadlineIso,
+          end: deadlineIso,
+          organizationId: row.organization_id,
+          schedulingPollId: row.id,
+          link: `#/organization/${row.organization_id}/schedule/polls/${row.id}`
+        });
+      }
+    } catch (err) {
+      logger.warn('CalendarService: open scheduling poll deadlines query failed', { error: err.message });
+    }
+  }
+
   try {
     const meetingPlaceholders = orgIdsToQuery.map(() => '?').join(',');
     let meetingSql = `

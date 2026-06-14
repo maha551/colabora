@@ -25,7 +25,10 @@ const IMMEDIATE_EVENT_TYPES = [
   'voting_started',
   'rule_proposal_deadline_approaching',
   'election_deadline_approaching',
-  'election_nomination_deadline_approaching'
+  'election_nomination_deadline_approaching',
+  'scheduling_poll_opened',
+  'scheduling_poll_participation_closed',
+  'scheduling_poll_deadline_approaching',
 ];
 
 // Event types that go to digest
@@ -396,7 +399,8 @@ async function getApproachingDeadlinesByUser(knex) {
         documentsVoting: [],
         ruleProposals: [],
         electionVoting: [],
-        electionNomination: []
+        electionNomination: [],
+        schedulingPolls: []
       });
     }
     const sections = userMap.get(userId);
@@ -536,9 +540,40 @@ async function getApproachingDeadlinesByUser(knex) {
     }
   }
 
+  // Scheduling polls – open, participation deadline within 7 days
+  try {
+    const polls = await TransactionManager.queryAll(knex, `
+      SELECT sp.id, sp.title, sp.response_deadline, sp.organization_id, o.name AS org_name
+      FROM scheduling_polls sp
+      LEFT JOIN organizations o ON sp.organization_id = o.id
+      WHERE sp.status = 'open'
+        AND sp.response_deadline IS NOT NULL
+        AND sp.response_deadline > ?
+        AND sp.response_deadline <= ?
+    `, [nowIso, weekIso]);
+    const SchedulingService = require('../services/SchedulingService');
+    for (const p of polls) {
+      const members = await TransactionManager.queryAll(knex, `
+        SELECT user_id FROM organization_members WHERE organization_id = ? AND status = 'active'
+      `, [p.organization_id]);
+      const item = {
+        title: p.title || 'Scheduling poll',
+        deadline: p.response_deadline,
+        link: SchedulingService.pollDetailLink(p.organization_id, p.id),
+        organizationName: p.org_name || null,
+        organizationId: p.organization_id || null
+      };
+      for (const m of members) {
+        addToUser(m.user_id, 'schedulingPolls', item);
+      }
+    }
+  } catch (err) {
+    logger.error('Error fetching scheduling polls for deadlines digest', { error: err.message });
+  }
+
   // Sort each section by deadline ascending
   for (const sections of userMap.values()) {
-    for (const key of ['documentsVoting', 'ruleProposals', 'electionVoting', 'electionNomination']) {
+    for (const key of ['documentsVoting', 'ruleProposals', 'electionVoting', 'electionNomination', 'schedulingPolls']) {
       const arr = sections[key];
       if (arr && arr.length) {
         arr.sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
@@ -561,7 +596,8 @@ async function sendDeadlinesDigestIfDue(knex, userId, sections) {
   const rules = sections.ruleProposals || [];
   const electionV = sections.electionVoting || [];
   const electionN = sections.electionNomination || [];
-  const total = docs.length + rules.length + electionV.length + electionN.length;
+  const schedulingPolls = sections.schedulingPolls || [];
+  const total = docs.length + rules.length + electionV.length + electionN.length + schedulingPolls.length;
   if (total === 0) return false;
 
   try {
@@ -580,7 +616,7 @@ async function sendDeadlinesDigestIfDue(knex, userId, sections) {
     const user = await TransactionManager.query(knex, 'SELECT email, name, preferences FROM users WHERE id = ?', [userId]);
     if (!user || !user.email) return false;
 
-    const primaryOrgName = docs[0]?.organizationName || rules[0]?.organizationName || electionV[0]?.organizationName || electionN[0]?.organizationName || null;
+    const primaryOrgName = docs[0]?.organizationName || rules[0]?.organizationName || electionV[0]?.organizationName || electionN[0]?.organizationName || schedulingPolls[0]?.organizationName || null;
     const content = formatDeadlinesApproachingDigest(sections, {
       userName: user.name || null,
       primaryOrgName,

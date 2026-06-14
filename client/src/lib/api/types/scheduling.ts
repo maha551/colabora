@@ -10,8 +10,24 @@ export interface SchedulingPoll {
   description: string | null;
   status: SchedulingPollStatus;
   chosenSlotId: string | null;
+  participationDeadline: string | null;
+  participationClosedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ParticipationSummary {
+  memberCount: number;
+  respondedCount: number;
+  nonRespondedUserIds: string[];
+  guestCount: number;
+}
+
+export interface SuggestedSlot {
+  slotId: string;
+  startAt: string;
+  endAt: string;
+  yesCount: number;
 }
 
 export interface SchedulingPollSlot {
@@ -62,6 +78,8 @@ export interface SchedulingPollDetailResponse {
   myResponses?: MyResponseItem[];
   guestLink?: GuestLinkInfo | null;
   guestRespondentSummaries?: GuestRespondentSummary[];
+  participationSummary?: ParticipationSummary;
+  suggestedSlot?: SuggestedSlot | null;
 }
 
 export interface SlotsResponse {

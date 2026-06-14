@@ -14,7 +14,7 @@ export type SheetVariant = 'live' | 'pinned' | 'default';
 export type EventTypeAccent = 'meeting' | 'poll' | 'document' | 'election' | 'default';
 
 export const AGENDA_SHEET_SIZE_CLASSES =
-  'min-w-[132px] w-[132px] h-[168px] sm:min-w-[148px] sm:w-[148px] sm:h-[180px]';
+  'min-w-[148px] w-[148px] h-[188px] sm:min-w-[160px] sm:w-[160px] sm:h-[200px]';
 
 /** Alias used by flip/skeleton components (Phase 2 scaffold). */
 export const SHEET_SIZE_CLASSES = AGENDA_SHEET_SIZE_CLASSES;
@@ -113,7 +113,7 @@ export function resolveEventTypeAccent(ev: CalendarEvent): EventTypeAccent {
 export function getEventTypeAccent(ev: CalendarEvent): string {
   switch (resolveEventTypeAccent(ev)) {
     case 'meeting':
-      return 'bg-primary';
+      return 'bg-emerald-500';
     case 'poll':
       return 'bg-amber-500';
     case 'document':
@@ -128,7 +128,7 @@ export function getEventTypeAccent(ev: CalendarEvent): string {
 export function getEventTypeAccentClass(accent: EventTypeAccent): string {
   switch (accent) {
     case 'meeting':
-      return 'bg-primary';
+      return 'bg-emerald-500';
     case 'poll':
       return 'bg-amber-500';
     case 'document':
@@ -144,7 +144,7 @@ export function getEventTypeAccentClass(accent: EventTypeAccent): string {
 export function getEventTypeAccentBorderClass(ev: CalendarEvent): string {
   switch (resolveEventTypeAccent(ev)) {
     case 'meeting':
-      return 'border-l-primary';
+      return 'border-l-emerald-500';
     case 'poll':
       return 'border-l-amber-500';
     case 'document':

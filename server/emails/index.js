@@ -8,6 +8,7 @@ const votingStarted = require('./templates/votingStarted');
 const activityDigest = require('./templates/activityDigest');
 const deadlinesDigest = require('./templates/deadlinesDigest');
 const representativeRejection = require('./templates/representativeRejection');
+const schedulingPollParticipationClosed = require('./templates/schedulingPollParticipationClosed');
 
 module.exports = {
   invitation,
@@ -20,6 +21,7 @@ module.exports = {
   activityDigest,
   deadlinesDigest,
   representativeRejection,
+  schedulingPollParticipationClosed,
   urls: require('./urls'),
   branding: require('./branding'),
   i18n: require('./i18n'),

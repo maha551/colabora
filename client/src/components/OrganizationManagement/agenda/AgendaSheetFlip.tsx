@@ -57,10 +57,12 @@ export function AgendaSheetFlip({
         'shrink-0 snap-start',
         flipped && 'is-flipped',
         isToday && 'agenda-sheet--today',
-        reducedMotion && 'agenda-sheet-flip--reduced'
+        reducedMotion && 'agenda-sheet-flip--reduced',
+        showTouchToggle && 'agenda-sheet-flip--touch'
       )}
       role="group"
       aria-label={ariaLabel}
+      aria-expanded={showTouchToggle ? flipped : undefined}
     >
       <div className="agenda-sheet-flip__inner h-full w-full">
         <div className="agenda-sheet-flip__face agenda-sheet-flip__front h-full w-full">{front}</div>

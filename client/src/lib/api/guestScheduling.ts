@@ -2,6 +2,7 @@ export interface GuestPollInfo {
   title: string;
   description: string | null;
   status: 'open' | 'closed' | 'finalized';
+  participationDeadline?: string | null;
 }
 
 export interface GuestPollSlot {

@@ -51,6 +51,8 @@ describe('Scheduler Jobs Tests', () => {
 
     expect(typeof scheduler.checkVotingDeadlines).toBe('function');
     await expect(scheduler.checkVotingDeadlines()).resolves.not.toThrow();
+    await expect(scheduler.checkSchedulingPollParticipationDeadlines()).resolves.not.toThrow();
+    await expect(scheduler.checkSchedulingPollReminders()).resolves.not.toThrow();
 
     scheduler.stop();
   });
@@ -123,6 +125,8 @@ describe('Scheduler Jobs Tests', () => {
 
     await expect(scheduler.checkProposalDeadlines()).resolves.not.toThrow();
     await expect(scheduler.checkVotingDeadlines()).resolves.not.toThrow();
+    await expect(scheduler.checkSchedulingPollParticipationDeadlines()).resolves.not.toThrow();
+    await expect(scheduler.checkSchedulingPollReminders()).resolves.not.toThrow();
     await expect(scheduler.checkProposalCutoff()).resolves.not.toThrow();
     await expect(scheduler.checkDeletionDeadlines()).resolves.not.toThrow();
     await expect(scheduler.processExpiredRuleProposals()).resolves.not.toThrow();

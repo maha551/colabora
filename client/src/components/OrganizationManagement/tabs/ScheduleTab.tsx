@@ -31,6 +31,10 @@ import type { OrganizationPermissions } from '../../../hooks/useOrganizationPerm
 import { useTimezone } from '../../../hooks/useTimezone';
 import { toast } from 'sonner';
 import { OverviewPinButton } from '../OverviewPinButton';
+import {
+  getDefaultParticipationDeadlineDate,
+  needsFinalization,
+} from '../../../lib/scheduling/participation';
 
 export type ScheduleSection = 'calendar' | 'scheduling' | 'meetings';
 
@@ -46,6 +50,7 @@ interface ScheduleTabProps {
   pinnedEventId?: string | null;
   onPinEvent?: (eventId: string) => Promise<void>;
   onUnpinEvent?: () => Promise<void>;
+  pollRefreshKey?: number;
 }
 
 export function ScheduleTab({
@@ -59,9 +64,10 @@ export function ScheduleTab({
   pinnedEventId,
   onPinEvent,
   onUnpinEvent,
+  pollRefreshKey = 0,
 }: ScheduleTabProps) {
   const { t } = useTranslation('organization');
-  const { formatDateTime, getMonthRange, fromDateInputValue } = useTimezone();
+  const { formatDateTime, getMonthRange, fromDateInputValue, fromDateTimeLocalValue, toDateTimeLocalValue } = useTimezone();
   const [month, setMonth] = useState<Date>(() => new Date());
 
   const [polls, setPolls] = useState<SchedulingPoll[]>([]);
@@ -74,6 +80,9 @@ export function ScheduleTab({
   const [createPollOpen, setCreatePollOpen] = useState(false);
   const [createPollTitle, setCreatePollTitle] = useState('');
   const [createPollDescription, setCreatePollDescription] = useState('');
+  const [createPollParticipationDeadline, setCreatePollParticipationDeadline] = useState(() =>
+    toDateTimeLocalValue(getDefaultParticipationDeadlineDate())
+  );
   const [createPollSubmitting, setCreatePollSubmitting] = useState(false);
   const [subscribeOpen, setSubscribeOpen] = useState(false);
   const fetchPolls = useCallback(async () => {
@@ -120,7 +129,7 @@ export function ScheduleTab({
       fetchPolls();
       fetchMeetings();
     }
-  }, [isActive, organization.id, fetchPolls, fetchMeetings]);
+  }, [isActive, organization.id, fetchPolls, fetchMeetings, pollRefreshKey]);
 
   // Meeting and poll URLs open dedicated pages in OrganizationManagement (hash routes)
 
@@ -155,14 +164,21 @@ export function ScheduleTab({
     }
     setCreatePollSubmitting(true);
     try {
+      const deadlineDate = fromDateTimeLocalValue(createPollParticipationDeadline.trim());
+      if (!deadlineDate || deadlineDate <= new Date()) {
+        toast.error(t('schedulingParticipationDeadlineFuture'));
+        return;
+      }
       const { poll } = await schedulingApi.createSchedulingPoll(organization.id, {
         title,
         description: createPollDescription.trim() || null,
+        participationDeadline: deadlineDate.toISOString(),
       });
       toast.success(t('schedulingPollCreated'));
       setCreatePollOpen(false);
       setCreatePollTitle('');
       setCreatePollDescription('');
+      setCreatePollParticipationDeadline(toDateTimeLocalValue(getDefaultParticipationDeadlineDate()));
       fetchPolls();
       const hash = `#/organization/${organization.id}/schedule/polls/${poll.id}`;
       if (onNavigateToHash) onNavigateToHash(hash);
@@ -277,6 +293,10 @@ export function ScheduleTab({
                               <h4 className={cn(NAVIGATION.typography.navItem, 'text-foreground')}>{poll.title}</h4>
                               <p className={cn(COLORS.text.secondary, 'text-xs')}>
                                 {t('schedulingStatus')}: {t(`schedulingStatus_${poll.status}`)}
+                                {poll.participationDeadline && poll.status === 'open' && (
+                                  <> · {t('schedulingRespondBy')}: {formatDateTime(poll.participationDeadline)}</>
+                                )}
+                                {needsFinalization(poll) && <> · {t('schedulingNeedsFinalization')}</>}
                               </p>
                             </div>
                             <Icon name="ChevronRight" className="h-4 w-4 text-muted-foreground" />
@@ -398,6 +418,14 @@ export function ScheduleTab({
                 value={createPollDescription}
                 onChange={(e) => setCreatePollDescription(e.target.value)}
                 placeholder={t('schedulingDescriptionPlaceholder')}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>{t('schedulingParticipationDeadline')}</Label>
+              <Input
+                type="datetime-local"
+                value={createPollParticipationDeadline}
+                onChange={(e) => setCreatePollParticipationDeadline(e.target.value)}
               />
             </div>
           </div>

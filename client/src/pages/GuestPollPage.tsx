@@ -20,6 +20,7 @@ import {
 import { loadGuestSession, saveGuestSession } from '../lib/guestSession';
 import { useTimezone } from '../hooks/useTimezone';
 import type { ResponseCount } from '../lib/api/types/scheduling';
+import { canParticipate } from '../lib/scheduling/participation';
 type ResponseChoice = 'yes' | 'no' | 'maybe';
 
 export interface GuestPollPageProps {
@@ -97,7 +98,7 @@ export function GuestPollPage({ token }: GuestPollPageProps) {
   };
 
   const handleSave = async () => {
-    if (!view || view.poll.status !== 'open') return;
+    if (!view || !participationOpen) return;
     setSaving(true);
     try {
       const responses = Object.entries(myResponses).map(([slotId, response]) => ({
@@ -125,7 +126,7 @@ export function GuestPollPage({ token }: GuestPollPageProps) {
     }
   };
 
-  const isOpen = view?.poll.status === 'open';
+  const participationOpen = view ? canParticipate(view.poll) : false;
 
   return (
     <div className={cn('min-h-screen bg-background', SPACING.page.all)}>
@@ -145,6 +146,11 @@ export function GuestPollPage({ token }: GuestPollPageProps) {
                 </h1>
                 {view.poll.description && (
                   <p className={cn('text-sm', COLORS.text.secondary)}>{view.poll.description}</p>
+                )}
+                {view.poll.participationDeadline && participationOpen && (
+                  <p className={cn('text-sm', COLORS.text.secondary)}>
+                    {t('respondBy')}: {formatDateTime(view.poll.participationDeadline)}
+                  </p>
                 )}
               </header>
 
@@ -202,7 +208,7 @@ export function GuestPollPage({ token }: GuestPollPageProps) {
                 </section>
               )}
 
-              {isOpen && (
+              {(participationOpen || (view.slots.length > 0 && !view.chosenSlot)) && (
                 <section
                   className={cn(
                     'border border-border/60 bg-card',
@@ -212,17 +218,23 @@ export function GuestPollPage({ token }: GuestPollPageProps) {
                     'flex flex-col'
                   )}
                 >
-                  <div className="max-w-xs">
-                    <Label htmlFor="guest-display-name">{t('yourName')}</Label>
-                    <Input
-                      id="guest-display-name"
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
-                      placeholder={t('yourNamePlaceholder')}
-                      maxLength={80}
-                      className="mt-1"
-                    />
-                  </div>
+                  {participationOpen && (
+                    <div className="max-w-xs">
+                      <Label htmlFor="guest-display-name">{t('yourName')}</Label>
+                      <Input
+                        id="guest-display-name"
+                        value={displayName}
+                        onChange={(e) => setDisplayName(e.target.value)}
+                        placeholder={t('yourNamePlaceholder')}
+                        maxLength={80}
+                        className="mt-1"
+                      />
+                    </div>
+                  )}
+
+                  {!participationOpen && !view.chosenSlot && (
+                    <p className={cn('text-sm', COLORS.text.muted)}>{t('pollClosed')}</p>
+                  )}
 
                   <SchedulingPollGrid
                     slots={view.slots.map((s) => ({
@@ -234,23 +246,21 @@ export function GuestPollPage({ token }: GuestPollPageProps) {
                     countsBySlot={countsBySlot}
                     myResponses={myResponses}
                     onResponseChange={handleResponseChange}
-                    isOpen={true}
+                    isOpen={participationOpen}
                   />
 
-                  <div>
-                    <Button
-                      type="button"
-                      onClick={() => void handleSave()}
-                      disabled={saving || Object.keys(myResponses).length === 0}
-                    >
-                      {saving ? t('saving') : t('saveAvailability')}
-                    </Button>
-                  </div>
+                  {participationOpen && (
+                    <div>
+                      <Button
+                        type="button"
+                        onClick={() => void handleSave()}
+                        disabled={saving || Object.keys(myResponses).length === 0}
+                      >
+                        {saving ? t('saving') : t('saveAvailability')}
+                      </Button>
+                    </div>
+                  )}
                 </section>
-              )}
-
-              {!isOpen && view.poll.status !== 'open' && !view.chosenSlot && (
-                <p className={cn('text-sm', COLORS.text.muted)}>{t('pollClosed')}</p>
               )}
 
               {view.minutesBlocks && view.minutesBlocks.length > 0 && (

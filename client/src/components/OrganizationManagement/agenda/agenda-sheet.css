@@ -103,6 +103,10 @@
   .agenda-sheet-flip.is-flipped .agenda-sheet-flip__inner {
     transform: rotateY(180deg);
   }
+
+  .agenda-sheet-flip--touch {
+    cursor: pointer;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

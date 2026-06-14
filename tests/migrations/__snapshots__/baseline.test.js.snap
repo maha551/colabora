@@ -4764,6 +4764,20 @@ exports[`baseline schema drift matches expected PostgreSQL schema baseline 1`] =
       "type": "timestamp with time zone",
     },
     {
+      "column": "participation_closed_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "scheduling_polls",
+      "type": "timestamp with time zone",
+    },
+    {
+      "column": "participation_reminder_sent_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "scheduling_polls",
+      "type": "timestamp with time zone",
+    },
+    {
       "column": "id",
       "default": null,
       "nullable": "NO",

@@ -110,4 +110,28 @@ describe('AgendaSheetFlip', () => {
     expect(view.container.querySelector('[data-testid="back-face"] button')).toBeTruthy();
     view.unmount();
   });
+
+  it('sets aria-expanded when touch toggle is active', () => {
+    window.matchMedia = jest.fn().mockImplementation((query: string) => ({
+      matches: query === '(hover: none)',
+      media: query,
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+    }));
+
+    const view = renderComponent(
+      <AgendaSheetFlip
+        ariaLabel="Touch event"
+        front={<div>front</div>}
+        back={<div>back</div>}
+        flipped
+        showTouchToggle
+      />
+    );
+
+    const group = view.container.querySelector('[role="group"]');
+    expect(group?.getAttribute('aria-expanded')).toBe('true');
+    expect(view.container.querySelector('.agenda-sheet-flip--touch')).toBeTruthy();
+    view.unmount();
+  });
 });

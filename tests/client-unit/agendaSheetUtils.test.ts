@@ -171,7 +171,7 @@ describe('getEventTypeAccent', () => {
 
   it('maps event types to accent bar classes', () => {
 
-    expect(getEventTypeAccent(makeEvent({ type: 'meeting', meetingId: 'm1' }))).toContain('primary');
+    expect(getEventTypeAccent(makeEvent({ type: 'meeting', meetingId: 'm1' }))).toContain('emerald');
 
     expect(
 

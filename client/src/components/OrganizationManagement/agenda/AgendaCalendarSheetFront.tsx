@@ -38,6 +38,8 @@ interface AgendaCalendarSheetFrontProps {
   canPin: boolean;
   onPin?: (eventId: string) => Promise<void>;
   onUnpin?: () => Promise<void>;
+  coarsePointer?: boolean;
+  flipped?: boolean;
   onToggleFlip?: () => void;
   showFlipToggle?: boolean;
 }
@@ -55,6 +57,8 @@ export const AgendaCalendarSheetFront = memo(function AgendaCalendarSheetFront({
   canPin,
   onPin,
   onUnpin,
+  coarsePointer,
+  flipped,
   onToggleFlip,
   showFlipToggle,
 }: AgendaCalendarSheetFrontProps) {
@@ -68,31 +72,45 @@ export const AgendaCalendarSheetFront = memo(function AgendaCalendarSheetFront({
     if (clickable) navigateCalendarEvent(ev, handlers);
   };
 
+  const handleBodyClick = () => {
+    if (coarsePointer && onToggleFlip) {
+      onToggleFlip();
+      return;
+    }
+    if (clickable) handleActivate();
+  };
+
+  const interactive = coarsePointer || clickable;
+
   return (
     <div
       className={cn(
         getSheetVariantClasses(variant),
-        'agenda-sheet cursor-default select-none',
-        clickable && 'cursor-pointer'
+        'agenda-sheet select-none',
+        coarsePointer ? 'cursor-pointer' : clickable ? 'cursor-pointer' : 'cursor-default'
       )}
-      onClick={clickable ? handleActivate : undefined}
+      onClick={interactive ? handleBodyClick : undefined}
       onKeyDown={
-        clickable
+        !coarsePointer && clickable
           ? (e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 handleActivate();
               }
             }
-          : undefined
+          : coarsePointer && onToggleFlip
+            ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onToggleFlip();
+                }
+              }
+            : undefined
       }
-      role={clickable ? 'button' : undefined}
-      tabIndex={clickable ? 0 : undefined}
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : undefined}
     >
-      <div
-        className={cn('absolute left-0 top-0 bottom-0 w-[3px]', accentClass)}
-        aria-hidden
-      />
+      <div className={cn('absolute left-0 top-0 bottom-0 w-1', accentClass)} aria-hidden />
 
       <div className="agenda-sheet__ring-holes" aria-hidden>
         <span className="agenda-sheet__ring-hole" />
@@ -104,7 +122,7 @@ export const AgendaCalendarSheetFront = memo(function AgendaCalendarSheetFront({
         <div className="flex items-start justify-between gap-1">
           <div className="min-w-0 flex-1 text-center">
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{weekday}</div>
-            <div className="text-4xl sm:text-5xl font-bold tabular-nums leading-none tracking-tight">
+            <div className="text-3xl sm:text-4xl font-bold tabular-nums leading-none tracking-tight">
               {day}
             </div>
             <div className="text-xs uppercase tracking-widest font-semibold text-muted-foreground mt-0.5">
@@ -135,15 +153,21 @@ export const AgendaCalendarSheetFront = memo(function AgendaCalendarSheetFront({
           ev={ev}
           formatRelativeTime={formatRelativeTime}
           formatDateTime={formatDateTime}
+          className="mt-0.5"
         />
 
-        <div className="mt-auto flex flex-col gap-1.5 min-h-0">
-          <div className="flex items-center gap-1 min-w-0">
+        <div className="mt-auto flex flex-col gap-1 min-h-0">
+          <div className="flex items-start gap-1 min-w-0">
             <Icon
               name={getCalendarEventIcon(ev)}
-              className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+              className="h-4 w-4 shrink-0 text-muted-foreground mt-0.5"
             />
-            <span className="text-xs font-medium truncate">{ev.title}</span>
+            <span
+              className="text-sm font-semibold line-clamp-2 leading-snug"
+              data-testid="agenda-sheet-title"
+            >
+              {ev.title}
+            </span>
           </div>
 
           <div className="flex items-center gap-1">
@@ -174,17 +198,17 @@ export const AgendaCalendarSheetFront = memo(function AgendaCalendarSheetFront({
             {showFlipToggle && onToggleFlip && (
               <Button
                 type="button"
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 min-h-[28px] min-w-[28px] shrink-0"
+                variant="outline"
+                size="sm"
+                className="h-7 min-h-[28px] shrink-0 text-xs px-2"
                 onClick={(e) => {
                   e.stopPropagation();
                   onToggleFlip();
                 }}
-                aria-label={t('dashboardSheetFlipHint')}
-                title={t('dashboardSheetFlipHint')}
+                aria-label={flipped ? t('dashboardSheetFlipBack') : t('dashboardSheetFlipHint')}
               >
-                <Icon name="Info" className="h-3.5 w-3.5" />
+                <Icon name="Info" className="h-3 w-3 mr-1 shrink-0" />
+                {flipped ? t('dashboardSheetFlipBack') : t('dashboardSheetFlipHint')}
               </Button>
             )}
           </div>

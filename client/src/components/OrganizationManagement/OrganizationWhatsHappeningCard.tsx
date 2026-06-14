@@ -14,6 +14,7 @@ import type { Organization } from '../../types';
 import type { OrganizationPermissions } from '../../hooks/useOrganizationPermissions';
 import { AgendaCalendarStrip } from './agenda/AgendaCalendarStrip';
 import { AgendaSheetSkeleton } from './agenda/AgendaSheetSkeleton';
+import { AgendaEventTypeLegend } from './agenda/AgendaEventTypeLegend';
 
 interface OrganizationWhatsHappeningCardProps extends CalendarEventHandlers {
   organization: Organization;
@@ -119,21 +120,24 @@ export function OrganizationWhatsHappeningCard({
         )}
 
         {!isLoading && !error && (hasContent || pinned) && (
-          <AgendaCalendarStrip
-            live={live}
-            pinned={pinned}
-            upcoming={upcoming}
-            handlers={handlers}
-            pinnedEventId={organization.overviewPinnedEventId}
-            canPin={canPin}
-            onPin={onPinEvent}
-            onUnpin={onUnpinEvent}
-            onNavigateToSchedule={onNavigateToSchedule}
-            timezone={timezone}
-            locale={locale}
-            formatRelativeTime={formatRelativeTime}
-            formatDateTime={formatDateTime}
-          />
+          <>
+            <AgendaCalendarStrip
+              live={live}
+              pinned={pinned}
+              upcoming={upcoming}
+              handlers={handlers}
+              pinnedEventId={organization.overviewPinnedEventId}
+              canPin={canPin}
+              onPin={onPinEvent}
+              onUnpin={onUnpinEvent}
+              onNavigateToSchedule={onNavigateToSchedule}
+              timezone={timezone}
+              locale={locale}
+              formatRelativeTime={formatRelativeTime}
+              formatDateTime={formatDateTime}
+            />
+            <AgendaEventTypeLegend />
+          </>
         )}
 
         {!isLoading && !error && openPollCount > 0 && (

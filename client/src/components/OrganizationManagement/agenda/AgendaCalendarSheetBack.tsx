@@ -63,25 +63,23 @@ export const AgendaCalendarSheetBack = memo(function AgendaCalendarSheetBack({
 
   return (
     <div className={cn(getSheetVariantClasses(variant), 'agenda-sheet p-2.5 flex flex-col gap-1.5 relative')}>
-      <div className={cn('absolute left-0 top-0 bottom-0 w-[3px]', getEventTypeAccent(ev))} aria-hidden />
+      <div className={cn('absolute left-0 top-0 bottom-0 w-1', getEventTypeAccent(ev))} aria-hidden />
       <div className="flex items-start gap-1.5 min-h-0">
         <Icon
           name={getCalendarEventIcon(ev)}
-          className="h-3.5 w-3.5 shrink-0 text-muted-foreground mt-0.5"
+          className="h-4 w-4 shrink-0 text-muted-foreground mt-0.5"
         />
-        <h4 className="text-xs font-semibold leading-snug line-clamp-3">{ev.title}</h4>
+        <h4 className="text-sm font-semibold leading-snug line-clamp-4">{ev.title}</h4>
       </div>
 
-      <p className={cn(COLORS.text.secondary, 'text-[10px] sm:text-xs')}>{timeRange}</p>
+      <p className={cn(COLORS.text.secondary, 'text-xs')}>{timeRange}</p>
 
       {ev.description && (
-        <p className={cn(COLORS.text.secondary, 'text-[10px] sm:text-xs line-clamp-2')}>
-          {ev.description}
-        </p>
+        <p className={cn(COLORS.text.secondary, 'text-xs line-clamp-3')}>{ev.description}</p>
       )}
 
       {ev.location && (
-        <p className={cn(COLORS.text.secondary, 'text-[10px] truncate flex items-center gap-1')}>
+        <p className={cn(COLORS.text.secondary, 'text-xs truncate flex items-center gap-1')}>
           <Icon name="MapPin" className="h-3 w-3 shrink-0" />
           {ev.location}
         </p>
@@ -124,7 +122,7 @@ export const AgendaCalendarSheetBack = memo(function AgendaCalendarSheetBack({
             <Button
               variant="link"
               size="sm"
-              className="h-auto p-0 text-[10px] ml-auto"
+              className="h-auto p-0 text-xs ml-auto"
               onClick={(e) => {
                 e.stopPropagation();
                 onNavigateToSchedule();

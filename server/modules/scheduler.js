@@ -56,6 +56,20 @@ class DocumentScheduler {
       });
     }, 15 * 60 * 1000)); // 15 minutes
 
+    // Close scheduling polls when participation deadline passes
+    this.jobs.set('scheduling-poll-participation-check', setInterval(() => {
+      this.checkSchedulingPollParticipationDeadlines().catch(err => {
+        logger.error('Error in scheduling poll participation deadline check', { error: err.message, stack: err.stack });
+      });
+    }, 15 * 60 * 1000)); // 15 minutes
+
+    // Remind members about approaching scheduling poll deadlines
+    this.jobs.set('scheduling-poll-reminder-check', setInterval(() => {
+      this.checkSchedulingPollReminders().catch(err => {
+        logger.error('Error in scheduling poll reminder check', { error: err.message, stack: err.stack });
+      });
+    }, 15 * 60 * 1000)); // 15 minutes
+
     // Check deletion vote deadlines every 15 minutes
     this.jobs.set('deletion-check', setInterval(() => {
       this.checkDeletionDeadlines().catch(err => {
@@ -144,6 +158,8 @@ class DocumentScheduler {
         this.checkProposalDeadlines().catch(err => logger.error('Error in proposal deadline check', { error: err.message }));
         this.checkProposalCutoff().catch(err => logger.error('Error in proposal cutoff check', { error: err.message }));
         this.checkVotingDeadlines().catch(err => logger.error('Error in voting deadline check', { error: err.message }));
+        this.checkSchedulingPollParticipationDeadlines().catch(err => logger.error('Error in scheduling poll participation check', { error: err.message }));
+        this.checkSchedulingPollReminders().catch(err => logger.error('Error in scheduling poll reminder check', { error: err.message }));
         this.checkDeletionDeadlines().catch(err => logger.error('Error in deletion deadline check', { error: err.message }));
         this.processExpiredRuleProposals().catch(err => logger.error('Error in rule proposal expiration check', { error: err.message }));
         this.expireOverdueStructureProposals().catch(err => logger.error('Error in structure proposal expiration check', { error: err.message }));
@@ -1532,6 +1548,123 @@ class DocumentScheduler {
         error: error.message,
         stack: error.stack
       });
+    }
+  }
+
+  /**
+   * Close open scheduling polls whose participation deadline has passed.
+   */
+  async checkSchedulingPollParticipationDeadlines() {
+    logger.debug('Checking scheduling poll participation deadlines');
+
+    try {
+      const now = new Date().toISOString();
+      const SchedulingService = require('../services/SchedulingService');
+      const SchedulingNotificationService = require('../services/SchedulingNotificationService');
+      const { broadcastOrganizationUpdate } = require('../utils/websocketBroadcast');
+
+      const polls = await TransactionManager.queryAll(this.db, `
+        SELECT id, organization_id, title, created_by_user_id, response_deadline
+        FROM scheduling_polls
+        WHERE status = 'open'
+          AND response_deadline IS NOT NULL
+          AND response_deadline <= ?
+      `, [now]);
+
+      logger.debug('Found scheduling polls with expired participation deadlines', { count: polls.length });
+
+      for (const row of polls) {
+        try {
+          const result = await SchedulingService.closePollForParticipation(this.db, {
+            pollId: row.id,
+            organizationId: row.organization_id,
+            reason: 'deadline'
+          });
+          if (!result || result.alreadyClosed) continue;
+
+          const managerUserIds = await SchedulingService.getManagerUserIds(this.db, row.id, row.organization_id);
+          await SchedulingNotificationService.notifyParticipationClosed(this.db, {
+            organizationId: row.organization_id,
+            pollId: row.id,
+            poll: result.poll,
+            participationSummary: result.participationSummary,
+            suggestedSlot: result.suggestedSlot,
+            closedReason: 'deadline',
+            userIds: managerUserIds
+          });
+
+          broadcastOrganizationUpdate(row.organization_id, 'scheduling-poll-participation-closed', {
+            organizationId: row.organization_id,
+            pollId: row.id,
+            title: result.poll.title,
+            closedReason: 'deadline'
+          });
+        } catch (error) {
+          logger.error('Failed to close scheduling poll for participation', {
+            error: error.message,
+            pollId: row.id
+          });
+        }
+      }
+    } catch (error) {
+      logger.error('Error checking scheduling poll participation deadlines', { error: error.message, stack: error.stack });
+    }
+  }
+
+  /**
+   * Send 24h reminders to members who have not responded to open scheduling polls.
+   */
+  async checkSchedulingPollReminders() {
+    logger.debug('Checking scheduling poll participation reminders');
+
+    try {
+      const now = new Date();
+      const nowIso = now.toISOString();
+      const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
+      const SchedulingService = require('../services/SchedulingService');
+      const SchedulingNotificationService = require('../services/SchedulingNotificationService');
+
+      const polls = await TransactionManager.queryAll(this.db, `
+        SELECT id, organization_id, title, response_deadline
+        FROM scheduling_polls
+        WHERE status = 'open'
+          AND response_deadline IS NOT NULL
+          AND response_deadline > ?
+          AND response_deadline <= ?
+          AND participation_reminder_sent_at IS NULL
+      `, [nowIso, in24h]);
+
+      for (const row of polls) {
+        try {
+          const poll = {
+            title: row.title,
+            participationDeadline: row.response_deadline instanceof Date
+              ? row.response_deadline.toISOString()
+              : row.response_deadline
+          };
+          const summary = await SchedulingService.getParticipationSummary(this.db, row.id, row.organization_id);
+          const memberIds = await SchedulingService.getActiveMemberUserIds(this.db, row.organization_id);
+          const nonResponders = summary.nonRespondedUserIds || [];
+          const targetUserIds = memberIds.filter(id => nonResponders.includes(id));
+
+          if (targetUserIds.length > 0) {
+            await SchedulingNotificationService.notifyDeadlineApproaching(this.db, {
+              organizationId: row.organization_id,
+              pollId: row.id,
+              poll,
+              userIds: targetUserIds
+            });
+          }
+
+          await TransactionManager.execute(this.db, `
+            UPDATE scheduling_polls SET participation_reminder_sent_at = ?, updated_at = ? WHERE id = ?
+          `, [nowIso, nowIso, row.id]);
+        } catch (error) {
+          logger.error('Failed to send scheduling poll reminder', { error: error.message, pollId: row.id });
+        }
+      }
+    } catch (error) {
+      logger.error('Error checking scheduling poll reminders', { error: error.message, stack: error.stack });
     }
   }
 }

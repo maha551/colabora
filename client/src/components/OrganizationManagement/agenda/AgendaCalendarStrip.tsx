@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '../../ui/utils';
 import { SPACING } from '../../../lib/designSystem';
+import { Icon } from '../../ui/Icon';
 import type { CalendarEventHandlers } from '../../../lib/calendar/eventPresentation';
 import type { CalendarEvent } from '../../../lib/api/calendar';
 import { AgendaCalendarSheet } from './AgendaCalendarSheet';
@@ -84,13 +85,16 @@ export function AgendaCalendarStrip({
     updateFade();
   }, [sheets.length, updateFade]);
 
+  const centerCards = sheets.length <= 2;
+
   return (
     <div className={cn('relative', SPACING.layout.containScroll)} data-testid="agenda-calendar-strip">
       <div
         ref={scrollRef}
         className={cn(
           'flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth pb-2 -mx-1 px-1',
-          '[scrollbar-width:thin]'
+          '[scrollbar-width:thin]',
+          centerCards && 'justify-center'
         )}
         role="list"
       >
@@ -117,9 +121,11 @@ export function AgendaCalendarStrip({
 
       {showFade && (
         <div
-          className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-card to-transparent"
+          className="pointer-events-none absolute inset-y-0 right-0 flex w-10 items-center justify-end bg-gradient-to-l from-card to-transparent pr-1"
           aria-hidden
-        />
+        >
+          <Icon name="ChevronRight" className="h-4 w-4 text-muted-foreground/80" />
+        </div>
       )}
     </div>
   );

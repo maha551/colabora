@@ -56,7 +56,8 @@ function render(sections, options = {}) {
   const rules = sections.ruleProposals || [];
   const electionV = sections.electionVoting || [];
   const electionN = sections.electionNomination || [];
-  const total = docs.length + rules.length + electionV.length + electionN.length;
+  const schedulingPolls = sections.schedulingPolls || [];
+  const total = docs.length + rules.length + electionV.length + electionN.length + schedulingPolls.length;
 
   if (total === 0) {
     return { subject: '', htmlContent: '', textContent: '', preheader: '' };
@@ -74,7 +75,7 @@ function render(sections, options = {}) {
   const preheader = t(locale, 'deadlinesDigest.preheader');
   const greeting = userName ? t(locale, 'common.helloName', { name: userName }) : t(locale, 'common.hello');
 
-  const allItems = [...docs, ...rules, ...electionV, ...electionN]
+  const allItems = [...docs, ...rules, ...electionV, ...electionN, ...schedulingPolls]
     .map((item) => ({ ...item, _at: new Date(item.deadline).getTime() }));
   allItems.sort((a, b) => a._at - b._at);
   const firstItem = allItems[0];
@@ -90,13 +91,14 @@ function render(sections, options = {}) {
   const s2 = renderSection(locale, rules, 'deadlinesDigest.sectionRules', 'common.viewAndVote', branding);
   const s3 = renderSection(locale, electionV, 'deadlinesDigest.sectionElectionVoting', 'common.vote', branding);
   const s4 = renderSection(locale, electionN, 'deadlinesDigest.sectionElectionNomination', 'common.nominate', branding);
+  const s5 = renderSection(locale, schedulingPolls, 'deadlinesDigest.sectionSchedulingPolls', 'common.respond', branding);
 
   const dashboardUrl = urls.activity('deadlines_digest');
   const bodyHtml = `
     <p style="font-size: 16px; margin-top: 0;">${greeting}</p>
     <p style="font-size: 16px;">${t(locale, 'deadlinesDigest.intro')}</p>
     ${firstCalloutHtml}
-    ${s1.html}${s2.html}${s3.html}${s4.html}
+    ${s1.html}${s2.html}${s3.html}${s4.html}${s5.html}
     <p style="font-size: 14px; color: #666; margin-top: 16px;">${t(locale, 'deadlinesDigest.prefsNote')}</p>`;
 
   const textContent = [
@@ -111,6 +113,7 @@ function render(sections, options = {}) {
     ...s2.textLines,
     ...s3.textLines,
     ...s4.textLines,
+    ...s5.textLines,
     '',
     `${t(locale, 'common.viewDashboard')}: ${dashboardUrl}`,
     '',

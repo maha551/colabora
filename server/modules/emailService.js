@@ -213,10 +213,20 @@ async function sendImmediateNotification(email, eventType, eventData, options = 
   if (eventType === 'voting_deadline_approaching' ||
       eventType === 'rule_proposal_deadline_approaching' ||
       eventType === 'election_deadline_approaching' ||
-      eventType === 'election_nomination_deadline_approaching') {
+      eventType === 'election_nomination_deadline_approaching' ||
+      eventType === 'scheduling_poll_deadline_approaching') {
     content = emailTemplates.deadlineReminder.render({ eventData, locale });
-  } else if (eventType === 'voting_started') {
-    content = emailTemplates.votingStarted.render({ eventData, locale });
+  } else if (eventType === 'voting_started' || eventType === 'scheduling_poll_opened') {
+    content = emailTemplates.votingStarted.render({
+      eventData: {
+        ...eventData,
+        votingType: eventType === 'scheduling_poll_opened' ? 'scheduling_poll' : eventData.votingType,
+        votingDeadline: eventData.votingDeadline || eventData.participationDeadline,
+      },
+      locale,
+    });
+  } else if (eventType === 'scheduling_poll_participation_closed') {
+    content = emailTemplates.schedulingPollParticipationClosed.render({ eventData, locale });
   } else {
     logger.warn('Unknown immediate notification event type', { eventType });
     return null;

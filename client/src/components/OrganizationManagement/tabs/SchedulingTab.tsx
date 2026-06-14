@@ -33,6 +33,12 @@ import type { OrganizationPermissions } from '../../../hooks/useOrganizationPerm
 import { useTimezone } from '../../../hooks/useTimezone';
 import { TimezoneBanner } from '../../shared/TimezoneBanner';
 import { toast } from 'sonner';
+import {
+  canParticipate,
+  canFinalize,
+  getDefaultParticipationDeadlineDate,
+  needsFinalization,
+} from '../../../lib/scheduling/participation';
 
 type ResponseChoice = 'yes' | 'no' | 'maybe';
 
@@ -48,6 +54,8 @@ interface SchedulingTabProps {
   onBack?: () => void;
   /** When true (default), omit page padding — parent shell owns SPACING.page.* */
   embedded?: boolean;
+  /** Increment to refetch poll detail/list (e.g. from WebSocket). */
+  pollRefreshKey?: number;
 }
 
 function getResponseCountsBySlot(responseCounts: ResponseCount[]): Map<string, ResponseCount> {
@@ -69,9 +77,10 @@ export function SchedulingTab({
   initialPollId,
   onBack,
   embedded = true,
+  pollRefreshKey = 0,
 }: SchedulingTabProps) {
   const { t } = useTranslation('organization');
-  const { formatDateTime, formatTime, fromDateTimeLocalValue, generateSlots } = useTimezone();
+  const { formatDateTime, formatTime, fromDateTimeLocalValue, toDateTimeLocalValue, generateSlots } = useTimezone();
   const [polls, setPolls] = useState<SchedulingPoll[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -105,6 +114,14 @@ export function SchedulingTab({
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
   const [regenerateLinkOpen, setRegenerateLinkOpen] = useState(false);
   const [regenerateSubmitting, setRegenerateSubmitting] = useState(false);
+  const [createParticipationDeadline, setCreateParticipationDeadline] = useState(() =>
+    toDateTimeLocalValue(getDefaultParticipationDeadlineDate())
+  );
+  const [extendDeadlineOpen, setExtendDeadlineOpen] = useState(false);
+  const [extendDeadlineValue, setExtendDeadlineValue] = useState('');
+  const [extendSubmitting, setExtendSubmitting] = useState(false);
+  const [closeSubmitting, setCloseSubmitting] = useState(false);
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
 
   const fetchPolls = useCallback(async () => {
     if (!organization.id) return;
@@ -177,11 +194,18 @@ export function SchedulingTab({
     }
   }, [selectedPollId, organization.id, fetchDetail]);
 
+  useEffect(() => {
+    if (pollRefreshKey > 0 && organization.id) {
+      if (selectedPollId) void fetchDetail(selectedPollId, { silent: true });
+      if (!detailOnlyMode) void fetchPolls();
+    }
+  }, [pollRefreshKey, organization.id, selectedPollId, fetchDetail, fetchPolls, detailOnlyMode]);
+
   // Auto-save my responses when in grid view (When2Meet-style "saved automatically")
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevResponsesRef = useRef<string>('');
   useEffect(() => {
-    if (!detail?.poll?.id || !organization.id || detail.poll.status !== 'open') return;
+    if (!detail?.poll?.id || !organization.id || !canParticipate(detail.poll)) return;
     const key = JSON.stringify(myResponses);
     if (key === prevResponsesRef.current) return;
     prevResponsesRef.current = key;
@@ -210,21 +234,67 @@ export function SchedulingTab({
       toast.error(t('schedulingTitleRequired'));
       return;
     }
+    const deadlineDate = fromDateTimeLocalValue(createParticipationDeadline.trim());
+    if (!deadlineDate || deadlineDate <= new Date()) {
+      toast.error(t('schedulingParticipationDeadlineFuture'));
+      return;
+    }
     setCreateSubmitting(true);
     try {
       await schedulingApi.createSchedulingPoll(organization.id, {
         title,
         description: createDescription.trim() || null,
+        participationDeadline: deadlineDate.toISOString(),
       });
       toast.success(t('schedulingPollCreated'));
       setCreateOpen(false);
       setCreateTitle('');
       setCreateDescription('');
+      setCreateParticipationDeadline(toDateTimeLocalValue(getDefaultParticipationDeadlineDate()));
       await fetchPolls();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t('schedulingError'));
     } finally {
       setCreateSubmitting(false);
+    }
+  };
+
+  const handleCloseParticipation = async () => {
+    if (!detail?.poll?.id || !organization.id) return;
+    setCloseSubmitting(true);
+    try {
+      await schedulingApi.closeSchedulingPoll(organization.id, detail.poll.id);
+      toast.success(t('schedulingParticipationClosedSuccess'));
+      setCloseConfirmOpen(false);
+      await fetchDetail(detail.poll.id, { silent: true });
+      await fetchPolls();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('schedulingError'));
+    } finally {
+      setCloseSubmitting(false);
+    }
+  };
+
+  const handleExtendDeadline = async () => {
+    if (!detail?.poll?.id || !organization.id) return;
+    const deadlineDate = fromDateTimeLocalValue(extendDeadlineValue.trim());
+    if (!deadlineDate || deadlineDate <= new Date()) {
+      toast.error(t('schedulingParticipationDeadlineFuture'));
+      return;
+    }
+    setExtendSubmitting(true);
+    try {
+      const result = await schedulingApi.updateSchedulingPoll(organization.id, detail.poll.id, {
+        participationDeadline: deadlineDate.toISOString(),
+      });
+      toast.success(result.reopened ? t('schedulingPollReopened') : t('schedulingDeadlineExtended'));
+      setExtendDeadlineOpen(false);
+      await fetchDetail(detail.poll.id, { silent: true });
+      await fetchPolls();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('schedulingError'));
+    } finally {
+      setExtendSubmitting(false);
     }
   };
 
@@ -368,7 +438,8 @@ export function SchedulingTab({
   const canManagePoll = detail?.poll
     ? detail.poll.createdByUserId === currentUser.id || permissions.isRepresentative
     : false;
-  const isOpen = detail?.poll?.status === 'open';
+  const participationOpen = canParticipate(detail?.poll);
+  const finalizationOpen = canFinalize(detail?.poll);
 
   const countsBySlot = detail ? getResponseCountsBySlot(detail.responseCounts) : new Map();
 
@@ -454,14 +525,61 @@ export function SchedulingTab({
                     <span className={cn(COLORS.text.secondary, 'text-xs')}>
                       {t('schedulingStatus')}: {t(`schedulingStatus_${detail.poll.status}`)}
                     </span>
+                    {detail.poll.participationDeadline && participationOpen && (
+                      <span className={cn(COLORS.text.secondary, 'text-xs')}>
+                        {t('schedulingRespondBy')}: {formatDateTime(detail.poll.participationDeadline)}
+                      </span>
+                    )}
+                    {detail.poll.participationClosedAt && !participationOpen && (
+                      <span className={cn(COLORS.text.secondary, 'text-xs')}>
+                        {t('schedulingParticipationClosed')}: {formatDateTime(detail.poll.participationClosedAt)}
+                      </span>
+                    )}
+                    {needsFinalization(detail.poll) && (
+                      <span className={cn('text-xs font-medium text-amber-700 dark:text-amber-400')}>
+                        {t('schedulingNeedsFinalization')}
+                      </span>
+                    )}
                     {detail.chosenSlot && (
                       <span className={cn(COLORS.text.secondary, 'text-xs')}>
                         {t('schedulingChosenSlot')}: {formatDateTime(detail.chosenSlot.startAt)} – {formatTime(detail.chosenSlot.endAt)}
                       </span>
                     )}
                   </div>
+                  {canManagePoll && detail.participationSummary && (
+                    <p className={cn('text-sm', COLORS.text.secondary)}>
+                      {t('schedulingResponseSummary', {
+                        responded: detail.participationSummary.respondedCount,
+                        total: detail.participationSummary.memberCount,
+                        guests: detail.participationSummary.guestCount,
+                      })}
+                    </p>
+                  )}
                   {canManagePoll && (
                     <div className={cn(SPACING.tight.inline, 'flex flex-wrap items-center mt-2')}>
+                      {participationOpen && (
+                        <Button variant="outline" size="sm" onClick={() => setCloseConfirmOpen(true)}>
+                          {t('schedulingCloseParticipation')}
+                        </Button>
+                      )}
+                      {finalizationOpen && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setExtendDeadlineValue(
+                              toDateTimeLocalValue(
+                                detail.poll.participationDeadline
+                                  ? new Date(detail.poll.participationDeadline)
+                                  : getDefaultParticipationDeadlineDate()
+                              )
+                            );
+                            setExtendDeadlineOpen(true);
+                          }}
+                        >
+                          {t('schedulingExtendDeadline')}
+                        </Button>
+                      )}
                       <Button variant="outline" size="sm" onClick={() => void handleCopyGuestLink()}>
                         <Icon name="Copy" className="h-4 w-4 mr-2" />
                         {t('copyGuestLink')}
@@ -475,7 +593,7 @@ export function SchedulingTab({
                 </div>
               </Card>
 
-              {isOpen && canManagePoll && suggestedSlot && (
+              {finalizationOpen && canManagePoll && suggestedSlot && (
                 <div
                   className={cn(
                     'border border-primary/30 bg-primary/5',
@@ -519,7 +637,7 @@ export function SchedulingTab({
                         return next;
                       });
                     }}
-                    isOpen={isOpen}
+                    isOpen={participationOpen}
                   />
                 ) : (
                   <ul className={cn(SPACING.content.gap)}>
@@ -543,9 +661,9 @@ export function SchedulingTab({
                               </span>
                             )}
                           </div>
-                          {isOpen && (
+                          {participationOpen ? (
                             <div className="flex items-center gap-2">
-                              {canManagePoll && detail.poll.status === 'open' && (
+                              {canManagePoll && finalizationOpen && (
                                 <Button
                                   size="sm"
                                   variant={finalizeSlotId === slot.id ? 'default' : 'outline'}
@@ -568,7 +686,15 @@ export function SchedulingTab({
                                 <option value="maybe">{t('schedulingMaybe')}</option>
                               </select>
                             </div>
-                          )}
+                          ) : finalizationOpen && canManagePoll ? (
+                            <Button
+                              size="sm"
+                              variant={finalizeSlotId === slot.id ? 'default' : 'outline'}
+                              onClick={() => setFinalizeSlotId(slot.id)}
+                            >
+                              {t('schedulingChooseSlot')}
+                            </Button>
+                          ) : null}
                         </li>
                       );
                     })}
@@ -594,7 +720,7 @@ export function SchedulingTab({
                   </div>
                 )}
 
-                {isOpen && canManagePoll && (
+                {participationOpen && canManagePoll && (
                   <div className={cn(SPACING.section.margin, SPACING.tight.inline, 'flex flex-wrap')}>
                     <Button variant="outline" size="sm" onClick={() => setAddSlotsOpen(true)}>
                       <Icon name="Plus" className="h-4 w-4 mr-2" />
@@ -603,7 +729,7 @@ export function SchedulingTab({
                   </div>
                 )}
 
-                {isOpen && (
+                {participationOpen && (
                   <div className={cn(SPACING.section.margin, SPACING.tight.inline, 'flex flex-wrap items-center')}>
                     <Button
                       size="sm"
@@ -612,7 +738,12 @@ export function SchedulingTab({
                     >
                       {responsesSubmitting ? t('saving') : t('schedulingSetMyResponses')}
                     </Button>
-                    {canManagePoll && viewMode === 'grid' && (
+                  </div>
+                )}
+
+                {finalizationOpen && canManagePoll && (
+                  <div className={cn(SPACING.section.margin, SPACING.tight.inline, 'flex flex-wrap items-center')}>
+                    {viewMode === 'grid' && (
                       <select
                         className="rounded border bg-background px-2 py-1 text-sm min-h-9"
                         value={finalizeSlotId ?? ''}
@@ -626,7 +757,7 @@ export function SchedulingTab({
                         ))}
                       </select>
                     )}
-                    {canManagePoll && finalizeSlotId && (
+                    {finalizeSlotId && (
                       <Button
                         size="sm"
                         onClick={handleFinalize}
@@ -862,6 +993,10 @@ export function SchedulingTab({
                           <h3 className={cn(NAVIGATION.typography.navItem, 'text-foreground')}>{poll.title}</h3>
                           <p className={cn(COLORS.text.secondary, 'text-xs')}>
                             {t('schedulingStatus')}: {t(`schedulingStatus_${poll.status}`)}
+                            {poll.participationDeadline && poll.status === 'open' && (
+                              <> · {t('schedulingRespondBy')}: {formatDateTime(poll.participationDeadline)}</>
+                            )}
+                            {needsFinalization(poll) && <> · {t('schedulingNeedsFinalization')}</>}
                             {poll.chosenSlotId && ` · ${t('schedulingFinalized')}`}
                           </p>
                         </div>
@@ -898,6 +1033,14 @@ export function SchedulingTab({
                 placeholder={t('schedulingDescriptionPlaceholder')}
               />
             </div>
+            <div className="grid gap-2">
+              <Label>{t('schedulingParticipationDeadline')}</Label>
+              <Input
+                type="datetime-local"
+                value={createParticipationDeadline}
+                onChange={(e) => setCreateParticipationDeadline(e.target.value)}
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>
@@ -905,6 +1048,43 @@ export function SchedulingTab({
             </Button>
             <Button onClick={handleCreatePoll} disabled={createSubmitting || !createTitle.trim()}>
               {createSubmitting ? t('saving') : t('schedulingCreate')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={closeConfirmOpen} onOpenChange={setCloseConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('schedulingCloseParticipation')}</DialogTitle>
+          </DialogHeader>
+          <p className={cn('text-sm', COLORS.text.secondary)}>{t('schedulingCloseParticipationConfirm')}</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCloseConfirmOpen(false)}>{t('cancel')}</Button>
+            <Button onClick={() => void handleCloseParticipation()} disabled={closeSubmitting}>
+              {closeSubmitting ? t('saving') : t('schedulingCloseParticipation')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={extendDeadlineOpen} onOpenChange={setExtendDeadlineOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('schedulingExtendDeadline')}</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-2 py-2">
+            <Label>{t('schedulingParticipationDeadline')}</Label>
+            <Input
+              type="datetime-local"
+              value={extendDeadlineValue}
+              onChange={(e) => setExtendDeadlineValue(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExtendDeadlineOpen(false)}>{t('cancel')}</Button>
+            <Button onClick={() => void handleExtendDeadline()} disabled={extendSubmitting}>
+              {extendSubmitting ? t('saving') : t('schedulingExtendDeadline')}
             </Button>
           </DialogFooter>
         </DialogContent>

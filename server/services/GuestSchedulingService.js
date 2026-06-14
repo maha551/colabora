@@ -290,7 +290,8 @@ async function getGuestPollView(db, token, { guestSessionToken } = {}) {
     poll: {
       title: pollData.poll.title,
       description: pollData.poll.description,
-      status: pollData.poll.status
+      status: pollData.poll.status,
+      participationDeadline: pollData.poll.participationDeadline || null
     },
     slots: pollData.slots.map(s => ({
       id: s.id,
@@ -313,7 +314,8 @@ async function saveGuestResponses(db, token, { displayName, sessionToken, respon
   if (!resolved) return { error: 'NOT_FOUND' };
 
   const pollRow = await getPollRow(db, resolved.pollId);
-  if (!pollRow || pollRow.status !== 'open') {
+  const SchedulingService = require('./SchedulingService');
+  if (!pollRow || !SchedulingService.isParticipationOpen(pollRow)) {
     return { error: 'POLL_CLOSED' };
   }
 

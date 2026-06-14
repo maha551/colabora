@@ -171,9 +171,36 @@ describe('OrganizationWhatsHappeningCard', () => {
 
     const strip = view.container.querySelector('[data-testid="agenda-calendar-strip"]');
     expect(strip).toBeTruthy();
-    const titles = Array.from(strip!.querySelectorAll('.truncate')).map((el) => el.textContent);
+    const titles = Array.from(strip!.querySelectorAll('[data-testid="agenda-sheet-title"]')).map(
+      (el) => el.textContent
+    );
     expect(titles.indexOf('Live Meeting')).toBeLessThan(titles.indexOf('Pinned Meeting'));
     expect(titles.indexOf('Pinned Meeting')).toBeLessThan(titles.indexOf('Doc Vote'));
+    view.unmount();
+  });
+
+  it('renders event type legend when content is shown', () => {
+    mockUseOrganizationAgenda.mockReturnValue({
+      live: [liveEvent],
+      pinned: null,
+      upcoming: [],
+      openPollCount: 0,
+      isLoading: false,
+      error: null,
+      hasContent: true,
+      refresh: jest.fn(),
+    });
+
+    const view = renderComponent(
+      <OrganizationWhatsHappeningCard
+        organization={organization}
+        permissions={permissions}
+        enabled
+        onNavigateToSchedule={jest.fn()}
+      />
+    );
+
+    expect(view.container.querySelector('[data-testid="agenda-event-type-legend"]')).toBeTruthy();
     view.unmount();
   });
 

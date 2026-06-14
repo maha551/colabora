@@ -12,6 +12,8 @@ import type {
   FinalizeSchedulingResponse,
   SchedulingPoll,
   SchedulingResponseItem,
+  ParticipationSummary,
+  SuggestedSlot,
 } from './types/scheduling';
 
 const base = (organizationId: string) => `/api/organizations/${organizationId}/scheduling-polls`;
@@ -27,7 +29,12 @@ export const schedulingApi = {
 
   createSchedulingPoll(
     organizationId: string,
-    payload: { title: string; description?: string | null; sourceMeetingId?: string }
+    payload: {
+      title: string;
+      description?: string | null;
+      sourceMeetingId?: string;
+      participationDeadline?: string;
+    }
   ): Promise<{ poll: SchedulingPoll }> {
     return apiRequest(`${base(organizationId)}`, {
       method: 'POST',
@@ -35,7 +42,29 @@ export const schedulingApi = {
         title: payload.title,
         ...(payload.description != null && { description: payload.description }),
         ...(payload.sourceMeetingId != null && { sourceMeetingId: payload.sourceMeetingId }),
+        ...(payload.participationDeadline != null && { participationDeadline: payload.participationDeadline }),
       }),
+    });
+  },
+
+  updateSchedulingPoll(
+    organizationId: string,
+    pollId: string,
+    payload: { participationDeadline: string }
+  ): Promise<{ poll: SchedulingPoll; reopened: boolean }> {
+    return apiRequest(`${base(organizationId)}/${pollId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ participationDeadline: payload.participationDeadline }),
+    });
+  },
+
+  closeSchedulingPoll(
+    organizationId: string,
+    pollId: string
+  ): Promise<{ poll: SchedulingPoll; participationSummary?: ParticipationSummary; suggestedSlot?: SuggestedSlot | null }> {
+    return apiRequest(`${base(organizationId)}/${pollId}/close`, {
+      method: 'POST',
+      body: JSON.stringify({}),
     });
   },
 

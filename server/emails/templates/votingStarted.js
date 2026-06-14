@@ -8,15 +8,17 @@ function votingTypeKey(votingType) {
     document: 'votingStarted.typeDocument',
     rule_proposal: 'votingStarted.typeRuleProposal',
     election: 'votingStarted.typeElection',
+    scheduling_poll: 'votingStarted.typeSchedulingPoll',
   };
   return map[votingType] || 'votingStarted.typeDefault';
 }
 
 function render({ eventData, locale = 'en' }) {
-  const { title, votingDeadline, link, organizationName, votingType } = eventData;
+  const { title, votingDeadline, participationDeadline, link, organizationName, votingType } = eventData;
+  const deadline = votingDeadline || participationDeadline;
   const branding = resolveOrgBranding(organizationName ? { name: organizationName } : null);
   const votingTypeText = t(locale, votingTypeKey(votingType));
-  const formattedDate = formatDateTime(locale, votingDeadline);
+  const formattedDate = formatDateTime(locale, deadline);
   const orgSuffix = organizationName
     ? t(locale, 'votingStarted.orgIn', { orgName: organizationName })
     : '';

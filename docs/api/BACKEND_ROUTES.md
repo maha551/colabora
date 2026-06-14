@@ -371,15 +371,19 @@ Scheduling polls let organizations create polls with time slots; members submit 
 
 | Purpose | HTTP Method | Route | Who can call | Description |
 |---------|-------------|-------|----------------|-------------|
-| Create poll | POST | `/:organizationId/scheduling-polls` | Representative only | Create a scheduling poll. Body: `{ title, description? }`. |
+| Create poll | POST | `/:organizationId/scheduling-polls` | Representative only | Create a scheduling poll. Body: `{ title, description?, participationDeadline? }` (default deadline: 3 days). |
 | List polls | GET | `/:organizationId/scheduling-polls` | Org member | List scheduling polls for the organization. |
-| Get poll | GET | `/:organizationId/scheduling-polls/:pollId` | Org member | Get one poll with slots and aggregated response counts (yes/no/maybe per slot). When finalized, includes `chosenSlot: { startAt, endAt }`. |
-| Add slots | POST | `/:organizationId/scheduling-polls/:pollId/slots` | Creator or representative | Add time slots. Body: `{ slots: [{ startAt, endAt, sortOrder? }] }`. |
-| Set my responses | PUT | `/:organizationId/scheduling-polls/:pollId/responses` | Org member | Set current user's responses. Body: `{ responses: [{ slotId, response }] }` where `response` is `'yes'`, `'no'`, or `'maybe'`. |
-| Finalize poll | POST | `/:organizationId/scheduling-polls/:pollId/finalize` | Creator or representative | Set chosen slot and finalize. Body: `{ chosenSlotId }`. |
+| Get poll | GET | `/:organizationId/scheduling-polls/:pollId` | Org member | Get one poll with slots and aggregated response counts. Managers also receive `participationSummary` and `suggestedSlot`. |
+| Update poll | PATCH | `/:organizationId/scheduling-polls/:pollId` | Creator or representative | Extend participation deadline. Body: `{ participationDeadline }`. Reopens `closed` polls when the new deadline is in the future. |
+| Close participation | POST | `/:organizationId/scheduling-polls/:pollId/close` | Creator or representative | Manually close participation (`status` → `closed`). |
+| Add slots | POST | `/:organizationId/scheduling-polls/:pollId/slots` | Creator or representative | Add time slots while poll is `open`. Body: `{ slots: [{ startAt, endAt, sortOrder? }] }`. |
+| Set my responses | PUT | `/:organizationId/scheduling-polls/:pollId/responses` | Org member | Set current user's responses while poll is `open`. Returns `409 POLL_CLOSED` after participation closes. |
+| Finalize poll | POST | `/:organizationId/scheduling-polls/:pollId/finalize` | Creator or representative | Set chosen slot and finalize from `open` or `closed`. Body: `{ chosenSlotId }`. |
+
+**Poll lifecycle:** `open` (accepting responses until `participationDeadline`) → `closed` (participation ended; organizers finalize) → `finalized` (slot chosen).
 
 **Response shapes:**
-- **Create:** `{ poll: { id, organizationId, createdByUserId, title, description, status, chosenSlotId, createdAt, updatedAt } }`
+- **Create:** `{ poll: { id, organizationId, createdByUserId, title, description, status, chosenSlotId, participationDeadline, participationClosedAt, createdAt, updatedAt } }`
 - **List:** `{ polls: [...] }` (same poll shape)
 - **Get one:** `{ poll: {...}, slots: [{ id, startAt, endAt, sortOrder }], responseCounts: [{ slotId, yes, no, maybe }], chosenSlot?: { startAt, endAt } }` when finalized
 - **Add slots:** `{ slots: [{ id, startAt, endAt, sortOrder }, ...] }`

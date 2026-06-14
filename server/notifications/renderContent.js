@@ -15,6 +15,9 @@ const IMMEDIATE_EVENT_TYPES = [
   'rule_proposal_deadline_approaching',
   'election_deadline_approaching',
   'election_nomination_deadline_approaching',
+  'scheduling_poll_opened',
+  'scheduling_poll_participation_closed',
+  'scheduling_poll_deadline_approaching',
 ];
 
 const DEADLINE_EVENT_TYPE_MAP = {
@@ -22,6 +25,7 @@ const DEADLINE_EVENT_TYPE_MAP = {
   rule_proposal_deadline_approaching: 'rule_proposal',
   election_deadline_approaching: 'election_voting',
   election_nomination_deadline_approaching: 'election_nomination',
+  scheduling_poll_deadline_approaching: 'scheduling_poll',
 };
 
 function resolveTitle(eventData, locale) {
@@ -139,8 +143,12 @@ function renderFallbackImmediate(eventType, eventData, locale) {
 }
 
 function renderImmediate(eventType, eventData, locale) {
-  if (eventType === 'voting_started') {
-    return renderVotingStarted(eventData, locale);
+  if (eventType === 'voting_started' || eventType === 'scheduling_poll_opened') {
+    return renderVotingStarted({
+      ...eventData,
+      votingType: eventType === 'scheduling_poll_opened' ? 'scheduling_poll' : eventData.votingType,
+      votingDeadline: eventData.votingDeadline || eventData.participationDeadline,
+    }, locale);
   }
   if (DEADLINE_EVENT_TYPE_MAP[eventType]) {
     return renderDeadlineApproaching(eventType, eventData, locale);

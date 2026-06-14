@@ -11,6 +11,7 @@
   "minutesPending": "Minutes will appear here after the meeting",
   "minutesReadOnly": "Meeting minutes",
   "pollClosed": "This poll is closed and no longer accepts responses",
+  "respondBy": "Respond by",
   "invalidLink": "Link not available",
   "loadError": "Could not load this poll",
   "saveError": "Could not save your availability",

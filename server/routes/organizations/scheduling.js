@@ -10,6 +10,8 @@ const { logger } = require('../../middleware/logger');
 const { getUserId } = require('../../utils/routeHelpers');
 const { isRepresentative } = require('../../modules/permissions');
 const SchedulingService = require('../../services/SchedulingService');
+const SchedulingNotificationService = require('../../services/SchedulingNotificationService');
+const { broadcastOrganizationUpdate } = require('../../utils/websocketBroadcast');
 const TransactionManager = require('../../database/services/TransactionManager');
 
 const router = express.Router({ mergeParams: true });
@@ -22,16 +24,45 @@ router.post('/:organizationId/scheduling-polls', requireAuth, requireOrganizatio
   const isRep = await isRepresentative(db, userId, organizationId);
   if (!isRep) throw ApiError.forbidden('Only representatives can create scheduling polls', 'NOT_REPRESENTATIVE');
 
-  const { title, description } = req.body || {};
+  const body = req.body || {};
+  const { title, description } = body;
+  const participationDeadline = body.participation_deadline ?? body.participationDeadline;
+
   if (!title || typeof title !== 'string' || !title.trim()) {
     throw ApiError.validation('Title is required', null, 'VALIDATION_ERROR');
   }
-  const poll = await SchedulingService.createPoll(db, {
+
+  let poll;
+  try {
+    poll = await SchedulingService.createPoll(db, {
+      organizationId,
+      userId,
+      title: title.trim(),
+      description: description != null ? String(description).trim() : null,
+      participationDeadline
+    });
+  } catch (err) {
+    if (err.code === 'VALIDATION_ERROR') {
+      throw ApiError.validation(err.message, null, 'VALIDATION_ERROR');
+    }
+    throw err;
+  }
+
+  const memberUserIds = await SchedulingService.getActiveMemberUserIds(db, organizationId);
+  await SchedulingNotificationService.notifyPollOpened(db, {
     organizationId,
-    userId,
-    title: title.trim(),
-    description: description != null ? String(description).trim() : null
+    pollId: poll.id,
+    poll,
+    userIds: memberUserIds
   });
+
+  broadcastOrganizationUpdate(organizationId, 'scheduling-poll-opened', {
+    organizationId,
+    pollId: poll.id,
+    title: poll.title,
+    participationDeadline: poll.participationDeadline
+  });
+
   res.status(201).json({ poll });
 }));
 
@@ -48,9 +79,104 @@ router.get('/:organizationId/scheduling-polls/:pollId', requireAuth, requireOrga
   const db = req.app.locals.db;
   const { organizationId, pollId } = req.params;
   const userId = getUserId(req);
-  const result = await SchedulingService.getPoll(db, { pollId, organizationId, userId });
+  const canManage = await SchedulingService.canManagePoll(db, pollId, organizationId, userId);
+  const result = await SchedulingService.getPoll(db, {
+    pollId,
+    organizationId,
+    userId,
+    includeParticipationSummary: canManage
+  });
   if (!result) throw ApiError.notFound('Scheduling poll', 'POLL_NOT_FOUND');
   res.json(result);
+}));
+
+// Update poll (extend participation deadline)
+router.patch('/:organizationId/scheduling-polls/:pollId', requireAuth, requireOrganizationMember, asyncHandler(async (req, res) => {
+  const db = req.app.locals.db;
+  const { organizationId, pollId } = req.params;
+  const userId = getUserId(req);
+  const canManage = await SchedulingService.canManagePoll(db, pollId, organizationId, userId);
+  if (!canManage) throw ApiError.forbidden('Only the poll creator or a representative can update the poll', 'NOT_ALLOWED');
+
+  const body = req.body || {};
+  const participationDeadline = body.participation_deadline ?? body.participationDeadline;
+  if (!participationDeadline) {
+    throw ApiError.validation('participationDeadline is required', null, 'VALIDATION_ERROR');
+  }
+
+  let result;
+  try {
+    result = await SchedulingService.extendParticipationDeadline(db, {
+      pollId,
+      organizationId,
+      participationDeadline
+    });
+  } catch (err) {
+    if (err.code === 'VALIDATION_ERROR') {
+      throw ApiError.validation(err.message, null, 'VALIDATION_ERROR');
+    }
+    throw err;
+  }
+
+  if (!result) throw ApiError.notFound('Scheduling poll', 'POLL_NOT_FOUND');
+  if (result.error === 'POLL_FINALIZED') {
+    throw ApiError.conflict('This poll is finalized and cannot be updated', 'POLL_FINALIZED');
+  }
+
+  broadcastOrganizationUpdate(organizationId, 'scheduling-poll-deadline-extended', {
+    organizationId,
+    pollId,
+    participationDeadline: result.poll.participationDeadline,
+    reopened: result.reopened
+  });
+
+  res.json(result);
+}));
+
+// Close poll for participation (manual early close)
+router.post('/:organizationId/scheduling-polls/:pollId/close', requireAuth, requireOrganizationMember, asyncHandler(async (req, res) => {
+  const db = req.app.locals.db;
+  const { organizationId, pollId } = req.params;
+  const userId = getUserId(req);
+  const canManage = await SchedulingService.canManagePoll(db, pollId, organizationId, userId);
+  if (!canManage) throw ApiError.forbidden('Only the poll creator or a representative can close the poll', 'NOT_ALLOWED');
+
+  const result = await SchedulingService.closePollForParticipation(db, {
+    pollId,
+    organizationId,
+    reason: 'manual'
+  });
+
+  if (!result) throw ApiError.notFound('Scheduling poll', 'POLL_NOT_FOUND');
+  if (result.error === 'POLL_NOT_OPEN') {
+    throw ApiError.conflict('This poll is not open for participation', 'POLL_NOT_OPEN');
+  }
+
+  if (!result.alreadyClosed) {
+    const managerUserIds = await SchedulingService.getManagerUserIds(db, pollId, organizationId);
+    await SchedulingNotificationService.notifyParticipationClosed(db, {
+      organizationId,
+      pollId,
+      poll: result.poll,
+      participationSummary: result.participationSummary,
+      suggestedSlot: result.suggestedSlot,
+      closedReason: 'manual',
+      userIds: managerUserIds
+    });
+
+    broadcastOrganizationUpdate(organizationId, 'scheduling-poll-participation-closed', {
+      organizationId,
+      pollId,
+      title: result.poll.title,
+      closedReason: 'manual'
+    });
+  }
+
+  res.json({
+    poll: result.poll,
+    participationSummary: result.participationSummary,
+    suggestedSlot: result.suggestedSlot
+  });
 }));
 
 // Add slots (creator or rep)
@@ -65,7 +191,6 @@ router.post('/:organizationId/scheduling-polls/:pollId/slots', requireAuth, requ
   if (!Array.isArray(slots) || slots.length === 0) {
     throw ApiError.validation('slots array with at least one { startAt, endAt } is required', null, 'VALIDATION_ERROR');
   }
-  // transformRequest converts body to snake_case; support both for compatibility
   const added = await SchedulingService.addSlots(db, {
     pollId,
     organizationId,
@@ -75,7 +200,10 @@ router.post('/:organizationId/scheduling-polls/:pollId/slots', requireAuth, requ
       sortOrder: s.sort_order ?? s.sortOrder
     }))
   });
-  if (!added) throw ApiError.notFound('Scheduling poll', 'POLL_NOT_FOUND');
+  if (added === null) throw ApiError.notFound('Scheduling poll', 'POLL_NOT_FOUND');
+  if (added.error === 'POLL_CLOSED') {
+    throw ApiError.conflict('This poll is closed and no longer accepts changes', 'POLL_CLOSED');
+  }
   res.status(201).json({ slots: added });
 }));
 
@@ -88,7 +216,6 @@ router.put('/:organizationId/scheduling-polls/:pollId/responses', requireAuth, r
   if (!Array.isArray(responses)) {
     throw ApiError.validation('responses array is required', null, 'VALIDATION_ERROR');
   }
-  // transformRequest converts body to snake_case; support both for compatibility
   const normalized = responses
     .map(r => ({
       slotId: r.slot_id ?? r.slotId,
@@ -102,6 +229,9 @@ router.put('/:organizationId/scheduling-polls/:pollId/responses', requireAuth, r
     responses: normalized
   });
   if (result === null) throw ApiError.notFound('Scheduling poll', 'POLL_NOT_FOUND');
+  if (result.error === 'POLL_CLOSED') {
+    throw ApiError.conflict('This poll is closed and no longer accepts responses', 'POLL_CLOSED');
+  }
   res.json({ responses: result });
 }));
 
@@ -113,7 +243,6 @@ router.post('/:organizationId/scheduling-polls/:pollId/finalize', requireAuth, r
   const canManage = await SchedulingService.canManagePoll(db, pollId, organizationId, userId);
   if (!canManage) throw ApiError.forbidden('Only the poll creator or a representative can finalize', 'NOT_ALLOWED');
 
-  // transformRequest converts body to snake_case; support both for compatibility
   const chosenSlotId = (req.body && (req.body.chosen_slot_id ?? req.body.chosenSlotId)) || null;
   if (!chosenSlotId || typeof chosenSlotId !== 'string') {
     throw ApiError.validation('chosenSlotId is required', null, 'VALIDATION_ERROR');
@@ -124,6 +253,12 @@ router.post('/:organizationId/scheduling-polls/:pollId/finalize', requireAuth, r
     chosenSlotId: chosenSlotId.trim()
   });
   if (!result) throw ApiError.notFound('Scheduling poll or slot', 'NOT_FOUND');
+  if (result.error === 'POLL_FINALIZED') {
+    throw ApiError.conflict('This poll is already finalized', 'POLL_FINALIZED');
+  }
+  if (result.error === 'POLL_NOT_FINALIZABLE') {
+    throw ApiError.conflict('This poll cannot be finalized in its current state', 'POLL_NOT_FINALIZABLE');
+  }
   res.json(result);
 }));
 

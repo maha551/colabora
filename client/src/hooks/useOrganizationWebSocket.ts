@@ -40,7 +40,10 @@ export type OrganizationUpdateEventType =
   | 'organization-vote-completed'
   | 'vote-declined'
   | 'document-updated'
-  | 'overview-pin-updated';
+  | 'overview-pin-updated'
+  | 'scheduling-poll-opened'
+  | 'scheduling-poll-participation-closed'
+  | 'scheduling-poll-deadline-extended';
 
 // Union type for organization WebSocket event data
 export type OrganizationUpdateData =

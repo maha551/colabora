@@ -66,6 +66,8 @@ export const AgendaCalendarSheet = memo(function AgendaCalendarSheet({
       canPin={canPin}
       onPin={onPin}
       onUnpin={onUnpin}
+      coarsePointer={coarsePointer}
+      flipped={flipped}
       showFlipToggle={coarsePointer}
       onToggleFlip={() => setFlipped((f) => !f)}
     />

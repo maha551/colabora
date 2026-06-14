@@ -45,6 +45,18 @@ non-obvious gotchas for running and testing in this environment.
   job runs `node scripts/security-test.js --local`, which requires the GitHub Actions
   repository secret **`JWT_SECRET`** (≥32 chars). Without it, build/security/deploy jobs
   fail even when all tests pass.
+- **Pipeline layout:** `changes` (path detection) → `code-quality` → parallel `test`
+  (full `test:ci` with coverage) + `client-unit` → `build-validation`. Docker, health,
+  and deployment-readiness jobs run on every `main` push and on PRs that touch deploy-
+  relevant paths (`Dockerfile`, `server/`, `knex/`, deploy config, etc.); otherwise they
+  are skipped. Superseded runs on the same branch/PR are canceled via workflow concurrency.
+- **Branch protection (GitHub Settings → Branches):** Required status checks should
+  include the always-run jobs: `Code Quality & Dependencies`, `Test (unit + integration)`,
+  `Client unit tests`, `Build & Validation`. Do **not** require `Migration + Test
+  (ephemeral PG)` — that job was removed as redundant. Skipped deploy-heavy jobs
+  (`Docker Build Validation`, `Health Check Validation`, `Deployment Readiness`) must
+  **not** be required checks, or client-only PRs cannot merge. `main` pushes still run
+  the full deploy-heavy chain before Hetzner Deploy.
 
 ### Integration test pitfalls
 - **DB pool alignment:** Rows inserted or updated via `getTestKnex()` alone may not be

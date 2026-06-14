@@ -1,6 +1,7 @@
 /** Pure client/unit helpers — no DB setup (see tests/setup.js). */
 module.exports = {
   testEnvironment: 'node',
+  setupFiles: ['<rootDir>/tests/client-unit/setup.js'],
   roots: [
     '<rootDir>/tests/client-unit',
     '<rootDir>/client/src/components/OrganizationManagement/agenda/__tests__',

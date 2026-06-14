@@ -11,6 +11,20 @@ describe('renderNotificationContent', () => {
     votingType: 'document',
   };
 
+  test('renders scheduling_poll_opened with scheduling poll copy and preserves event type', () => {
+    const content = renderNotificationContent('scheduling_poll_opened', {
+      title: 'June Board Meeting',
+      participationDeadline: '2026-06-20T18:00:00.000Z',
+      link: 'http://localhost:3001/#/organization/org-1/scheduling/poll-1',
+      organizationName: 'Acme Co',
+    }, 'en', 'plain', 'immediate');
+
+    expect(content.eventType).toBe('scheduling_poll_opened');
+    expect(content.subject).toContain('June Board Meeting');
+    expect(content.body).toBeTruthy();
+    expect(content.url).toContain('scheduling');
+  });
+
   test('renders voting_started with email subject and short body', () => {
     const content = renderNotificationContent('voting_started', votingStartedData, 'en', 'plain', 'immediate');
 

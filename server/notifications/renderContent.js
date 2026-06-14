@@ -67,7 +67,7 @@ function renderDigestSummary(eventData, locale) {
   };
 }
 
-function renderVotingStarted(eventData, locale) {
+function renderVotingStarted(eventData, locale, eventType = 'voting_started') {
   const title = resolveTitle(eventData, locale);
   const votingTypeText = t(locale, votingTypeKey(eventData.votingType));
   const deadline = eventData.votingDeadline
@@ -91,7 +91,7 @@ function renderVotingStarted(eventData, locale) {
     body,
     url: resolveLink(eventData),
     locale,
-    eventType: 'voting_started',
+    eventType,
   };
 }
 
@@ -148,7 +148,7 @@ function renderImmediate(eventType, eventData, locale) {
       ...eventData,
       votingType: eventType === 'scheduling_poll_opened' ? 'scheduling_poll' : eventData.votingType,
       votingDeadline: eventData.votingDeadline || eventData.participationDeadline,
-    }, locale);
+    }, locale, eventType);
   }
   if (DEADLINE_EVENT_TYPE_MAP[eventType]) {
     return renderDeadlineApproaching(eventType, eventData, locale);

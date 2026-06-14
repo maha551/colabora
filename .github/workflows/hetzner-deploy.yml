@@ -33,6 +33,7 @@ jobs:
     if: github.repository == 'maha551/colabora'
     environment: production
     env:
+      CI: true
       KAMAL_DESTINATION: ${{ github.event.inputs.destination }}
     steps:
       - name: Checkout code
@@ -71,6 +72,12 @@ jobs:
           install -m 700 -d ~/.ssh
           printf '%s\n' "$KAMAL_SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/kamal_ci_key
           chmod 600 ~/.ssh/kamal_ci_key
+          if ! ssh-keygen -y -f ~/.ssh/kamal_ci_key >/dev/null 2>&1; then
+            echo "::error::KAMAL_SSH_PRIVATE_KEY is missing or not a valid private key. Re-set it from ~/.ssh/colabora_deploy."
+            exit 1
+          fi
+          echo "Deploy key fingerprint:"
+          ssh-keygen -lf ~/.ssh/kamal_ci_key
           ssh-add ~/.ssh/kamal_ci_key
           echo "SSH agent keys:"
           ssh-add -l

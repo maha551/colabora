@@ -4,8 +4,8 @@ Deploy Colabora to **Hetzner Cloud** with **[Kamal 2](https://kamal-deploy.org/)
 
 | Profile | Users | Architecture | Config |
 |---------|-------|--------------|--------|
-| **Pilot** (start here) | 10–50, collaborating | 1 app + 1 data server | `deploy.pilot.yml` |
-| **Production** | ~200 concurrent | 2 app + LB + data | `deploy.yml` |
+| **Production** (current) | 10–200 | 1 app + 1 data server | `deploy.yml` |
+| **Pilot** (legacy alias) | same as production | 1 app + 1 data | `deploy.pilot.yml` overlay |
 
 **Pilot walkthrough:** [HETZNER_PILOT_CHECKLIST.md](./HETZNER_PILOT_CHECKLIST.md) — follow that document step by step for your first deploy.
 

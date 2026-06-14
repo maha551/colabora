@@ -1,16 +1,7 @@
 # Deploy Colabora to Hetzner via Kamal (manual trigger).
+# Production: single app server (app-1) + data-1 — see config/deploy.yml
 #
-# Production uses private app IPs (10.0.0.x) — GitHub-hosted runners cannot SSH there.
-# Run production deploys from a machine on your Hetzner network, or use workflow_dispatch
-# with the pilot destination (public app IP in config/deploy.pilot.yml).
-#
-# Required GitHub secrets (Settings → Secrets → Actions):
-#   JWT_SECRET — CI and deploy
-#   KAMAL_SSH_PRIVATE_KEY — deploy@ SSH key (pilot / reachable hosts only)
-#   DATABASE_URL, REDIS_URL, FRONTEND_URL, ALLOWED_ORIGINS
-#   RESEND_API_KEY, RESEND_FROM_EMAIL (optional)
-#   CONTACT_EMAIL, SITE_OPERATOR_NAME, SITE_OPERATOR_ADDRESS
-#   KAMAL_REGISTRY_PASSWORD (optional — defaults to GITHUB_TOKEN for GHCR)
+# Required GitHub secrets: same as .kamal/secrets.example
 
 name: Hetzner Deploy
 
@@ -46,14 +37,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Block production from GitHub-hosted runner
-        if: env.KAMAL_DESTINATION == 'production'
-        run: |
-          echo "Production hosts use private Hetzner IPs (10.0.0.x)."
-          echo "Deploy production from your workstation: kamal deploy"
-          echo "Or use destination=pilot for CI deploy to the public app IP."
-          exit 1
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
@@ -110,7 +93,12 @@ jobs:
           SITE_OPERATOR_ADDRESS: ${{ secrets.SITE_OPERATOR_ADDRESS }}
         run: |
           mkdir -p .kamal
-          cat > .kamal/secrets <<EOF
+          if [ "${KAMAL_DESTINATION}" = "production" ]; then
+            SECRETS_FILE=".kamal/secrets"
+          else
+            SECRETS_FILE=".kamal/secrets.${KAMAL_DESTINATION}"
+          fi
+          cat > "$SECRETS_FILE" <<EOF
           KAMAL_REGISTRY_PASSWORD=${KAMAL_REGISTRY_PASSWORD}
           DATABASE_URL=${DATABASE_URL}
           REDIS_URL=${REDIS_URL}
@@ -127,7 +115,12 @@ jobs:
       - name: Deploy with Kamal
         env:
           KAMAL_REGISTRY_PASSWORD: ${{ secrets.KAMAL_REGISTRY_PASSWORD || github.token }}
-        run: kamal deploy -d "${KAMAL_DESTINATION}" -v
+        run: |
+          if [ "${KAMAL_DESTINATION}" = "production" ]; then
+            kamal deploy -v
+          else
+            kamal deploy -d "${KAMAL_DESTINATION}" -v
+          fi
 
       - name: Post-deploy reminder
         run: |

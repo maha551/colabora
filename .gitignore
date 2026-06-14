@@ -84,3 +84,7 @@ test-results.txt
 
 # Archived documentation
 docs/archive/
+
+# TLS material for production multi-server deploy (never commit)
+config/certs/*.pem
+config/certs/*.key

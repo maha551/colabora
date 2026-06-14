@@ -2,10 +2,7 @@
 # Prerequisites: Ruby gem `kamal`, Docker, SSH key at ~/.ssh/colabora_deploy, .kamal/secrets filled in.
 
 $ErrorActionPreference = "Stop"
-$RepoRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-if (Test-Path (Join-Path $PSScriptRoot "..\config\deploy.yml")) {
-    $RepoRoot = Join-Path $PSScriptRoot ".."
-}
+$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $RepoRoot
 
 $KeyPath = Join-Path $env:USERPROFILE ".ssh\colabora_deploy"

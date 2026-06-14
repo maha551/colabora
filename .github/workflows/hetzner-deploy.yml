@@ -64,6 +64,11 @@ jobs:
 
       - name: Add app servers to known_hosts
         run: |
+          # Do NOT use ssh-keyscan -H: Kamal/SSHKit cannot verify hashed known_hosts
+          # entries reliably (see basecamp/kamal#1814) and raises HostKeyMismatch.
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          : > ~/.ssh/known_hosts
           DEST="${KAMAL_DESTINATION}"
           if [ "$DEST" = "pilot" ]; then
             CONFIG="config/deploy.pilot.yml"
@@ -74,9 +79,12 @@ jobs:
           fi
           echo "Using host list from $CONFIG (destination: $DEST)"
           for ip in $(ruby -ryaml -e "puts YAML.load_file('$CONFIG').dig('servers','web','hosts') || []"); do
-            echo "Adding $ip"
-            ssh-keyscan -H "$ip" >> ~/.ssh/known_hosts 2>/dev/null || true
+            echo "Adding $ip (unhashed host keys for Kamal/net-ssh)"
+            ssh-keyscan -T 10 -t ed25519,ecdsa,rsa "$ip" >> ~/.ssh/known_hosts 2>/dev/null || true
           done
+          chmod 600 ~/.ssh/known_hosts
+          echo "Known hosts entries:"
+          cat ~/.ssh/known_hosts
 
       - name: Write Kamal secrets
         env:

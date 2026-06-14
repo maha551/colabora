@@ -1,0 +1,185 @@
+/**
+ * App chrome orb ↔ bar morph animations (AppHeader).
+ * FLIP scale morph — durations mirror APP_CHROME_MOTION in appChromeMotion.ts
+ */
+
+.app-chrome-shell {
+  transform-origin: 0 0;
+}
+
+.app-chrome-shell--collapsed {
+  width: var(--app-orb-size, 2.75rem);
+  height: var(--app-orb-size, 2.75rem);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.app-chrome-shell--expanded-bar {
+  width: 100%;
+  min-height: var(--app-header-height, 3.5rem);
+  height: auto;
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.app-chrome-shell--opening.app-chrome-motion-full {
+  animation: app-chrome-flip-open 300ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  will-change: transform, border-radius;
+}
+
+@keyframes app-chrome-flip-open {
+  0% {
+    transform: translate3d(var(--app-chrome-flip-x, 0), var(--app-chrome-flip-y, 0), 0)
+      scale(var(--app-chrome-flip-sx, 1), var(--app-chrome-flip-sy, 1));
+    border-radius: 9999px;
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1, 1);
+    border-radius: 0;
+  }
+}
+
+.app-chrome-shell--opening.app-chrome-motion-fade {
+  animation: app-chrome-fade-open 220ms ease-out forwards;
+}
+
+@keyframes app-chrome-fade-open {
+  from {
+    opacity: 0.85;
+    transform: scale(0.96) translateZ(0);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateZ(0);
+  }
+}
+
+.app-chrome-shell--closing.app-chrome-motion-full {
+  animation: app-chrome-flip-close 260ms cubic-bezier(0.4, 0, 0.68, 0.06) forwards;
+  will-change: transform, border-radius;
+}
+
+@keyframes app-chrome-flip-close {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1, 1);
+    border-radius: 0;
+  }
+  100% {
+    transform: translate3d(var(--app-chrome-flip-x, 0), var(--app-chrome-flip-y, 0), 0)
+      scale(var(--app-chrome-flip-sx, 1), var(--app-chrome-flip-sy, 1));
+    border-radius: 9999px;
+  }
+}
+
+.app-chrome-shell--closing.app-chrome-motion-fade {
+  animation: app-chrome-fade-close 200ms ease-in forwards;
+}
+
+@keyframes app-chrome-fade-close {
+  from {
+    opacity: 1;
+    transform: scale(1) translateZ(0);
+  }
+  to {
+    opacity: 0.85;
+    transform: scale(0.96) translateZ(0);
+  }
+}
+
+.app-chrome-orb-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-chrome-orb-layer--opening {
+  animation: app-chrome-orb-layer-out 300ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  pointer-events: none;
+}
+
+.app-chrome-orb-layer--closing {
+  animation: app-chrome-orb-layer-in 260ms cubic-bezier(0.4, 0, 0.68, 0.06) forwards;
+  opacity: 0;
+  pointer-events: none;
+}
+
+@keyframes app-chrome-orb-layer-out {
+  0%,
+  55% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes app-chrome-orb-layer-in {
+  0%,
+  40% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.app-chrome-content-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.app-chrome-content-visible {
+  animation: app-chrome-content-in 150ms ease-out 180ms forwards;
+  opacity: 0;
+}
+
+.app-chrome-content-closing {
+  animation: app-chrome-content-out 120ms ease-in forwards;
+}
+
+@keyframes app-chrome-content-in {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes app-chrome-content-out {
+  to {
+    opacity: 0;
+  }
+}
+
+.app-chrome-panel-visible {
+  animation: app-chrome-panel-in 150ms ease-out 80ms forwards;
+  opacity: 0;
+}
+
+@keyframes app-chrome-panel-in {
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-chrome-shell--opening,
+  .app-chrome-shell--closing,
+  .app-chrome-orb-layer--opening,
+  .app-chrome-orb-layer--closing,
+  .app-chrome-content-visible,
+  .app-chrome-content-closing,
+  .app-chrome-panel-visible {
+    animation: none !important;
+  }
+
+  .app-chrome-content-hidden {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .app-chrome-orb-layer--closing {
+    opacity: 1;
+  }
+}

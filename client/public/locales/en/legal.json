@@ -1,0 +1,60 @@
+{
+  "footer": {
+    "privacy": "Privacy",
+    "terms": "Terms",
+    "imprint": "Imprint",
+    "about": "About",
+    "contact": "Contact",
+    "reportIssue": "Report issue"
+  },
+  "backToApp": "Back to app",
+  "backToLogin": "Back to login",
+  "contentUnavailable": "This content is not available in your language yet.",
+  "loading": "Loading…",
+  "meta": {
+    "lastUpdated": "Last updated"
+  },
+  "hub": {
+    "title": "Legal & information",
+    "description": "Policies, project information, and ways to reach us. Colabora is currently a test preview — use at your own risk; do not submit confidential data.",
+    "privacyDescription": "How we collect, use, and protect your data.",
+    "termsDescription": "Rules for using Colabora.",
+    "imprintDescription": "Legal notice and operator information.",
+    "aboutDescription": "What Colabora is and how it works.",
+    "contactDescription": "Send us a message."
+  },
+  "pages": {
+    "privacy": "Privacy policy",
+    "terms": "Terms of use",
+    "imprint": "Legal notice",
+    "about": "About Colabora",
+    "contact": "Contact",
+    "notFound": "Page not found"
+  },
+  "contact": {
+    "title": "Contact us",
+    "description": "Questions, feedback, or partnership inquiries — we read every message.",
+    "name": "Name",
+    "namePlaceholder": "Your name",
+    "email": "Email",
+    "emailPlaceholder": "you@example.com",
+    "subject": "Subject",
+    "subjectPlaceholder": "What is this about?",
+    "message": "Message",
+    "messagePlaceholder": "Your message…",
+    "submit": "Send message",
+    "submitting": "Sending…",
+    "success": "Thank you — your message has been sent.",
+    "error": "Could not send your message. Please try again later.",
+    "rateLimited": "Too many messages sent. Please wait a few minutes and try again."
+  },
+  "consent": {
+    "label": "I accept the <termsLink>Terms of use</termsLink> and have read the <privacyLink>Privacy policy</privacyLink>. I understand this is a test environment: I use Colabora at my own risk and will not submit data I expect to stay private.",
+    "required": "You must accept the Terms and acknowledge the Privacy policy to create an account."
+  },
+  "notFound": {
+    "title": "Page not found",
+    "description": "This information page does not exist.",
+    "backToHub": "Back to legal & information"
+  }
+}

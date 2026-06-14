@@ -1,0 +1,137 @@
+/**
+ * Shared lub-dub heartbeat rhythm for chrome surfaces and login background.
+ * Presets: relaxed (header/footer), medium (login), strong (orb).
+ *
+ * Tuned for a slow, breathing pulse — not a sharp cardiac monitor flash.
+ */
+
+/* Opacity-only — avoids scale shifting gradient edges (login card, orb shell) */
+@keyframes heartbeat-lub-dub-opacity {
+  0%,
+  62%,
+  100% {
+    opacity: var(--hb-rest-opacity);
+  }
+  12% {
+    opacity: var(--hb-lub-opacity);
+  }
+  18% {
+    opacity: var(--hb-lub-fall-opacity);
+  }
+  28% {
+    opacity: var(--hb-dub-opacity);
+  }
+  36% {
+    opacity: var(--hb-dub-fall-opacity);
+  }
+  48%,
+  62% {
+    opacity: var(--hb-rest-opacity);
+  }
+}
+
+@keyframes heartbeat-lub-dub {
+  0%,
+  62%,
+  100% {
+    transform: scale(1) translateZ(0);
+    opacity: var(--hb-rest-opacity);
+  }
+  /* lub — gentle rise */
+  12% {
+    transform: scale(var(--hb-lub-scale)) translateZ(0);
+    opacity: var(--hb-lub-opacity);
+  }
+  18% {
+    transform: scale(var(--hb-lub-fall)) translateZ(0);
+    opacity: var(--hb-lub-fall-opacity);
+  }
+  /* dub — softer second bump */
+  28% {
+    transform: scale(var(--hb-dub-scale)) translateZ(0);
+    opacity: var(--hb-dub-opacity);
+  }
+  36% {
+    transform: scale(var(--hb-dub-fall)) translateZ(0);
+    opacity: var(--hb-dub-fall-opacity);
+  }
+  /* long diastole — calm hold before next beat */
+  48%,
+  62% {
+    transform: scale(1) translateZ(0);
+    opacity: var(--hb-rest-opacity);
+  }
+}
+
+.heartbeat--relaxed {
+  --hb-duration: 5.4s;
+  --hb-lub-scale: 1.032;
+  --hb-lub-fall: 1.016;
+  --hb-dub-scale: 1.024;
+  --hb-dub-fall: 1.008;
+  --hb-rest-opacity: 0.48;
+  --hb-lub-opacity: 0.57;
+  --hb-lub-fall-opacity: 0.52;
+  --hb-dub-opacity: 0.55;
+  --hb-dub-fall-opacity: 0.5;
+  animation: heartbeat-lub-dub var(--hb-duration) cubic-bezier(0.42, 0, 0.58, 1) infinite;
+}
+
+.heartbeat--medium {
+  --hb-duration: 4.6s;
+  --hb-lub-scale: 1.048;
+  --hb-lub-fall: 1.024;
+  --hb-dub-scale: 1.035;
+  --hb-dub-fall: 1.016;
+  --hb-rest-opacity: 0.58;
+  --hb-lub-opacity: 0.72;
+  --hb-lub-fall-opacity: 0.64;
+  --hb-dub-opacity: 0.67;
+  --hb-dub-fall-opacity: 0.61;
+  animation: heartbeat-lub-dub var(--hb-duration) cubic-bezier(0.42, 0, 0.58, 1) infinite;
+}
+
+.heartbeat--strong {
+  --hb-duration: 3.8s;
+  --hb-lub-scale: 1.07;
+  --hb-lub-fall: 1.035;
+  --hb-dub-scale: 1.05;
+  --hb-dub-fall: 1.02;
+  --hb-rest-opacity: 1;
+  --hb-lub-opacity: 1;
+  --hb-lub-fall-opacity: 0.99;
+  --hb-dub-opacity: 0.985;
+  --hb-dub-fall-opacity: 0.992;
+  animation: heartbeat-lub-dub var(--hb-duration) cubic-bezier(0.42, 0, 0.58, 1) infinite;
+}
+
+.dark .heartbeat--relaxed {
+  --hb-rest-opacity: 0.52;
+  --hb-lub-opacity: 0.61;
+  --hb-lub-fall-opacity: 0.56;
+  --hb-dub-opacity: 0.59;
+  --hb-dub-fall-opacity: 0.54;
+}
+
+.dark .heartbeat--medium {
+  --hb-rest-opacity: 0.52;
+  --hb-lub-opacity: 0.66;
+  --hb-lub-fall-opacity: 0.59;
+  --hb-dub-opacity: 0.62;
+  --hb-dub-fall-opacity: 0.57;
+}
+
+.heartbeat--relaxed.heartbeat--opacity-only,
+.heartbeat--medium.heartbeat--opacity-only,
+.heartbeat--strong.heartbeat--opacity-only {
+  animation: heartbeat-lub-dub-opacity var(--hb-duration) cubic-bezier(0.42, 0, 0.58, 1) infinite;
+  will-change: opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .heartbeat--relaxed,
+  .heartbeat--medium,
+  .heartbeat--strong {
+    animation: none !important;
+  }
+}

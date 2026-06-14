@@ -1,0 +1,18 @@
+# Staging overlay — merge with config/deploy.yml
+# Usage: kamal deploy -d staging
+#
+# For a real group pilot (10–50 users), prefer config/deploy.pilot.yml instead.
+
+servers:
+  web:
+    hosts:
+      - 10.0.0.10 # single staging server — replace with your IP
+
+proxy:
+  host: staging.colabora.example.com
+
+env:
+  clear:
+    PG_POOL_MIN: "2"
+    PG_POOL_MAX: "10"
+    RATE_LIMIT_MAX_REQUESTS: "2000"

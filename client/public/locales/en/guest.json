@@ -1,0 +1,18 @@
+{
+  "subtitle": "Pick the times that work for you",
+  "defaultPollTitle": "Date poll",
+  "yourName": "Your name",
+  "yourNamePlaceholder": "Your name (optional)",
+  "saveAvailability": "Save availability",
+  "saving": "Saving…",
+  "savedBookmark": "Saved — bookmark this page to update your answers later",
+  "meetingScheduled": "Meeting scheduled",
+  "joinVideo": "Join video call",
+  "minutesPending": "Minutes will appear here after the meeting",
+  "minutesReadOnly": "Meeting minutes",
+  "pollClosed": "This poll is closed and no longer accepts responses",
+  "invalidLink": "Link not available",
+  "loadError": "Could not load this poll",
+  "saveError": "Could not save your availability",
+  "loading": "Loading poll…"
+}

@@ -1,0 +1,22 @@
+{
+  "errorBoundary": {
+    "description": "Ein unerwarteter Fehler ist aufgetreten. Möglicherweise ein vorübergehendes Problem.",
+    "reloadPage": "Seite neu laden",
+    "reportError": "Fehler melden",
+    "stackTrace": "Stacktrace",
+    "title": "Etwas ist schiefgelaufen",
+    "tryAgain": "Erneut versuchen"
+  },
+  "generic": "Etwas ist schiefgelaufen",
+  "reportForm": {
+    "addLogs": "Protokolle hinzufügen",
+    "consoleLabel": "Konsolenprotokolle (optional)",
+    "consolePlaceholder": "Alle relevanten Konsolenfehler oder Protokolle",
+    "descriptionLabel": "Beschreibung *",
+    "descriptionPlaceholder": "Was ist passiert? Was wolltest du tun? Was hast du erwartet?",
+    "titleLabel": "Titel *",
+    "titlePlaceholder": "Kurze Beschreibung des Problems"
+  },
+  "reportIssue": "Problem melden",
+  "tryAgain": "Bitte versuche es erneut"
+}

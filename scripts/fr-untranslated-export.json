@@ -1,0 +1,2673 @@
+{
+  "common": [
+    {
+      "k": "unknown",
+      "v": "Unknown"
+    },
+    {
+      "k": "buttons.apply",
+      "v": "Apply"
+    },
+    {
+      "k": "buttons.proceed",
+      "v": "Proceed"
+    },
+    {
+      "k": "buttons.completing",
+      "v": "Completing..."
+    },
+    {
+      "k": "buttons.saving",
+      "v": "Saving..."
+    },
+    {
+      "k": "tree.collapse",
+      "v": "Collapse"
+    },
+    {
+      "k": "tree.expand",
+      "v": "Expand"
+    },
+    {
+      "k": "tree.noChildren",
+      "v": "No children"
+    },
+    {
+      "k": "toasts.structureProposalCreated",
+      "v": "New structure proposal created"
+    },
+    {
+      "k": "toasts.structureProposalApproved",
+      "v": "Structure proposal approved"
+    },
+    {
+      "k": "toasts.structureProposalRejected",
+      "v": "Structure proposal rejected"
+    },
+    {
+      "k": "toasts.treeProposalCreated",
+      "v": "New tree proposal created"
+    },
+    {
+      "k": "toasts.treeProposalApproved",
+      "v": "Tree proposal approved"
+    },
+    {
+      "k": "toasts.treeProposalRejected",
+      "v": "Tree proposal rejected"
+    },
+    {
+      "k": "aria.listView",
+      "v": "List view"
+    },
+    {
+      "k": "aria.goBack",
+      "v": "Go back"
+    },
+    {
+      "k": "aria.loading",
+      "v": "Loading..."
+    },
+    {
+      "k": "aria.loadingApplication",
+      "v": "Loading application"
+    },
+    {
+      "k": "aria.breadcrumb",
+      "v": "Breadcrumb"
+    },
+    {
+      "k": "aria.toggleSidebar",
+      "v": "Toggle Sidebar"
+    },
+    {
+      "k": "aria.pagination",
+      "v": "Pagination"
+    },
+    {
+      "k": "aria.previousPage",
+      "v": "Go to previous page"
+    },
+    {
+      "k": "aria.nextPage",
+      "v": "Go to next page"
+    },
+    {
+      "k": "aria.clearSearch",
+      "v": "Clear search"
+    },
+    {
+      "k": "aria.toggleDiscussion",
+      "v": "Toggle discussion"
+    },
+    {
+      "k": "aria.toggleHistory",
+      "v": "Toggle history"
+    },
+    {
+      "k": "aria.suggestEdit",
+      "v": "Suggest edit"
+    },
+    {
+      "k": "aria.documentTree",
+      "v": "Document tree"
+    },
+    {
+      "k": "aria.agreedDocumentView",
+      "v": "Agreed document view"
+    },
+    {
+      "k": "aria.documentTitle",
+      "v": "Document title"
+    },
+    {
+      "k": "aria.documentMetadata",
+      "v": "Document metadata"
+    },
+    {
+      "k": "aria.voteEventLog",
+      "v": "Vote event log"
+    },
+    {
+      "k": "aria.votingDetailsToggle",
+      "v": "Click to show/hide voting details"
+    },
+    {
+      "k": "aria.diffView",
+      "v": "Diff view showing text changes"
+    },
+    {
+      "k": "aria.viewSuggestionsAndDiscussion",
+      "v": "Click to view suggestions and discussion"
+    },
+    {
+      "k": "aria.openDiscussion",
+      "v": "Click to open discussion"
+    },
+    {
+      "k": "aria.enableDiffView",
+      "v": "Enable persistent diff view"
+    },
+    {
+      "k": "aria.disableDiffView",
+      "v": "Disable persistent diff view"
+    },
+    {
+      "k": "aria.addSuggestionFirstToEnableDiffView",
+      "v": "Add a suggestion first to enable persistent diff view"
+    },
+    {
+      "k": "agreedDocument.pendingAmendment",
+      "v": "Pending amendment"
+    },
+    {
+      "k": "agreedDocument.approvedWithConsensus",
+      "v": "Approved with {{pct}}% consensus"
+    },
+    {
+      "k": "timezone.label",
+      "v": "Timezone"
+    },
+    {
+      "k": "timezone.description",
+      "v": "All dates and times throughout the application will be displayed in your selected timezone."
+    },
+    {
+      "k": "timezone.displayBanner",
+      "v": "Times shown in {{timezone}}"
+    },
+    {
+      "k": "timezone.browserMismatchWarning",
+      "v": "Your profile timezone differs from your browser. Inputs use your profile timezone."
+    },
+    {
+      "k": "collaborator.placeholderEmail",
+      "v": "Enter email address"
+    },
+    {
+      "k": "collaborator.toggleRealtimeUpdates",
+      "v": "Toggle real-time updates"
+    },
+    {
+      "k": "voteDialog.castVote",
+      "v": "Cast Vote"
+    },
+    {
+      "k": "voteDialog.castingVote",
+      "v": "Casting Vote..."
+    },
+    {
+      "k": "voteDialog.waitingForUpdate",
+      "v": "Waiting for update..."
+    },
+    {
+      "k": "voteRadio.proApprove",
+      "v": "PRO - I approve this proposal"
+    },
+    {
+      "k": "voteRadio.neutralNoOpinion",
+      "v": "NEUTRAL - I have no strong opinion"
+    },
+    {
+      "k": "voteRadio.contraDisapprove",
+      "v": "CONTRA - I do not approve this proposal"
+    },
+    {
+      "k": "voteRadio.yesApprove",
+      "v": "Yes - I approve this proposal"
+    },
+    {
+      "k": "voteRadio.noDisapprove",
+      "v": "No - I do not approve this proposal"
+    },
+    {
+      "k": "voteRadio.abstain",
+      "v": "Abstain - I choose not to vote"
+    },
+    {
+      "k": "comparison.youVoted",
+      "v": "You voted {{vote}}"
+    },
+    {
+      "k": "comparison.leading",
+      "v": "Leading"
+    },
+    {
+      "k": "comparison.leading100",
+      "v": "Leading (100%)"
+    },
+    {
+      "k": "comparison.contested",
+      "v": "Contested"
+    },
+    {
+      "k": "comparison.rejected",
+      "v": "Rejected"
+    },
+    {
+      "k": "comparison.new",
+      "v": "New"
+    },
+    {
+      "k": "comparison.yourVoteNeeded",
+      "v": "Your vote needed"
+    },
+    {
+      "k": "comparison.approvalPercent",
+      "v": "{{percent}}% approval"
+    },
+    {
+      "k": "comparison.comment",
+      "v": "Comment"
+    }
+  ],
+  "nav": [
+    {
+      "k": "documents",
+      "v": "Documents"
+    },
+    {
+      "k": "switchOrganization",
+      "v": "Switch organization"
+    },
+    {
+      "k": "invitations",
+      "v": "Invitations"
+    },
+    {
+      "k": "languageNames.en",
+      "v": "English"
+    },
+    {
+      "k": "languageNames.es",
+      "v": "Español"
+    },
+    {
+      "k": "languageNames.fr",
+      "v": "Français"
+    },
+    {
+      "k": "languageNames.de",
+      "v": "Deutsch"
+    },
+    {
+      "k": "languageNames.ur",
+      "v": "Urdu"
+    }
+  ],
+  "auth": [
+    {
+      "k": "login.placeholderEmail",
+      "v": "Enter your email"
+    },
+    {
+      "k": "login.placeholderPassword",
+      "v": "Enter your password"
+    },
+    {
+      "k": "register.placeholderName",
+      "v": "Enter your full name"
+    },
+    {
+      "k": "register.placeholderEmail",
+      "v": "Enter your email"
+    },
+    {
+      "k": "register.placeholderPassword",
+      "v": "Create a strong password"
+    },
+    {
+      "k": "register.placeholderConfirmPassword",
+      "v": "Confirm your password"
+    },
+    {
+      "k": "resetPassword.placeholderNew",
+      "v": "Enter your new password"
+    },
+    {
+      "k": "resetPassword.placeholderConfirm",
+      "v": "Confirm your new password"
+    },
+    {
+      "k": "changePassword.placeholderCurrent",
+      "v": "Enter your current password"
+    },
+    {
+      "k": "changePassword.placeholderNew",
+      "v": "Enter your new password"
+    },
+    {
+      "k": "changePassword.placeholderConfirm",
+      "v": "Confirm your new password"
+    },
+    {
+      "k": "forgotPassword.placeholderEmail",
+      "v": "your.email@example.com"
+    }
+  ],
+  "documents": [
+    {
+      "k": "sidebarTitle",
+      "v": "Documents"
+    },
+    {
+      "k": "suggestions_other",
+      "v": "{{count}} suggestions"
+    },
+    {
+      "k": "search.entityDocument",
+      "v": "Document"
+    },
+    {
+      "k": "typeFilterDocuments",
+      "v": "Documents"
+    },
+    {
+      "k": "createDialog.descriptionLabel",
+      "v": "Description"
+    },
+    {
+      "k": "view.tabDiscussion",
+      "v": "Discussion"
+    }
+  ],
+  "organization": [
+    {
+      "k": "documents",
+      "v": "Documents"
+    },
+    {
+      "k": "descriptionLabel",
+      "v": "Description"
+    },
+    {
+      "k": "schedulingDescription",
+      "v": "Description"
+    },
+    {
+      "k": "meetingDate",
+      "v": "Date"
+    },
+    {
+      "k": "pasteLinkPlaceholder",
+      "v": "https://..."
+    },
+    {
+      "k": "optionLabel",
+      "v": "Option {{number}}"
+    },
+    {
+      "k": "minutes",
+      "v": "Minutes"
+    },
+    {
+      "k": "description",
+      "v": "Description"
+    },
+    {
+      "k": "voteCount",
+      "v": "{{count}} vote(s)"
+    },
+    {
+      "k": "addParagraphSectionLabel",
+      "v": "Section"
+    },
+    {
+      "k": "minutesSectionDiscussion",
+      "v": "Discussion"
+    },
+    {
+      "k": "todoDescription",
+      "v": "Description"
+    },
+    {
+      "k": "dashboardSummaryDiscussions",
+      "v": "Discussions"
+    },
+    {
+      "k": "dashboardDebateScore",
+      "v": "score {{score}}"
+    },
+    {
+      "k": "logo",
+      "v": "Logo:"
+    },
+    {
+      "k": "brandingDialog.colorPlaceholder",
+      "v": "#3B82F6"
+    },
+    {
+      "k": "brandingDialog.bannerUrlPlaceholder",
+      "v": "https://example.com/banner.jpg"
+    },
+    {
+      "k": "nominationStatus",
+      "v": "Nomination"
+    }
+  ],
+  "governance": [
+    {
+      "k": "filterTypePlaceholder",
+      "v": "Type"
+    },
+    {
+      "k": "electionResults.title",
+      "v": "Election Results - {{title}}"
+    },
+    {
+      "k": "electionResults.description",
+      "v": "Final results and outcome of the representative election"
+    },
+    {
+      "k": "electionResults.summary",
+      "v": "Election Summary"
+    },
+    {
+      "k": "electionResults.candidates",
+      "v": "Candidates"
+    },
+    {
+      "k": "electionResults.totalVotes",
+      "v": "Total Votes"
+    },
+    {
+      "k": "electionResults.turnout",
+      "v": "Turnout"
+    },
+    {
+      "k": "electionResults.quorum",
+      "v": "Quorum"
+    },
+    {
+      "k": "electionResults.voterTurnout",
+      "v": "Voter Turnout"
+    },
+    {
+      "k": "electionResults.votesCount",
+      "v": "{{percent}}% ({{count}} votes)"
+    },
+    {
+      "k": "electionResults.requiredQuorum",
+      "v": "Required quorum: {{percent}}%"
+    },
+    {
+      "k": "electionResults.resultsTitle",
+      "v": "Election Results"
+    },
+    {
+      "k": "electionResults.resultsDesc",
+      "v": "Candidates ranked by votes received"
+    },
+    {
+      "k": "electionResults.elected",
+      "v": "Elected"
+    },
+    {
+      "k": "electionResults.voteCount",
+      "v": "{{count}} votes"
+    },
+    {
+      "k": "electionResults.noResults",
+      "v": "No results available yet."
+    },
+    {
+      "k": "electionResults.noResultsHint",
+      "v": "Results will appear once voting begins."
+    },
+    {
+      "k": "electionResults.newRepresentatives",
+      "v": "New Representatives"
+    },
+    {
+      "k": "electionResults.newRepresentativesDesc",
+      "v": "These candidates have been elected to serve as organization representatives"
+    },
+    {
+      "k": "electionResults.positionVotes",
+      "v": "Position #{{position}} • {{votes}} votes ({{percent}}%)"
+    },
+    {
+      "k": "electionResults.termStarts",
+      "v": "Term: {{months}} months starting immediately"
+    },
+    {
+      "k": "electionResults.completeTitle",
+      "v": "Complete Election"
+    },
+    {
+      "k": "electionResults.completeDesc",
+      "v": "Election has ended and quorum was reached. Representatives can now be officially assigned."
+    },
+    {
+      "k": "electionResults.completeNoticeIntro",
+      "v": "Completing the election will:"
+    },
+    {
+      "k": "electionResults.assignRepresentatives",
+      "v": "Assign elected candidates as organization representatives"
+    },
+    {
+      "k": "electionResults.archiveResults",
+      "v": "Archive the election results permanently"
+    },
+    {
+      "k": "electionResults.updateTerms",
+      "v": "Update representative terms and expiration dates"
+    },
+    {
+      "k": "electionResults.notifyMembers",
+      "v": "Notify all organization members of the results"
+    },
+    {
+      "k": "electionResults.completing",
+      "v": "Completing Election..."
+    },
+    {
+      "k": "electionResults.completeAction",
+      "v": "Complete Election & Assign Representatives"
+    },
+    {
+      "k": "electionVoting.thankYouParticipatingPublic",
+      "v": "Thank you for participating in this election. Your vote has been recorded and is visible to organization members."
+    },
+    {
+      "k": "electionVoting.public",
+      "v": "Public"
+    },
+    {
+      "k": "electionVoting.confirmFinalVotePublic",
+      "v": "I confirm this is my final vote. It will be recorded publicly with my membership and cannot be changed"
+    },
+    {
+      "k": "electionVoting.publicVoteNotice",
+      "v": "This election uses public voting. Your ballot will be visible to organization members after you vote."
+    },
+    {
+      "k": "ruleProposalVoting.title",
+      "v": "Vote on Rule Change"
+    },
+    {
+      "k": "ruleProposalVoting.subtitle",
+      "v": "{{name}} governance proposal"
+    },
+    {
+      "k": "ruleProposalVoting.proposedBy",
+      "v": "Proposed by {{name}} on {{date}}"
+    },
+    {
+      "k": "ruleProposalVoting.ruleBeingChanged",
+      "v": "Rule Being Changed"
+    },
+    {
+      "k": "ruleProposalVoting.ruleLabel",
+      "v": "Rule:"
+    },
+    {
+      "k": "ruleProposalVoting.proposedValueLabel",
+      "v": "Proposed Value:"
+    },
+    {
+      "k": "ruleProposalVoting.votingDeadline",
+      "v": "Voting deadline: {{date}}"
+    },
+    {
+      "k": "ruleProposalVoting.castYourVote",
+      "v": "Cast Your Vote"
+    },
+    {
+      "k": "ruleProposalVoting.alreadyVoted",
+      "v": "You have already voted on this proposal"
+    },
+    {
+      "k": "ruleProposalVoting.voteDetermines",
+      "v": "Your vote will determine if this rule change is approved"
+    },
+    {
+      "k": "ruleProposalVoting.selectOption",
+      "v": "Select your preferred option:"
+    },
+    {
+      "k": "ruleProposalVoting.yourDecision",
+      "v": "Your decision:"
+    },
+    {
+      "k": "ruleProposalVoting.recordingVote",
+      "v": "Recording Vote..."
+    },
+    {
+      "k": "ruleProposalVoting.submitVote",
+      "v": "Submit Vote"
+    },
+    {
+      "k": "ruleProposalVoting.currentResults",
+      "v": "Current Results"
+    },
+    {
+      "k": "ruleProposalVoting.voteCount",
+      "v": "{{count}} votes"
+    },
+    {
+      "k": "ruleProposalVoting.totalVotes",
+      "v": "Total votes: {{count}}"
+    },
+    {
+      "k": "tab.voteCount_one",
+      "v": "{{count}} vote"
+    },
+    {
+      "k": "tab.voteCount_other",
+      "v": "{{count}} votes"
+    },
+    {
+      "k": "ruleImpacts.representativeTermMonths",
+      "v": "Affects when new elections are scheduled"
+    },
+    {
+      "k": "ruleImpacts.representativeTermLimits",
+      "v": "Affects representative eligibility for re-election"
+    },
+    {
+      "k": "ruleImpacts.electionVotingMethod",
+      "v": "Affects how election winners are determined"
+    },
+    {
+      "k": "ruleImpacts.electionQuorumPercentage",
+      "v": "Affects election validity requirements"
+    },
+    {
+      "k": "ruleImpacts.electionNoticeDays",
+      "v": "Affects election scheduling and member preparation time"
+    },
+    {
+      "k": "ruleImpacts.defaultVotingDeadlineHours",
+      "v": "Affects how long members have to vote on proposals"
+    },
+    {
+      "k": "ruleImpacts.defaultQuorumPercentage",
+      "v": "Affects quorum requirements for all non-election votes"
+    },
+    {
+      "k": "ruleImpacts.defaultAcceptanceThreshold",
+      "v": "Affects all new organizational documents. Higher threshold = more votes needed for approval"
+    },
+    {
+      "k": "ruleImpacts.documentProposalPeriodDays",
+      "v": "Affects all new organizational documents. Longer period = more time for proposals and edits"
+    },
+    {
+      "k": "ruleImpacts.paragraphProposalCutoffDays",
+      "v": "Affects all new organizational documents. Earlier cutoff = less time for paragraph proposals"
+    },
+    {
+      "k": "ruleImpacts.thresholdCalculationMethod",
+      "v": "Affects all new organizational documents. \"All Members\" requires higher participation to meet thresholds"
+    },
+    {
+      "k": "ruleImpacts.anonymousVotingEnabled",
+      "v": "Affects all new organizational documents and votes. Anonymous voting protects voter privacy"
+    },
+    {
+      "k": "ruleImpacts.voteChangeAllowed",
+      "v": "Affects all new organizational documents. Flexible voting allows reconsideration, locked voting prevents changes"
+    },
+    {
+      "k": "ruleImpacts.representativeCanCreateVotes",
+      "v": "Affects representative powers and governance workflow"
+    },
+    {
+      "k": "ruleImpacts.representativeCanInviteMembers",
+      "v": "Affects organization growth and membership management"
+    },
+    {
+      "k": "ruleImpacts.representativeCanManageDocuments",
+      "v": "Affects document creation and management permissions"
+    },
+    {
+      "k": "ruleImpacts.representativeApprovalRequired",
+      "v": "Affects voting workflow and representative oversight"
+    },
+    {
+      "k": "ruleImpacts.tamperProofEnabled",
+      "v": "Affects vote security and auditability"
+    },
+    {
+      "k": "ruleImpacts.auditTrailEnabled",
+      "v": "Affects transparency and ability to review organization history"
+    },
+    {
+      "k": "ruleImpacts.membersCanProposeRules",
+      "v": "Affects who can initiate rule changes. Enabling this democratizes rule-making"
+    },
+    {
+      "k": "ruleImpacts.membersCanProposeRulesThreshold",
+      "v": "Affects difficulty of passing member-proposed rule changes. Higher threshold = more votes needed"
+    },
+    {
+      "k": "ruleImpacts.membersCanCreateDocuments",
+      "v": "Affects document creation permissions. Enabling this allows all members to contribute documents"
+    },
+    {
+      "k": "ruleImpacts.membersCanCreateDocumentsThreshold",
+      "v": "Affects difficulty of passing member-created documents. Higher threshold = more votes needed"
+    },
+    {
+      "k": "ruleImpacts.membersCanInitializeElections",
+      "v": "Affects election initiation. Enabling this allows members to trigger elections when needed"
+    },
+    {
+      "k": "ruleImpacts.membersCanInitializeElectionsThreshold",
+      "v": "Affects difficulty of passing member-initiated elections. Higher threshold = more votes needed"
+    },
+    {
+      "k": "ruleImpacts.membersCanInviteMembers",
+      "v": "Affects membership growth. Enabling this allows all members to help grow the organization"
+    },
+    {
+      "k": "ruleImpacts.membersCanInviteMembersThreshold",
+      "v": "Affects difficulty of passing member invitations. Higher threshold = more votes needed"
+    },
+    {
+      "k": "ruleImpacts.membersCanManageRuleProposals",
+      "v": "Affects proposal workflow. Enabling this allows members to manage the full proposal lifecycle"
+    },
+    {
+      "k": "ruleImpacts.membersCanManageRuleProposalsThreshold",
+      "v": "Affects difficulty of passing member-managed proposals. Higher threshold = more votes needed"
+    },
+    {
+      "k": "ruleImpacts.defaultStructureProposalsEnabled",
+      "v": "Affects whether new documents allow structure proposals by default"
+    },
+    {
+      "k": "ruleImpacts.defaultVotingAnonymityLocked",
+      "v": "Affects whether anonymity settings are locked by default on new documents"
+    },
+    {
+      "k": "ruleImpacts.minimumQuorumPercentage",
+      "v": "Sets the floor for participation required before votes can pass"
+    },
+    {
+      "k": "ruleImpacts.minimumApprovalThreshold",
+      "v": "Sets the floor for approval percentage required before votes can pass"
+    },
+    {
+      "k": "ruleImpacts.minimumVotingPeriodHours",
+      "v": "Sets the minimum hours voting must remain open before it can close"
+    },
+    {
+      "k": "ruleImpacts.membersCanInitiateMistrustVote",
+      "v": "Affects whether members can initiate votes to remove representatives"
+    },
+    {
+      "k": "ruleImpacts.mistrustVoteThreshold",
+      "v": "Affects how many PRO votes are required to remove a representative via mistrust vote"
+    },
+    {
+      "k": "ruleImpacts.mistrustVoteQuorumPercentage",
+      "v": "Affects minimum participation required for a valid mistrust vote"
+    },
+    {
+      "k": "bootstrapBanner.title",
+      "v": "Bootstrap Mode Active"
+    },
+    {
+      "k": "bootstrapBanner.description",
+      "v": "Your organization is setting up its governance constitution. Vote on core rules to complete the bootstrap process."
+    },
+    {
+      "k": "bootstrapBanner.progress",
+      "v": "Progress"
+    },
+    {
+      "k": "bootstrapBanner.coreRulesProgress",
+      "v": "{{completed}} of {{total}} core rules"
+    },
+    {
+      "k": "bootstrapBanner.checklistTitle",
+      "v": "Core Rules Checklist:"
+    },
+    {
+      "k": "bootstrapBanner.autoCompletion_one",
+      "v": "Auto-completion in {{count}} day"
+    },
+    {
+      "k": "bootstrapBanner.autoCompletion_other",
+      "v": "Auto-completion in {{count}} days"
+    },
+    {
+      "k": "bootstrapBanner.completeNow",
+      "v": "Complete Bootstrap Now"
+    },
+    {
+      "k": "recoveryBanner.title",
+      "v": "Recovery Mode Active"
+    },
+    {
+      "k": "recoveryBanner.description",
+      "v": "Your organization is in recovery mode. This mode provides additional permissions to help restore normal governance."
+    },
+    {
+      "k": "recoveryBanner.reasonLabel",
+      "v": "Reason:"
+    },
+    {
+      "k": "recoveryBanner.reasons.no_representatives_and_members_cannot_manage",
+      "v": "No representatives and members cannot manage proposals"
+    },
+    {
+      "k": "recoveryBanner.reasons.no_successful_votes_60_days",
+      "v": "No successful votes in 60 days"
+    },
+    {
+      "k": "recoveryBanner.reasons.quorum_consistently_unmet",
+      "v": "Quorum consistently unmet"
+    },
+    {
+      "k": "recoveryBanner.reasons.unknown",
+      "v": "Unknown reason"
+    },
+    {
+      "k": "recoveryBanner.whatYouCanDo",
+      "v": "What you can do:"
+    },
+    {
+      "k": "recoveryBanner.permissions.manageProposals",
+      "v": "All active members can propose and manage rule proposals"
+    },
+    {
+      "k": "recoveryBanner.permissions.createDocuments",
+      "v": "All active members can create documents"
+    },
+    {
+      "k": "recoveryBanner.permissions.initializeElections",
+      "v": "All active members can initialize elections"
+    },
+    {
+      "k": "recoveryBanner.permissions.inviteMembers",
+      "v": "All active members can invite new members"
+    },
+    {
+      "k": "recoveryBanner.autoExitHint",
+      "v": "Recovery mode will automatically exit once normal governance is restored."
+    },
+    {
+      "k": "proposalStatusBadge.draft.label",
+      "v": "Draft"
+    },
+    {
+      "k": "proposalStatusBadge.draft.description",
+      "v": "Proposal is being prepared and has not started voting"
+    },
+    {
+      "k": "proposalStatusBadge.draft.nextSteps",
+      "v": "A representative can start voting when ready"
+    },
+    {
+      "k": "proposalStatusBadge.active.label",
+      "v": "Active"
+    },
+    {
+      "k": "proposalStatusBadge.active.description",
+      "v": "Voting is currently open for this proposal"
+    },
+    {
+      "k": "proposalStatusBadge.active.nextSteps",
+      "v": "Members can vote on this proposal"
+    },
+    {
+      "k": "proposalStatusBadge.approved.label",
+      "v": "Approved"
+    },
+    {
+      "k": "proposalStatusBadge.approved.description",
+      "v": "Proposal has been approved by voters"
+    },
+    {
+      "k": "proposalStatusBadge.approved.nextSteps",
+      "v": "The rule change can now be implemented"
+    },
+    {
+      "k": "proposalStatusBadge.rejected.label",
+      "v": "Rejected"
+    },
+    {
+      "k": "proposalStatusBadge.rejected.description",
+      "v": "Proposal was rejected by voters"
+    },
+    {
+      "k": "proposalStatusBadge.rejected.nextSteps",
+      "v": "This proposal will not be implemented"
+    },
+    {
+      "k": "proposalStatusBadge.expired.label",
+      "v": "Expired"
+    },
+    {
+      "k": "proposalStatusBadge.expired.description",
+      "v": "Voting deadline has passed without reaching threshold"
+    },
+    {
+      "k": "proposalStatusBadge.expired.nextSteps",
+      "v": "This proposal did not meet the required threshold"
+    },
+    {
+      "k": "proposalStatusBadge.implemented.label",
+      "v": "Implemented"
+    },
+    {
+      "k": "proposalStatusBadge.implemented.description",
+      "v": "Proposal has been implemented and rule change is active"
+    },
+    {
+      "k": "proposalStatusBadge.implemented.nextSteps",
+      "v": "The rule change is now in effect"
+    },
+    {
+      "k": "proposalStatusBadge.timeExpired",
+      "v": "Expired"
+    },
+    {
+      "k": "proposalStatusBadge.nextLabel",
+      "v": "Next:"
+    },
+    {
+      "k": "proposalStatusBadge.votingEnds",
+      "v": "Voting ends: {{date}}"
+    },
+    {
+      "k": "electionCreation.titlePlaceholder",
+      "v": "e.g., Representative Election - 2024"
+    },
+    {
+      "k": "electionCreation.descriptionPlaceholder",
+      "v": "Describe the purpose and context of this election"
+    },
+    {
+      "k": "electionCreation.defaultTitle",
+      "v": "Representative Election - {{year}}"
+    },
+    {
+      "k": "electionCreation.defaultDescription",
+      "v": "Election for {{count}} representative positions in {{organizationName}}"
+    },
+    {
+      "k": "electionCreation.title",
+      "v": "Create Representative Election"
+    },
+    {
+      "k": "electionCreation.description",
+      "v": "Call a democratic election for representative positions in {{name}}"
+    },
+    {
+      "k": "electionCreation.electionDetails",
+      "v": "Election Details"
+    },
+    {
+      "k": "electionCreation.electionTitle",
+      "v": "Election Title"
+    },
+    {
+      "k": "electionCreation.descriptionLabel",
+      "v": "Description"
+    },
+    {
+      "k": "electionCreation.positionsAvailable",
+      "v": "Positions Available"
+    },
+    {
+      "k": "electionCreation.positionsHelp",
+      "v": "Number of representatives to elect"
+    },
+    {
+      "k": "electionCreation.termLength",
+      "v": "Term Length (Months)"
+    },
+    {
+      "k": "electionCreation.termLengthHelp",
+      "v": "How long winners will serve"
+    },
+    {
+      "k": "electionCreation.timeline",
+      "v": "Election Timeline"
+    },
+    {
+      "k": "electionCreation.timelineDesc",
+      "v": "Set the schedule for nominations and voting"
+    },
+    {
+      "k": "electionCreation.noticeAlert",
+      "v": "Elections must be announced at least {{days}} days in advance according to governance rules."
+    },
+    {
+      "k": "electionCreation.nominationDeadline",
+      "v": "Nomination Deadline"
+    },
+    {
+      "k": "electionCreation.nominationDeadlineHelp",
+      "v": "Last day for candidates to nominate themselves"
+    },
+    {
+      "k": "electionCreation.votingStarts",
+      "v": "Voting Starts"
+    },
+    {
+      "k": "electionCreation.votingStartsHelp",
+      "v": "When voting opens to members"
+    },
+    {
+      "k": "electionCreation.votingEnds",
+      "v": "Voting Ends"
+    },
+    {
+      "k": "electionCreation.votingEndsHelp",
+      "v": "When voting closes"
+    },
+    {
+      "k": "electionCreation.summary",
+      "v": "Election Summary"
+    },
+    {
+      "k": "electionCreation.organization",
+      "v": "Organization:"
+    },
+    {
+      "k": "electionCreation.positions",
+      "v": "Positions:"
+    },
+    {
+      "k": "electionCreation.votingMethod",
+      "v": "Voting Method:"
+    },
+    {
+      "k": "electionCreation.quorumRequired",
+      "v": "Quorum Required:"
+    },
+    {
+      "k": "electionCreation.anonymousVoting",
+      "v": "Anonymous Voting:"
+    },
+    {
+      "k": "electionCreation.termLengthLabel",
+      "v": "Term Length:"
+    },
+    {
+      "k": "electionCreation.creating",
+      "v": "Creating Election..."
+    },
+    {
+      "k": "electionCreation.create",
+      "v": "Create Election"
+    },
+    {
+      "k": "electionCreation.validation.titleRequired",
+      "v": "Election title is required"
+    },
+    {
+      "k": "electionCreation.validation.descriptionRequired",
+      "v": "Election description is required"
+    },
+    {
+      "k": "electionCreation.validation.positionsMin",
+      "v": "At least 1 position must be available"
+    },
+    {
+      "k": "electionCreation.validation.termMin",
+      "v": "Term must be at least 1 month"
+    },
+    {
+      "k": "electionCreation.validation.startFuture",
+      "v": "Voting start date must be in the future"
+    },
+    {
+      "k": "electionCreation.validation.endAfterStart",
+      "v": "Voting end date must be after start date"
+    },
+    {
+      "k": "electionCreation.validation.nominationBeforeStart",
+      "v": "Nomination deadline must be before voting starts"
+    },
+    {
+      "k": "candidateNomination.nominationStatementPlaceholder",
+      "v": "Why do you want to serve as a representative? What experience or qualifications do you bring?"
+    },
+    {
+      "k": "candidateNomination.qualificationsPlaceholder",
+      "v": "List any relevant experience, skills, or background..."
+    },
+    {
+      "k": "candidateNomination.experiencePlaceholder",
+      "v": "Describe any leadership, governance, or organizational experience..."
+    },
+    {
+      "k": "candidateNomination.title",
+      "v": "Candidate Nominations - {{title}}"
+    },
+    {
+      "k": "candidateNomination.description",
+      "v": "Organization members can nominate themselves to run for representative positions"
+    },
+    {
+      "k": "candidateNomination.accessDenied",
+      "v": "Access Denied"
+    },
+    {
+      "k": "candidateNomination.accessDeniedDesc",
+      "v": "Only active organization members can participate in nominations."
+    },
+    {
+      "k": "candidateNomination.yourStatus",
+      "v": "Your Nomination Status"
+    },
+    {
+      "k": "candidateNomination.deadline",
+      "v": "Deadline: {{date}}"
+    },
+    {
+      "k": "candidateNomination.youAreNominated",
+      "v": "You are nominated!"
+    },
+    {
+      "k": "candidateNomination.status",
+      "v": "Status:"
+    },
+    {
+      "k": "candidateNomination.withdraw",
+      "v": "Withdraw"
+    },
+    {
+      "k": "candidateNomination.yourStatement",
+      "v": "Your Nomination Statement"
+    },
+    {
+      "k": "candidateNomination.readyToRun",
+      "v": "Ready to Run?"
+    },
+    {
+      "k": "candidateNomination.readyToRunDesc",
+      "v": "Nominate yourself for a representative position in this election."
+    },
+    {
+      "k": "candidateNomination.submitNomination",
+      "v": "Submit Nomination"
+    },
+    {
+      "k": "candidateNomination.alreadyNominated",
+      "v": "Already Nominated"
+    },
+    {
+      "k": "candidateNomination.nominationsClosed",
+      "v": "Nominations Closed"
+    },
+    {
+      "k": "candidateNomination.alreadySubmitted",
+      "v": "You have already submitted a nomination for this election."
+    },
+    {
+      "k": "candidateNomination.periodEnded",
+      "v": "The nomination period for this election has ended."
+    },
+    {
+      "k": "candidateNomination.submitYourNomination",
+      "v": "Submit Your Nomination"
+    },
+    {
+      "k": "candidateNomination.submitYourNominationDesc",
+      "v": "Tell the organization why you want to serve as a representative"
+    },
+    {
+      "k": "candidateNomination.statementLabel",
+      "v": "Nomination Statement *"
+    },
+    {
+      "k": "candidateNomination.statementHelp",
+      "v": "This will be visible to all organization members voting in the election."
+    },
+    {
+      "k": "candidateNomination.qualificationsLabel",
+      "v": "Qualifications (Optional)"
+    },
+    {
+      "k": "candidateNomination.experienceLabel",
+      "v": "Relevant Experience (Optional)"
+    },
+    {
+      "k": "candidateNomination.reviewNotice",
+      "v": "Your nomination will be reviewed by current representatives before being approved. You will be notified of the decision."
+    },
+    {
+      "k": "candidateNomination.allCandidates",
+      "v": "All Candidates ({{count}})"
+    },
+    {
+      "k": "candidateNomination.allCandidatesDesc",
+      "v": "Candidates nominated for {{count}} representative positions"
+    },
+    {
+      "k": "candidateNomination.noCandidates",
+      "v": "No candidates have been nominated yet."
+    },
+    {
+      "k": "candidateNomination.beFirst",
+      "v": "Be the first to submit your nomination!"
+    },
+    {
+      "k": "candidateNomination.nominatedOn",
+      "v": "Nominated {{date}}"
+    },
+    {
+      "k": "candidateNomination.approvedForElection",
+      "v": "Approved for election"
+    },
+    {
+      "k": "candidateNomination.submitting",
+      "v": "Submitting..."
+    },
+    {
+      "k": "candidateNomination.statusApproved",
+      "v": "Approved"
+    },
+    {
+      "k": "candidateNomination.statusPending",
+      "v": "Pending Review"
+    },
+    {
+      "k": "candidateNomination.statusRejected",
+      "v": "Rejected"
+    },
+    {
+      "k": "candidateNomination.statusUnknown",
+      "v": "Unknown"
+    },
+    {
+      "k": "ruleLabels.representativeTermMonths.label",
+      "v": "Representative Term Length"
+    },
+    {
+      "k": "ruleLabels.representativeTermMonths.description",
+      "v": "How long representatives serve before needing re-election"
+    },
+    {
+      "k": "ruleLabels.representativeTermLimits.label",
+      "v": "Representative Term Limits"
+    },
+    {
+      "k": "ruleLabels.representativeTermLimits.description",
+      "v": "Maximum consecutive terms (empty = no limit)"
+    },
+    {
+      "k": "ruleLabels.electionVotingMethod.label",
+      "v": "Election Voting Method"
+    },
+    {
+      "k": "ruleLabels.electionVotingMethod.description",
+      "v": "How votes are counted in elections"
+    },
+    {
+      "k": "ruleLabels.electionQuorumPercentage.label",
+      "v": "Election Quorum"
+    },
+    {
+      "k": "ruleLabels.electionQuorumPercentage.description",
+      "v": "Minimum participation required for valid election"
+    },
+    {
+      "k": "ruleLabels.electionNoticeDays.label",
+      "v": "Election Notice Period"
+    },
+    {
+      "k": "ruleLabels.electionNoticeDays.description",
+      "v": "Days notice before election starts"
+    },
+    {
+      "k": "ruleLabels.defaultVotingDeadlineHours.label",
+      "v": "Default Voting Deadline"
+    },
+    {
+      "k": "ruleLabels.defaultVotingDeadlineHours.description",
+      "v": "Default time for votes to remain open"
+    },
+    {
+      "k": "ruleLabels.defaultQuorumPercentage.label",
+      "v": "Default Quorum"
+    },
+    {
+      "k": "ruleLabels.defaultQuorumPercentage.description",
+      "v": "Minimum participation for non-election votes"
+    },
+    {
+      "k": "ruleLabels.defaultAcceptanceThreshold.label",
+      "v": "Document Acceptance Threshold"
+    },
+    {
+      "k": "ruleLabels.defaultAcceptanceThreshold.description",
+      "v": "Percentage of PRO votes required for document proposals to be automatically accepted (1-100%)"
+    },
+    {
+      "k": "ruleLabels.documentProposalPeriodDays.label",
+      "v": "Document Proposal Period"
+    },
+    {
+      "k": "ruleLabels.documentProposalPeriodDays.description",
+      "v": "Number of days documents remain in proposal status before voting begins"
+    },
+    {
+      "k": "ruleLabels.paragraphProposalCutoffDays.label",
+      "v": "Paragraph Proposal Cutoff"
+    },
+    {
+      "k": "ruleLabels.paragraphProposalCutoffDays.description",
+      "v": "Days before proposal deadline when new paragraph proposals are locked"
+    },
+    {
+      "k": "ruleLabels.thresholdCalculationMethod.label",
+      "v": "Threshold Calculation Method"
+    },
+    {
+      "k": "ruleLabels.thresholdCalculationMethod.description",
+      "v": "How approval percentage is calculated: \"All Votes\" uses percentage of votes cast, \"All Members\" uses percentage of all eligible members"
+    },
+    {
+      "k": "ruleLabels.anonymousVotingEnabled.label",
+      "v": "Anonymous Voting"
+    },
+    {
+      "k": "ruleLabels.anonymousVotingEnabled.description",
+      "v": "Hide voter identities by default"
+    },
+    {
+      "k": "ruleLabels.voteChangeAllowed.label",
+      "v": "Vote Changes Allowed"
+    },
+    {
+      "k": "ruleLabels.voteChangeAllowed.description",
+      "v": "Allow members to change their votes"
+    },
+    {
+      "k": "ruleLabels.representativeCanCreateVotes.label",
+      "v": "Representatives Can Create Votes"
+    },
+    {
+      "k": "ruleLabels.representativeCanCreateVotes.description",
+      "v": "Representatives can create votes for organizational decisions"
+    },
+    {
+      "k": "ruleLabels.representativeCanInviteMembers.label",
+      "v": "Representatives Can Invite Members"
+    },
+    {
+      "k": "ruleLabels.representativeCanInviteMembers.description",
+      "v": "Representatives can send membership invitations"
+    },
+    {
+      "k": "ruleLabels.representativeCanManageDocuments.label",
+      "v": "Representatives Can Manage Documents"
+    },
+    {
+      "k": "ruleLabels.representativeCanManageDocuments.description",
+      "v": "Representatives can create and manage organization documents"
+    },
+    {
+      "k": "ruleLabels.representativeApprovalRequired.label",
+      "v": "Representative Approval Required"
+    },
+    {
+      "k": "ruleLabels.representativeApprovalRequired.description",
+      "v": "Representative approval needed for major actions"
+    },
+    {
+      "k": "ruleLabels.tamperProofEnabled.label",
+      "v": "Tamper-Proof Records"
+    },
+    {
+      "k": "ruleLabels.tamperProofEnabled.description",
+      "v": "Cryptographically verify vote integrity"
+    },
+    {
+      "k": "ruleLabels.auditTrailEnabled.label",
+      "v": "Audit Trail"
+    },
+    {
+      "k": "ruleLabels.auditTrailEnabled.description",
+      "v": "Log all governance actions"
+    },
+    {
+      "k": "ruleLabels.membersCanProposeRules.label",
+      "v": "Members Can Propose Rules"
+    },
+    {
+      "k": "ruleLabels.membersCanProposeRules.description",
+      "v": "Allow members to propose rule changes"
+    },
+    {
+      "k": "ruleLabels.membersCanCreateDocuments.label",
+      "v": "Members Can Create Documents"
+    },
+    {
+      "k": "ruleLabels.membersCanCreateDocuments.description",
+      "v": "Allow members to create documents"
+    },
+    {
+      "k": "ruleLabels.membersCanInitializeElections.label",
+      "v": "Members Can Initialize Elections"
+    },
+    {
+      "k": "ruleLabels.membersCanInitializeElections.description",
+      "v": "Allow members to start elections"
+    },
+    {
+      "k": "ruleLabels.membersCanInviteMembers.label",
+      "v": "Members Can Invite Members"
+    },
+    {
+      "k": "ruleLabels.membersCanInviteMembers.description",
+      "v": "Allow members to invite others"
+    },
+    {
+      "k": "ruleLabels.membersCanManageRuleProposals.label",
+      "v": "Members Can Manage Rule Proposals"
+    },
+    {
+      "k": "ruleLabels.membersCanManageRuleProposals.description",
+      "v": "Allow members to manage rule proposals"
+    },
+    {
+      "k": "ruleLabels.membersCanProposeRulesThreshold.label",
+      "v": "Members Can Propose Rules Threshold"
+    },
+    {
+      "k": "ruleLabels.membersCanProposeRulesThreshold.description",
+      "v": "Minimum approval percentage (0-100%) required when members propose rule changes"
+    },
+    {
+      "k": "ruleLabels.membersCanCreateDocumentsThreshold.label",
+      "v": "Members Can Create Documents Threshold"
+    },
+    {
+      "k": "ruleLabels.membersCanCreateDocumentsThreshold.description",
+      "v": "Minimum approval percentage (0-100%) required when members create documents"
+    },
+    {
+      "k": "ruleLabels.membersCanInitializeElectionsThreshold.label",
+      "v": "Members Can Initialize Elections Threshold"
+    },
+    {
+      "k": "ruleLabels.membersCanInitializeElectionsThreshold.description",
+      "v": "Minimum approval percentage (0-100%) required when members initialize elections"
+    },
+    {
+      "k": "ruleLabels.membersCanInviteMembersThreshold.label",
+      "v": "Members Can Invite Members Threshold"
+    },
+    {
+      "k": "ruleLabels.membersCanInviteMembersThreshold.description",
+      "v": "Minimum approval percentage (0-100%) required when members invite new members"
+    },
+    {
+      "k": "ruleLabels.membersCanManageRuleProposalsThreshold.label",
+      "v": "Members Can Manage Rule Proposals Threshold"
+    },
+    {
+      "k": "ruleLabels.membersCanManageRuleProposalsThreshold.description",
+      "v": "Minimum approval percentage (0-100%) required when members manage rule proposals"
+    },
+    {
+      "k": "ruleLabels.defaultStructureProposalsEnabled.label",
+      "v": "Default Structure Proposals Enabled"
+    },
+    {
+      "k": "ruleLabels.defaultStructureProposalsEnabled.description",
+      "v": "Whether new documents allow structure proposals by default"
+    },
+    {
+      "k": "ruleLabels.defaultVotingAnonymityLocked.label",
+      "v": "Default Voting Anonymity Locked"
+    },
+    {
+      "k": "ruleLabels.defaultVotingAnonymityLocked.description",
+      "v": "Whether anonymity settings are locked by default on new documents"
+    },
+    {
+      "k": "ruleLabels.minimumQuorumPercentage.label",
+      "v": "Minimum Quorum"
+    },
+    {
+      "k": "ruleLabels.minimumQuorumPercentage.description",
+      "v": "Floor for participation required before votes can pass (organization-configurable)"
+    },
+    {
+      "k": "ruleLabels.minimumApprovalThreshold.label",
+      "v": "Minimum Approval Threshold"
+    },
+    {
+      "k": "ruleLabels.minimumApprovalThreshold.description",
+      "v": "Floor for approval percentage required before votes can pass (organization-configurable)"
+    },
+    {
+      "k": "ruleLabels.minimumVotingPeriodHours.label",
+      "v": "Minimum Voting Period"
+    },
+    {
+      "k": "ruleLabels.minimumVotingPeriodHours.description",
+      "v": "Minimum hours voting must remain open before it can close"
+    },
+    {
+      "k": "ruleLabels.membersCanInitiateMistrustVote.label",
+      "v": "Members Can Initiate Mistrust Vote"
+    },
+    {
+      "k": "ruleLabels.membersCanInitiateMistrustVote.description",
+      "v": "Allow members to initiate votes to remove representatives"
+    },
+    {
+      "k": "ruleLabels.mistrustVoteThreshold.label",
+      "v": "Mistrust Vote Threshold"
+    },
+    {
+      "k": "ruleLabels.mistrustVoteThreshold.description",
+      "v": "Percentage of PRO votes required to remove a representative via mistrust vote"
+    },
+    {
+      "k": "ruleLabels.mistrustVoteQuorumPercentage.label",
+      "v": "Mistrust Vote Quorum"
+    },
+    {
+      "k": "ruleLabels.mistrustVoteQuorumPercentage.description",
+      "v": "Minimum participation required for a valid mistrust vote"
+    },
+    {
+      "k": "values.notSet",
+      "v": "Not set"
+    },
+    {
+      "k": "values.enabled",
+      "v": "Enabled"
+    },
+    {
+      "k": "values.disabled",
+      "v": "Disabled"
+    },
+    {
+      "k": "values.yes",
+      "v": "Yes"
+    },
+    {
+      "k": "values.noLimit",
+      "v": "No limit"
+    },
+    {
+      "k": "values.simpleMajority",
+      "v": "Simple majority"
+    },
+    {
+      "k": "values.enterNumber",
+      "v": "Enter number"
+    },
+    {
+      "k": "values.enterValue",
+      "v": "Enter value"
+    },
+    {
+      "k": "values.allVotes",
+      "v": "All Votes (percentage of votes cast)"
+    },
+    {
+      "k": "values.allMembers",
+      "v": "All Members (percentage of all members)"
+    },
+    {
+      "k": "values.unknownCandidate",
+      "v": "Unknown Candidate"
+    },
+    {
+      "k": "values.unknownRepresentative",
+      "v": "Unknown Representative"
+    },
+    {
+      "k": "values.you",
+      "v": "(You)"
+    },
+    {
+      "k": "values.months",
+      "v": "months"
+    },
+    {
+      "k": "votingMethods.simple_majority",
+      "v": "Simple Majority"
+    },
+    {
+      "k": "votingMethods.simple_majorityDesc",
+      "v": "First candidate with >50% wins"
+    },
+    {
+      "k": "votingMethods.ranked_choice",
+      "v": "Ranked Choice"
+    },
+    {
+      "k": "votingMethods.ranked_choiceDesc",
+      "v": "Voters rank candidates in order of preference"
+    },
+    {
+      "k": "votingMethods.approval",
+      "v": "Approval Voting"
+    },
+    {
+      "k": "votingMethods.approvalDesc",
+      "v": "Voters approve any number of candidates"
+    },
+    {
+      "k": "confirmDialog.warning",
+      "v": "Warning"
+    },
+    {
+      "k": "confirmDialog.conflict",
+      "v": "Conflict"
+    },
+    {
+      "k": "confirmDialog.proceed",
+      "v": "Proceed"
+    },
+    {
+      "k": "bootstrapCompletionDialog.title",
+      "v": "Complete Bootstrap Mode"
+    },
+    {
+      "k": "bootstrapCompletionDialog.description",
+      "v": "Manually complete the bootstrap process for your organization."
+    },
+    {
+      "k": "bootstrapCompletionDialog.whatThisMeans",
+      "v": "What this means:"
+    },
+    {
+      "k": "bootstrapCompletionDialog.disableBootstrap",
+      "v": "Bootstrap mode will be disabled"
+    },
+    {
+      "k": "bootstrapCompletionDialog.lockRules",
+      "v": "Current governance rules will be locked in"
+    },
+    {
+      "k": "bootstrapCompletionDialog.normalRules",
+      "v": "Normal governance rules will apply going forward"
+    },
+    {
+      "k": "bootstrapCompletionDialog.cannotUndo",
+      "v": "This action cannot be undone"
+    },
+    {
+      "k": "bootstrapCompletionDialog.confirmLabel",
+      "v": "I understand that completing bootstrap will lock in the current governance rules"
+    },
+    {
+      "k": "bootstrapCompletionDialog.completing",
+      "v": "Completing..."
+    },
+    {
+      "k": "bootstrapCompletionDialog.complete",
+      "v": "Complete Bootstrap"
+    },
+    {
+      "k": "bootstrapCompletionDialog.failedToComplete",
+      "v": "Failed to complete bootstrap mode"
+    },
+    {
+      "k": "representativeRejectDialog.reasonLabel",
+      "v": "Reason for declining"
+    },
+    {
+      "k": "representativeRejectDialog.reasonPlaceholder",
+      "v": "Explain why you are declining \"{{itemName}}\"..."
+    },
+    {
+      "k": "representativeRejectDialog.charCount",
+      "v": "{{count}}/2000 characters. The proposer will receive this reason via email."
+    },
+    {
+      "k": "representativeRejectDialog.reasonRequired",
+      "v": "Please provide a reason for declining."
+    },
+    {
+      "k": "representativeRejectDialog.reasonTooLong",
+      "v": "Reason must be 2000 characters or less."
+    },
+    {
+      "k": "representativeRejectDialog.failedToDecline",
+      "v": "Failed to decline. Please try again."
+    },
+    {
+      "k": "representativeRejectDialog.declining",
+      "v": "Declining..."
+    },
+    {
+      "k": "completeVoteButton.label",
+      "v": "Complete vote"
+    },
+    {
+      "k": "completeVoteButton.title",
+      "v": "Complete vote"
+    },
+    {
+      "k": "completeVoteButton.defaultDescription",
+      "v": "This will close voting and apply the outcome based on current votes."
+    },
+    {
+      "k": "completeVoteButton.completing",
+      "v": "Completing..."
+    },
+    {
+      "k": "completeVoteButton.tooltipReady",
+      "v": "Close voting and apply outcome based on current votes"
+    },
+    {
+      "k": "completeVoteButton.tooltipQuorum",
+      "v": "Participation threshold must be met before completing the vote"
+    },
+    {
+      "k": "rulesPanel.title",
+      "v": "Governance Rules"
+    },
+    {
+      "k": "rulesPanel.subtitle",
+      "v": "Review rules, vote on proposals, and manage the organization's governance settings."
+    },
+    {
+      "k": "rulesPanel.searchPlaceholder",
+      "v": "Search rules by name or description..."
+    },
+    {
+      "k": "rulesPanel.allCategories",
+      "v": "All Categories"
+    },
+    {
+      "k": "rulesPanel.tabOverview",
+      "v": "Overview"
+    },
+    {
+      "k": "rulesPanel.tabAllRules",
+      "v": "All Rules"
+    },
+    {
+      "k": "rulesPanel.tabProposals",
+      "v": "Proposals"
+    },
+    {
+      "k": "rulesPanel.overviewAlert",
+      "v": "Click on any rule to propose a change or vote on active proposals. Changes require member approval to take effect."
+    },
+    {
+      "k": "rulesPanel.rulesNeedingAttention",
+      "v": "Rules Needing Attention"
+    },
+    {
+      "k": "rulesPanel.activeAndPendingCount",
+      "v": "{{active}} active and {{pending}} pending proposals"
+    },
+    {
+      "k": "rulesPanel.pendingApproval",
+      "v": "Pending Approval"
+    },
+    {
+      "k": "rulesPanel.proposedBy",
+      "v": "Proposed by {{name}}"
+    },
+    {
+      "k": "rulesPanel.starting",
+      "v": "Starting..."
+    },
+    {
+      "k": "rulesPanel.startVoting",
+      "v": "Start Voting"
+    },
+    {
+      "k": "rulesPanel.decline",
+      "v": "Decline"
+    },
+    {
+      "k": "rulesPanel.importantRules",
+      "v": "Important Rules"
+    },
+    {
+      "k": "rulesPanel.importantRulesDesc",
+      "v": "Critical and frequently-used governance settings"
+    },
+    {
+      "k": "rulesPanel.noRulesMatch",
+      "v": "No rules match your search criteria. Try adjusting your filters."
+    },
+    {
+      "k": "rulesPanel.noRulesFound",
+      "v": "No governance rules found."
+    },
+    {
+      "k": "rulesPanel.activeProposals",
+      "v": "Active Proposals ({{count}})"
+    },
+    {
+      "k": "rulesPanel.activeProposalsDesc",
+      "v": "Rule changes currently being voted on by members"
+    },
+    {
+      "k": "rulesPanel.votingEnds",
+      "v": "Voting ends {{date}}"
+    },
+    {
+      "k": "rulesPanel.pendingProposals",
+      "v": "Pending Proposals ({{count}})"
+    },
+    {
+      "k": "rulesPanel.pendingProposalsDescRep",
+      "v": "Rule change proposals awaiting your approval to start voting"
+    },
+    {
+      "k": "rulesPanel.pendingProposalsDescMember",
+      "v": "Rule change proposals awaiting representative approval"
+    },
+    {
+      "k": "rulesPanel.myProposals",
+      "v": "My Proposals ({{count}})"
+    },
+    {
+      "k": "rulesPanel.myProposalsDesc",
+      "v": "Proposals you have created"
+    },
+    {
+      "k": "rulesPanel.awaitingApproval",
+      "v": "Awaiting representative approval to start voting"
+    },
+    {
+      "k": "rulesPanel.withdrawing",
+      "v": "Withdrawing..."
+    },
+    {
+      "k": "rulesPanel.withdraw",
+      "v": "Withdraw"
+    },
+    {
+      "k": "rulesPanel.viewVote",
+      "v": "View/Vote"
+    },
+    {
+      "k": "rulesPanel.emptyProposals",
+      "v": "No proposals found. Create a proposal by clicking on a rule in the \"All Rules\" tab."
+    },
+    {
+      "k": "rulesPanel.rulesNotConfigured",
+      "v": "Governance rules have not been configured for this organization yet."
+    },
+    {
+      "k": "rulesPanel.statusPermissionsTitle",
+      "v": "Your Status & Permissions"
+    },
+    {
+      "k": "rulesPanel.representative",
+      "v": "Representative"
+    },
+    {
+      "k": "rulesPanel.activeMember",
+      "v": "Active Member"
+    },
+    {
+      "k": "rulesPanel.limitedAccess",
+      "v": "Limited Access"
+    },
+    {
+      "k": "rulesPanel.canProposeRules",
+      "v": "Can propose rule changes"
+    },
+    {
+      "k": "rulesPanel.canManageProposals",
+      "v": "Can manage rule proposals"
+    },
+    {
+      "k": "rulesPanel.needActiveMember",
+      "v": "You need to be an active member to propose rules."
+    },
+    {
+      "k": "rulesPanel.onlyRepresentatives",
+      "v": "Only representatives can propose rules in this organization."
+    },
+    {
+      "k": "rulesPanel.critical",
+      "v": "Critical"
+    },
+    {
+      "k": "rulesPanel.currentValue",
+      "v": "Current: {{value}}"
+    },
+    {
+      "k": "rulesPanel.voteNow",
+      "v": "Vote Now"
+    },
+    {
+      "k": "rulesPanel.propose",
+      "v": "Propose"
+    },
+    {
+      "k": "rulesPanel.categories.Elections",
+      "v": "Elections"
+    },
+    {
+      "k": "rulesPanel.categories.Voting",
+      "v": "Voting"
+    },
+    {
+      "k": "rulesPanel.categories.Permissions",
+      "v": "Permissions"
+    },
+    {
+      "k": "rulesPanel.categories.Security",
+      "v": "Security"
+    },
+    {
+      "k": "rulesPanel.categories.Safeguards",
+      "v": "Safeguards"
+    },
+    {
+      "k": "rulesPanel.categoryDescriptions.Elections",
+      "v": "Configure how representatives are elected and serve"
+    },
+    {
+      "k": "rulesPanel.categoryDescriptions.Voting",
+      "v": "Default settings for all organization votes and decisions"
+    },
+    {
+      "k": "rulesPanel.categoryDescriptions.Permissions",
+      "v": "What actions representatives can perform"
+    },
+    {
+      "k": "rulesPanel.categoryDescriptions.Security",
+      "v": "Security and compliance settings"
+    },
+    {
+      "k": "rulesPanel.categoryDescriptions.Safeguards",
+      "v": "Organization-configurable floors for quorum, approval, and voting duration"
+    },
+    {
+      "k": "governanceRulesDialog.title",
+      "v": "Governance Rules Configuration"
+    },
+    {
+      "k": "governanceRulesDialog.description",
+      "v": "Configure democratic governance rules for {{name}}. These rules apply to all organization documents and elections."
+    },
+    {
+      "k": "governanceRulesDialog.tabElections",
+      "v": "Elections"
+    },
+    {
+      "k": "governanceRulesDialog.tabVoting",
+      "v": "Voting"
+    },
+    {
+      "k": "governanceRulesDialog.tabPermissions",
+      "v": "Permissions"
+    },
+    {
+      "k": "governanceRulesDialog.representativeElections",
+      "v": "Representative Elections"
+    },
+    {
+      "k": "governanceRulesDialog.representativeElectionsDesc",
+      "v": "Configure how representatives are elected and serve"
+    },
+    {
+      "k": "governanceRulesDialog.termLengthMonths",
+      "v": "Term Length (Months)"
+    },
+    {
+      "k": "governanceRulesDialog.termLengthHelp",
+      "v": "How long representatives serve before needing re-election"
+    },
+    {
+      "k": "governanceRulesDialog.termLimits",
+      "v": "Term Limits"
+    },
+    {
+      "k": "governanceRulesDialog.termLimitsHelp",
+      "v": "Maximum consecutive terms (leave empty for no limit)"
+    },
+    {
+      "k": "governanceRulesDialog.votingMethod",
+      "v": "Voting Method"
+    },
+    {
+      "k": "governanceRulesDialog.electionQuorum",
+      "v": "Election Quorum (%)"
+    },
+    {
+      "k": "governanceRulesDialog.electionQuorumHelp",
+      "v": "Minimum participation required for valid election"
+    },
+    {
+      "k": "governanceRulesDialog.noticePeriod",
+      "v": "Notice Period (Days)"
+    },
+    {
+      "k": "governanceRulesDialog.noticePeriodHelp",
+      "v": "Days notice before election starts"
+    },
+    {
+      "k": "governanceRulesDialog.generalVotingRules",
+      "v": "General Voting Rules"
+    },
+    {
+      "k": "governanceRulesDialog.generalVotingRulesDesc",
+      "v": "Default settings for all organization votes and decisions"
+    },
+    {
+      "k": "governanceRulesDialog.defaultDeadline",
+      "v": "Default Deadline (Hours)"
+    },
+    {
+      "k": "governanceRulesDialog.defaultDeadlineHelp",
+      "v": "Default time for votes to remain open"
+    },
+    {
+      "k": "governanceRulesDialog.defaultQuorum",
+      "v": "Default Quorum (%)"
+    },
+    {
+      "k": "governanceRulesDialog.defaultQuorumHelp",
+      "v": "Minimum participation for non-election votes"
+    },
+    {
+      "k": "governanceRulesDialog.anonymousVoting",
+      "v": "Anonymous Voting"
+    },
+    {
+      "k": "governanceRulesDialog.anonymousVotingHelp",
+      "v": "Hide voter identities by default"
+    },
+    {
+      "k": "governanceRulesDialog.voteChangesAllowed",
+      "v": "Vote Changes Allowed"
+    },
+    {
+      "k": "governanceRulesDialog.voteChangesAllowedHelp",
+      "v": "Allow members to change their votes"
+    },
+    {
+      "k": "governanceRulesDialog.securityCompliance",
+      "v": "Security & Compliance"
+    },
+    {
+      "k": "governanceRulesDialog.tamperProof",
+      "v": "Tamper-Proof Records"
+    },
+    {
+      "k": "governanceRulesDialog.tamperProofHelp",
+      "v": "Cryptographically verify vote integrity"
+    },
+    {
+      "k": "governanceRulesDialog.auditTrail",
+      "v": "Audit Trail"
+    },
+    {
+      "k": "governanceRulesDialog.auditTrailHelp",
+      "v": "Log all governance actions"
+    },
+    {
+      "k": "governanceRulesDialog.representativePermissions",
+      "v": "Representative Permissions"
+    },
+    {
+      "k": "governanceRulesDialog.representativePermissionsDesc",
+      "v": "What actions representatives can perform"
+    },
+    {
+      "k": "governanceRulesDialog.createVotes",
+      "v": "Create Votes"
+    },
+    {
+      "k": "governanceRulesDialog.createVotesHelp",
+      "v": "Representatives can create votes for organizational decisions"
+    },
+    {
+      "k": "governanceRulesDialog.inviteMembers",
+      "v": "Invite Members"
+    },
+    {
+      "k": "governanceRulesDialog.inviteMembersHelp",
+      "v": "Representatives can send membership invitations"
+    },
+    {
+      "k": "governanceRulesDialog.manageDocuments",
+      "v": "Manage Documents"
+    },
+    {
+      "k": "governanceRulesDialog.manageDocumentsHelp",
+      "v": "Representatives can create and manage organization documents"
+    },
+    {
+      "k": "governanceRulesDialog.approvalRequired",
+      "v": "Approval Required"
+    },
+    {
+      "k": "governanceRulesDialog.approvalRequiredHelp",
+      "v": "Representative approval needed for major actions"
+    },
+    {
+      "k": "governanceRulesDialog.importantNotice",
+      "v": "Important:"
+    },
+    {
+      "k": "governanceRulesDialog.importantNoticeBody",
+      "v": "Changes to governance rules affect all current and future organization documents and elections. Consider the impact on ongoing processes."
+    },
+    {
+      "k": "governanceRulesDialog.saving",
+      "v": "Saving..."
+    },
+    {
+      "k": "governanceRulesDialog.save",
+      "v": "Save Governance Rules"
+    },
+    {
+      "k": "governanceRulesDialog.failedToUpdate",
+      "v": "Failed to update governance rules"
+    },
+    {
+      "k": "ruleProposalDialog.title",
+      "v": "Propose Governance Rule Change"
+    },
+    {
+      "k": "ruleProposalDialog.descriptionRep",
+      "v": "Propose a change to {{name}}'s governance rules. As a representative, your proposal can be voted on directly."
+    },
+    {
+      "k": "ruleProposalDialog.descriptionMember",
+      "v": "Propose a change to {{name}}'s governance rules. As a member, your proposal will need representative approval before voting begins."
+    },
+    {
+      "k": "ruleProposalDialog.descriptionSuffix",
+      "v": "All proposals are voted on by organization members."
+    },
+    {
+      "k": "ruleProposalDialog.proposalDetails",
+      "v": "Proposal Details"
+    },
+    {
+      "k": "ruleProposalDialog.proposalDetailsDesc",
+      "v": "Describe the rule change you want to propose"
+    },
+    {
+      "k": "ruleProposalDialog.proposalTitle",
+      "v": "Proposal Title *"
+    },
+    {
+      "k": "ruleProposalDialog.titlePlaceholder",
+      "v": "e.g., Extend representative terms to 18 months"
+    },
+    {
+      "k": "ruleProposalDialog.descriptionLabel",
+      "v": "Description *"
+    },
+    {
+      "k": "ruleProposalDialog.descriptionPlaceholder",
+      "v": "Explain the reasoning and expected impact of this change"
+    },
+    {
+      "k": "ruleProposalDialog.ruleToChange",
+      "v": "Rule to Change *"
+    },
+    {
+      "k": "ruleProposalDialog.selectRule",
+      "v": "Select a governance rule"
+    },
+    {
+      "k": "ruleProposalDialog.currentValue",
+      "v": "Current value:"
+    },
+    {
+      "k": "ruleProposalDialog.whatRuleDoes",
+      "v": "What this rule does:"
+    },
+    {
+      "k": "ruleProposalDialog.impact",
+      "v": "Impact:"
+    },
+    {
+      "k": "ruleProposalDialog.proposedChange",
+      "v": "Proposed Change"
+    },
+    {
+      "k": "ruleProposalDialog.multipleChoice",
+      "v": "Multiple choice"
+    },
+    {
+      "k": "ruleProposalDialog.multipleChoiceDesc",
+      "v": "Present multiple options for members to choose from"
+    },
+    {
+      "k": "ruleProposalDialog.singleValueDesc",
+      "v": "Propose a single new value for this rule"
+    },
+    {
+      "k": "ruleProposalDialog.proposedLabel",
+      "v": "Proposed {{label}} *"
+    },
+    {
+      "k": "ruleProposalDialog.newValue",
+      "v": "New Value *"
+    },
+    {
+      "k": "ruleProposalDialog.options",
+      "v": "Options"
+    },
+    {
+      "k": "ruleProposalDialog.addOption",
+      "v": "Add Option"
+    },
+    {
+      "k": "ruleProposalDialog.optionTitle",
+      "v": "Option Title *"
+    },
+    {
+      "k": "ruleProposalDialog.optionTitlePlaceholder",
+      "v": "Option {{number}} title"
+    },
+    {
+      "k": "ruleProposalDialog.optionDescription",
+      "v": "Description (optional)"
+    },
+    {
+      "k": "ruleProposalDialog.optionDescriptionPlaceholder",
+      "v": "Describe this option"
+    },
+    {
+      "k": "ruleProposalDialog.optionValue",
+      "v": "Value"
+    },
+    {
+      "k": "ruleProposalDialog.noOptions",
+      "v": "No options added yet"
+    },
+    {
+      "k": "ruleProposalDialog.noOptionsHint",
+      "v": "Click \"Add Option\" to create voting choices"
+    },
+    {
+      "k": "ruleProposalDialog.important",
+      "v": "Important:"
+    },
+    {
+      "k": "ruleProposalDialog.voteNotice",
+      "v": "This proposal will be voted on by all active organization members. If approved, the governance rule will be immediately updated."
+    },
+    {
+      "k": "ruleProposalDialog.documentImpact",
+      "v": "Document Impact:"
+    },
+    {
+      "k": "ruleProposalDialog.documentImpactBody",
+      "v": "This rule affects all new organizational documents created after the change. Existing documents will keep their current settings."
+    },
+    {
+      "k": "ruleProposalDialog.considerImpact",
+      "v": "Consider the impact on ongoing elections, votes, and organization operations."
+    },
+    {
+      "k": "ruleProposalDialog.creating",
+      "v": "Creating Proposal..."
+    },
+    {
+      "k": "ruleProposalDialog.create",
+      "v": "Create Proposal"
+    },
+    {
+      "k": "ruleProposalDialog.validation.titleRequired",
+      "v": "Proposal title is required"
+    },
+    {
+      "k": "ruleProposalDialog.validation.descriptionRequired",
+      "v": "Proposal description is required"
+    },
+    {
+      "k": "ruleProposalDialog.validation.ruleRequired",
+      "v": "Rule field must be selected"
+    },
+    {
+      "k": "ruleProposalDialog.validation.optionsMin",
+      "v": "At least 2 options are required for multiple choice"
+    },
+    {
+      "k": "ruleProposalDialog.validation.optionTitlesRequired",
+      "v": "All option titles are required"
+    },
+    {
+      "k": "ruleProposalDialog.validation.valueRequired",
+      "v": "Proposed value is required"
+    },
+    {
+      "k": "ruleProposalDialog.validation.thresholdRange",
+      "v": "Acceptance threshold must be between 1 and 100"
+    },
+    {
+      "k": "ruleProposalDialog.validation.proposalPeriod",
+      "v": "Document proposal period must be a positive integer (days)"
+    },
+    {
+      "k": "ruleProposalDialog.validation.cutoffRange",
+      "v": "Paragraph proposal cutoff must be an integer between 0 and 365 days"
+    },
+    {
+      "k": "ruleProposalDialog.validation.thresholdMethod",
+      "v": "Threshold calculation method must be either \"all_votes\" or \"all_members\""
+    },
+    {
+      "k": "failedToRecordVote",
+      "v": "Failed to record vote"
+    },
+    {
+      "k": "ruleMetadata.currentValue",
+      "v": "Current Value"
+    },
+    {
+      "k": "ruleMetadata.proposedValue",
+      "v": "Proposed Value"
+    },
+    {
+      "k": "ruleHistory.title",
+      "v": "Rule Change History"
+    },
+    {
+      "k": "ruleHistory.description",
+      "v": "View the history of all governance rule changes for this organization"
+    },
+    {
+      "k": "ruleHistory.filterPlaceholder",
+      "v": "Filter by rule"
+    },
+    {
+      "k": "ruleHistory.allRules",
+      "v": "All Rules"
+    },
+    {
+      "k": "ruleHistory.empty",
+      "v": "No rule changes have been made yet. Rule changes will appear here once proposals are approved."
+    },
+    {
+      "k": "ruleHistory.previousValue",
+      "v": "Previous Value:"
+    },
+    {
+      "k": "ruleHistory.newValue",
+      "v": "New Value:"
+    },
+    {
+      "k": "ruleHistory.changedBy",
+      "v": "Changed by {{name}}"
+    },
+    {
+      "k": "ruleHistory.viaProposal",
+      "v": "(via proposal)"
+    },
+    {
+      "k": "ruleHistory.pagination",
+      "v": "Showing {{from}} to {{to}} of {{total}} entries"
+    },
+    {
+      "k": "proposalDetailsDialog.types.rule",
+      "v": "Rule Proposal"
+    },
+    {
+      "k": "proposalDetailsDialog.types.structure",
+      "v": "Structure Proposal"
+    },
+    {
+      "k": "proposalDetailsDialog.types.tree",
+      "v": "Tree Proposal"
+    },
+    {
+      "k": "proposalDetailsDialog.types.deletion",
+      "v": "Deletion Proposal"
+    },
+    {
+      "k": "proposalDetailsDialog.fallbackTitle",
+      "v": "Proposal #{{id}}"
+    },
+    {
+      "k": "proposalDetailsDialog.tabOverview",
+      "v": "Overview"
+    },
+    {
+      "k": "proposalDetailsDialog.tabVotes",
+      "v": "Votes ({{count}})"
+    },
+    {
+      "k": "proposalDetailsDialog.tabDetails",
+      "v": "Details"
+    },
+    {
+      "k": "proposalDetailsDialog.statusProgress",
+      "v": "Status & Progress"
+    },
+    {
+      "k": "proposalDetailsDialog.approvalRate",
+      "v": "Approval Rate"
+    },
+    {
+      "k": "proposalDetailsDialog.quorum",
+      "v": "Quorum"
+    },
+    {
+      "k": "proposalDetailsDialog.quorumMet",
+      "v": "Met"
+    },
+    {
+      "k": "proposalDetailsDialog.quorumPending",
+      "v": "Pending"
+    },
+    {
+      "k": "proposalDetailsDialog.timeline",
+      "v": "Timeline"
+    },
+    {
+      "k": "proposalDetailsDialog.created",
+      "v": "Created:"
+    },
+    {
+      "k": "proposalDetailsDialog.deadline",
+      "v": "Deadline:"
+    },
+    {
+      "k": "proposalDetailsDialog.createdBy",
+      "v": "Created by:"
+    },
+    {
+      "k": "proposalDetailsDialog.expired",
+      "v": "Expired"
+    },
+    {
+      "k": "proposalDetailsDialog.ruleChange",
+      "v": "Rule Change"
+    },
+    {
+      "k": "proposalDetailsDialog.field",
+      "v": "Field:"
+    },
+    {
+      "k": "proposalDetailsDialog.current",
+      "v": "Current:"
+    },
+    {
+      "k": "proposalDetailsDialog.proposed",
+      "v": "Proposed:"
+    },
+    {
+      "k": "proposalDetailsDialog.options",
+      "v": "Options:"
+    },
+    {
+      "k": "proposalDetailsDialog.votesCount",
+      "v": "({{count}} votes)"
+    },
+    {
+      "k": "proposalDetailsDialog.structureOperations",
+      "v": "Structure Operations"
+    },
+    {
+      "k": "proposalDetailsDialog.target",
+      "v": "Target: {{id}}"
+    },
+    {
+      "k": "proposalDetailsDialog.treeOperation",
+      "v": "Tree Operation"
+    },
+    {
+      "k": "proposalDetailsDialog.operation",
+      "v": "Operation:"
+    },
+    {
+      "k": "proposalDetailsDialog.reason",
+      "v": "Reason:"
+    },
+    {
+      "k": "proposalDetailsDialog.documentInfo",
+      "v": "Document Information"
+    },
+    {
+      "k": "proposalDetailsDialog.document",
+      "v": "Document:"
+    },
+    {
+      "k": "proposalDetailsDialog.description",
+      "v": "Description:"
+    },
+    {
+      "k": "proposalDetailsDialog.allVotes",
+      "v": "All Votes"
+    },
+    {
+      "k": "proposalDetailsDialog.anonymous",
+      "v": "Anonymous"
+    },
+    {
+      "k": "proposalDetailsDialog.noVotesYet",
+      "v": "No votes yet"
+    },
+    {
+      "k": "proposalDetailsDialog.additionalDetails",
+      "v": "Additional Details"
+    },
+    {
+      "k": "proposalDetailsDialog.proposalId",
+      "v": "Proposal ID:"
+    },
+    {
+      "k": "proposalDetailsDialog.documentId",
+      "v": "Document ID:"
+    },
+    {
+      "k": "proposalDetailsDialog.organizationId",
+      "v": "Organization ID:"
+    },
+    {
+      "k": "proposalDetailsDialog.status",
+      "v": "Status:"
+    }
+  ],
+  "activity": [
+    {
+      "k": "item.document",
+      "v": "Document"
+    },
+    {
+      "k": "item.meetingDecision",
+      "v": "Meeting decision"
+    },
+    {
+      "k": "item.openMeeting",
+      "v": "Open meeting"
+    },
+    {
+      "k": "item.viewMinutes",
+      "v": "View minutes"
+    },
+    {
+      "k": "item.meetingColon",
+      "v": "Meeting: {{title}}"
+    },
+    {
+      "k": "item.treeProposalReasonSuffix",
+      "v": " — {{reason}}"
+    },
+    {
+      "k": "item.vote",
+      "v": "Vote"
+    },
+    {
+      "k": "outcome.recorded",
+      "v": "Recorded"
+    }
+  ],
+  "errors": [
+    {
+      "k": "reportForm.titleLabel",
+      "v": "Title *"
+    },
+    {
+      "k": "reportForm.descriptionLabel",
+      "v": "Description *"
+    },
+    {
+      "k": "reportForm.titlePlaceholder",
+      "v": "Brief description of the issue"
+    },
+    {
+      "k": "reportForm.descriptionPlaceholder",
+      "v": "What happened? What were you trying to do? What did you expect to happen?"
+    },
+    {
+      "k": "reportForm.consolePlaceholder",
+      "v": "Any relevant console errors or logs"
+    },
+    {
+      "k": "reportForm.consoleLabel",
+      "v": "Console Logs (optional)"
+    },
+    {
+      "k": "reportForm.addLogs",
+      "v": "Add Logs"
+    }
+  ],
+  "admin": [
+    {
+      "k": "stats.documents",
+      "v": "Documents"
+    },
+    {
+      "k": "createOrg.descriptionLabel",
+      "v": "Description"
+    },
+    {
+      "k": "organizations.documents",
+      "v": "Documents"
+    },
+    {
+      "k": "organizations.actions",
+      "v": "Actions"
+    },
+    {
+      "k": "organizations.active",
+      "v": "Active"
+    },
+    {
+      "k": "organizations.inactive",
+      "v": "Inactive"
+    },
+    {
+      "k": "users.actions",
+      "v": "Actions"
+    },
+    {
+      "k": "reports.date",
+      "v": "Date"
+    },
+    {
+      "k": "reports.descriptionLabel",
+      "v": "Description"
+    }
+  ],
+  "onboarding": []
+}

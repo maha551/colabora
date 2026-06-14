@@ -1,0 +1,20 @@
+# Legacy Fly.io deploy — superseded by hetzner-deploy.yml
+# Kept for reference; trigger manually only if needed.
+
+name: Fly Deploy (legacy)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy app (Fly — legacy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fly deploy disabled
+        run: |
+          echo "Fly.io deployment is retired for this project."
+          echo "Use Hetzner Deploy workflow or: npm run deploy:hetzner"
+          echo "See docs/active/HETZNER_DEPLOYMENT.md"
+          exit 1

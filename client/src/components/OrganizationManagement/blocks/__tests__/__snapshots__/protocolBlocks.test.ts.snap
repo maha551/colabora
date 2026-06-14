@@ -1,0 +1,24 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`protocolUi tokens matches snapshot to prevent accidental regressions 1`] = `
+{
+  "actionRow": "border-t border-border/60 pt-3",
+  "blockActionBtn": "min-h-9 shrink-0 px-3 py-1.5 text-xs gap-1.5 [&_svg]:size-3.5",
+  "blockActionBtnDelete": "border-border text-muted-foreground hover:border-destructive/45 hover:bg-destructive/10 hover:text-destructive focus-visible:ring-destructive/25",
+  "blockActionsRow": "flex flex-wrap items-center justify-start gap-2 border-t border-border/60 pt-3",
+  "blockActionsStack": "flex flex-col gap-3 border-t border-border/60 pt-3",
+  "body": "text-sm leading-relaxed text-muted-foreground",
+  "bodySubtitle": "text-sm text-muted-foreground",
+  "bodyTitle": "text-sm font-semibold leading-snug text-foreground",
+  "decisionSequenceDeck": "relative pt-1 pb-2 md:pt-2 md:pb-3",
+  "decisionSequenceDeckStacked": "pb-5 md:pb-6",
+  "decisionSequenceFrontCardMin": "min-h-[min(40vh,17.5rem)] md:min-h-[min(34vh,16rem)]",
+  "decisionSequenceFrontCardMinDecision": "min-h-[min(48vh,22rem)] md:min-h-[min(42vh,19rem)]",
+  "eyebrow": "text-xs font-semibold uppercase tracking-wider text-muted-foreground",
+  "meta": "text-xs text-muted-foreground",
+  "surface": "rounded-xl border border-border/60 bg-card shadow-sm",
+  "surfaceMuted": "rounded-xl border border-border/60 bg-card/60",
+  "timelineDot": "absolute -left-[5px] top-5 z-[1] h-2.5 w-2.5 rounded-full border-2 border-background",
+  "timelineRail": "relative before:absolute before:left-4 before:top-0 before:bottom-0 before:w-px before:bg-border/60",
+}
+`;

@@ -1,0 +1,39 @@
+# Pilot overlay — 10–50 users, single app server (no load balancer)
+#
+# IMPORTANT: Kamal replaces env.secret lists when merging destinations (does not append).
+# All secrets required at runtime must be listed below, not only in deploy.yml.
+#
+# Usage:
+#   kamal setup -d pilot
+#   kamal deploy -d pilot
+#   npm run deploy:hetzner:pilot
+
+deploy_timeout: 120
+
+servers:
+  web:
+    hosts:
+      - 162.55.164.223 # app-1 public IP (Kamal SSH from your PC)
+
+proxy:
+  host: colabora.local-correspondent.com
+
+env:
+  clear:
+    PG_POOL_MIN: "2"
+    PG_POOL_MAX: "15"
+    RATE_LIMIT_MAX_REQUESTS: "500"
+    TERMS_VERSION: "2026-06-11"
+    PRIVACY_VERSION: "2026-06-11"
+    RESEND_FROM_NAME: "Colabora"
+  secret:
+    - DATABASE_URL
+    - REDIS_URL
+    - JWT_SECRET
+    - FRONTEND_URL
+    - ALLOWED_ORIGINS
+    - RESEND_API_KEY
+    - RESEND_FROM_EMAIL
+    - CONTACT_EMAIL
+    - SITE_OPERATOR_NAME
+    - SITE_OPERATOR_ADDRESS

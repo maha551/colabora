@@ -1,0 +1,22 @@
+{
+  "generic": "Something went wrong",
+  "reportIssue": "Report an issue",
+  "tryAgain": "Please try again",
+  "errorBoundary": {
+    "title": "Something went wrong",
+    "description": "An unexpected error occurred. This might be a temporary issue.",
+    "tryAgain": "Try Again",
+    "reloadPage": "Reload Page",
+    "reportError": "Report Error",
+    "stackTrace": "Stack trace"
+  },
+  "reportForm": {
+    "titleLabel": "Title *",
+    "descriptionLabel": "Description *",
+    "titlePlaceholder": "Brief description of the issue",
+    "descriptionPlaceholder": "What happened? What were you trying to do? What did you expect to happen?",
+    "consolePlaceholder": "Any relevant console errors or logs",
+    "consoleLabel": "Console Logs (optional)",
+    "addLogs": "Add Logs"
+  }
+}

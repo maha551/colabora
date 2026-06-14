@@ -1,0 +1,612 @@
+/* Font imports before Tailwind so font-family is available when theme applies (Bunny Fonts – privacy-friendly) */
+@import url('https://fonts.bunny.net/css?family=Inter:400,500,600,700|Work+Sans:400,500,600,700|Poppins:400,500,600,700|Merriweather:400,700&display=swap');
+
+@import "tailwindcss";
+
+/* Ensure design-system spacing utilities are generated (used via SPACING.page.y in designSystem.ts) */
+@source inline("{md:,}pt-{2,3}");
+@source inline("{md:,}pb-{4,5}");
+
+/**
+ * COLOR THEME SYSTEM - GitHub-Inspired Design
+ * 
+ * ARCHITECTURE:
+ * - Single source of truth: All theme colors are defined here in :root and .dark
+ * - Tailwind processes this file via @import "tailwindcss" above
+ * - CSS Variables: All components use var(--variable-name) for colors
+ * - OKLCH color space: Used for perceptual uniformity and better color manipulation
+ * 
+ * MAINTAINABILITY:
+ * To change the color palette:
+ * 1. Update values in :root (light theme) and .dark (dark theme) below
+ * 2. All components automatically inherit changes via CSS variables
+ * 3. No need to search/replace across component files
+ * 
+ * COLOR HIERARCHY (Light Theme):
+ * - Background: Page canvas (~L 0.968, GitHub #f6f8fa feel)
+ * - Sidebar: App chrome / nav rail (~L 0.975, between canvas and card)
+ * - Card: Elevated surfaces (pure white, ~L 1.0)
+ * - Muted: Inset rows and hover fills (~L 0.942)
+ * - Accent/Secondary: Interactive hover (~L 0.955)
+ * - Target 2–4% OKLCH lightness steps between tiers for depth
+ * - Border: Subtle dividers
+ * 
+ * COLOR HIERARCHY (Dark Theme):
+ * - Background: Very dark base (#0d1117 equivalent)
+ * - Card: Slightly lighter elevated elements (#161b22 equivalent)
+ * - Muted/Accent: Progressive lightness for depth
+ * 
+ * STATUS COLORS:
+ * - Success: GitHub green (#1a7f37 light, #3fb950 dark)
+ * - Error: GitHub red (#cf222e light, #f85149 dark)
+ * - Info: GitHub blue (#0969da light, #58a6ff dark)
+ * 
+ * VOTE COLORS:
+ * - Pro: Green for approve/yes votes
+ * - Neutral: Blue for neutral/abstain votes
+ * - Contra: Red for reject/no votes
+ * - Not Voted: Gray for members who haven't voted
+ * 
+ * All vote colors are defined as tokens for easy maintenance.
+ */
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --font-size: 16px;
+  /* Font families (Bunny Fonts loaded above) */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  /* Typography scale (used by base layer and components) */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  /* Light theme: GitHub-inspired canvas + white elevated surfaces (2–4% L steps) */
+  --background: oklch(0.968 0.004 250); /* Page canvas (#f6f8fa feel) */
+  --foreground: oklch(0.15 0.005 250); /* Slightly cooler dark text */
+  /* Card/Body elements are brighter (pure white) to stand out from background */
+  --card: oklch(1 0 0); /* #ffffff - pure white for elevated elements */
+  --card-foreground: oklch(0.15 0.005 250);
+  /* Popover matches card for consistency */
+  --popover: oklch(1 0 0); /* Pure white, same as card */
+  --popover-foreground: oklch(0.15 0.005 250);
+  --primary: #030213;
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.955 0.003 250); /* Interactive secondary surfaces */
+  --secondary-foreground: #030213;
+  /* Muted backgrounds for inset rows, hover fills, table headers */
+  --muted: oklch(0.942 0.003 250);
+  --muted-foreground: oklch(0.45 0.005 250); /* GitHub's muted text (#6e7781 equivalent) */
+  /* Accent between muted and card for interactive hover */
+  --accent: oklch(0.955 0.003 250);
+  --accent-foreground: #030213;
+  --destructive: #cf222e; /* GitHub red */
+  --destructive-foreground: #ffffff;
+  --border: oklch(0.90 0.005 250); /* Subtle border on gray canvas */
+  --input: transparent;
+  /* Input background is pure white for clear distinction */
+  --input-background: oklch(1 0 0); /* Pure white */
+  --switch-background: oklch(0.88 0.005 250); /* Match border color for GitHub style */
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --ring: oklch(0.60 0.15 250); /* Blue-tinted focus ring (matches primary brand) */
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  /* Base corner radius — tiers in designSystem.RADIUS (sm/md/lg/xl derive from this) */
+  --radius: 0.375rem; /* 6px */
+  /* Sidebar: nav rail / chrome band between canvas and card */
+  --sidebar: oklch(0.975 0.003 250);
+  --sidebar-foreground: oklch(0.15 0.005 250);
+  --sidebar-primary: #030213;
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.955 0.003 250); /* Matches accent */
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.90 0.005 250); /* Match main border color */
+  --sidebar-ring: oklch(0.60 0.15 250); /* Match ring */
+  /* Overlay color for modals/dialogs */
+  --overlay: oklch(0 0 0 / 0.5); /* Semi-transparent black */
+  /* Status colors - GitHub-inspired */
+  --color-amber-200: oklch(0.924 0.12 95.746);
+  --color-amber-500: oklch(0.769 0.188 70.08);
+  --color-amber-600: oklch(0.666 0.179 58.318);
+  --color-green-200: oklch(0.882 0.12 149.214);
+  --color-green-500: #1a7f37; /* GitHub green */
+  --color-green-600: oklch(0.627 0.194 149.214);
+  --color-blue-200: oklch(0.882 0.059 254.128);
+  --color-blue-500: #0969da; /* GitHub blue */
+  --color-blue-600: oklch(0.546 0.245 262.881);
+  --color-red-100: oklch(0.95 0.05 25);
+  --color-red-200: oklch(0.85 0.1 25);
+  --color-red-800: #cf222e; /* GitHub red */
+  --color-white: #ffffff; /* Pure white */
+  /* Badge semantic colors (designSystem.COLORS.statusBadge / status / statusBg reference these for theme and dark mode) */
+  --badge-info-bg: oklch(0.95 0.05 250);
+  --badge-info-text: oklch(0.35 0.10 250);
+  --badge-success-bg: oklch(0.95 0.05 149);
+  --badge-success-text: oklch(0.35 0.10 149);
+  --badge-warning-bg: oklch(0.95 0.05 70);
+  --badge-warning-text: oklch(0.35 0.10 70);
+  --badge-purple-bg: oklch(0.95 0.05 300);
+  --badge-purple-text: oklch(0.35 0.10 300);
+  /* Vote colors for progress bars */
+  --vote-pro: #22c55e; /* Green for approve/yes */
+  --vote-neutral: #3b82f6; /* Blue for neutral/abstain */
+  --vote-contra: #ef4444; /* Red for reject/no */
+  --vote-not-voted: #9ca3af; /* Gray for not voted */
+  --vote-background: #e5e7eb; /* Light gray background for progress bar */
+  /* Footer colors */
+  --footer-bg: #2d2416; /* Dark earthy brown */
+  --footer-text: #f5f1e8; /* Light cream text */
+  --footer-text-muted: rgba(245, 241, 232, 0.6); /* Slightly more transparent */
+  
+  /* Status colors - Light theme */
+  --status-draft-bg: oklch(0.96 0.002 250);
+  --status-draft-text: oklch(0.45 0.005 250);
+  --status-draft-border: oklch(0.88 0.005 250);
+  --status-draft-solid: oklch(0.50 0 0);
+  
+  --status-pending-bg: oklch(0.95 0.05 70);
+  --status-pending-text: oklch(0.35 0.10 70);
+  --status-pending-border: oklch(0.85 0.08 70);
+  --status-pending-solid: oklch(0.769 0.188 70.08);
+  
+  --status-proposed-bg: oklch(0.95 0.05 60);
+  --status-proposed-text: oklch(0.35 0.10 60);
+  --status-proposed-border: oklch(0.85 0.08 60);
+  --status-proposed-solid: oklch(0.75 0.15 60);
+  
+  --status-active-bg: oklch(0.95 0.05 250);
+  --status-active-text: oklch(0.35 0.10 250);
+  --status-active-border: oklch(0.85 0.08 250);
+  --status-active-solid: oklch(0.623 0.214 259.815);
+  
+  --status-approved-bg: oklch(0.95 0.05 149);
+  --status-approved-text: oklch(0.35 0.10 149);
+  --status-approved-border: oklch(0.85 0.08 149);
+  --status-approved-solid: oklch(0.627 0.194 149.214);
+  
+  --status-passed-bg: oklch(0.95 0.05 149);
+  --status-passed-text: oklch(0.35 0.10 149);
+  --status-passed-border: oklch(0.85 0.08 149);
+  --status-passed-solid: oklch(0.627 0.194 149.214);
+  
+  --status-rejected-bg: oklch(0.95 0.05 25);
+  --status-rejected-text: oklch(0.35 0.10 25);
+  --status-rejected-border: oklch(0.85 0.08 25);
+  --status-rejected-solid: oklch(0.55 0.20 25);
+  
+  --status-failed-bg: oklch(0.95 0.05 25);
+  --status-failed-text: oklch(0.35 0.10 25);
+  --status-failed-border: oklch(0.85 0.08 25);
+  --status-failed-solid: oklch(0.55 0.20 25);
+  
+  --status-expired-bg: oklch(0.96 0.002 250);
+  --status-expired-text: oklch(0.45 0.005 250);
+  --status-expired-border: oklch(0.88 0.005 250);
+  --status-expired-solid: oklch(0.40 0 0);
+  
+  --status-completed-bg: oklch(0.96 0.002 250);
+  --status-completed-text: oklch(0.45 0.005 250);
+  --status-completed-border: oklch(0.88 0.005 250);
+  --status-completed-solid: oklch(0.50 0 0);
+  
+  --status-implemented-bg: oklch(0.95 0.05 300);
+  --status-implemented-text: oklch(0.35 0.10 300);
+  --status-implemented-border: oklch(0.85 0.08 300);
+  --status-implemented-solid: oklch(0.60 0.15 300);
+  
+  --status-applied-bg: oklch(0.95 0.05 160);
+  --status-applied-text: oklch(0.35 0.10 160);
+  --status-applied-border: oklch(0.85 0.08 160);
+  --status-applied-solid: oklch(0.65 0.18 160);
+  
+  /* Activity colors - Light theme */
+  --activity-vote-cast-bg: oklch(0.95 0.05 300);
+  --activity-vote-cast-text: oklch(0.35 0.10 300);
+  --activity-vote-cast-border: oklch(0.85 0.08 300);
+  --activity-vote-cast-solid: oklch(0.60 0.15 300);
+  
+  --activity-comment-added-bg: oklch(0.95 0.05 40);
+  --activity-comment-added-text: oklch(0.35 0.10 40);
+  --activity-comment-added-border: oklch(0.85 0.08 40);
+  --activity-comment-added-solid: oklch(0.65 0.15 40);
+  
+  --activity-structure-proposal-created-bg: oklch(0.95 0.05 300);
+  --activity-structure-proposal-created-text: oklch(0.35 0.10 300);
+  --activity-structure-proposal-created-border: oklch(0.85 0.08 300);
+  --activity-structure-proposal-created-solid: oklch(0.60 0.15 300);
+  
+  --activity-structure-proposal-vote-bg: oklch(0.95 0.05 270);
+  --activity-structure-proposal-vote-text: oklch(0.35 0.10 270);
+  --activity-structure-proposal-vote-border: oklch(0.85 0.08 270);
+  --activity-structure-proposal-vote-solid: oklch(0.60 0.15 270);
+
+  /* Organization folder/register tab nav — warm manila inactive dividers (light mode) */
+  --org-folder-tab-inactive: oklch(0.94 0.03 85);
+  --org-folder-tab-inactive-border: oklch(0.86 0.04 85);
+  --org-folder-tab-highlight: oklch(0.98 0.02 85);
+  --org-folder-shelf: var(--border);
+  --org-folder-accent: var(--primary);
+}
+
+.dark {
+  /* Dark theme: GitHub-inspired - cool grays, not pure black */
+  --background: oklch(0.18 0.01 250); /* GitHub's dark background (#0d1117 equivalent) with cool tint */
+  --foreground: oklch(0.92 0.002 250); /* Cool-toned light text */
+  /* Card/Body elements are slightly lighter for elevation */
+  --card: oklch(0.22 0.01 250); /* Slightly lighter (#161b22 equivalent) */
+  --card-foreground: oklch(0.92 0.002 250);
+  /* Popover matches card for consistency */
+  --popover: oklch(0.22 0.01 250);
+  --popover-foreground: oklch(0.92 0.002 250);
+  --primary: oklch(0.95 0 0);
+  --primary-foreground: oklch(0.15 0 0);
+  /* Secondary matches accent */
+  --secondary: oklch(0.25 0.01 250); /* Match accent */
+  --secondary-foreground: oklch(0.92 0.002 250);
+  /* Muted backgrounds are darker than card for subtle differentiation */
+  --muted: oklch(0.20 0.01 250); /* Darker than card for subtlety */
+  --muted-foreground: oklch(0.60 0.002 250); /* GitHub's muted text (#8b949e equivalent) */
+  /* Accent is GitHub's hover state */
+  --accent: oklch(0.25 0.01 250); /* GitHub's hover state (#21262d) */
+  --accent-foreground: oklch(0.92 0.002 250);
+  --destructive: oklch(0.55 0.20 25); /* GitHub red (#f85149 equivalent) */
+  --destructive-foreground: oklch(0.92 0.002 250);
+  --border: oklch(0.30 0.01 250); /* GitHub's border (#30363d) */
+  --input: oklch(0.25 0.01 250); /* Matches secondary */
+  /* Input background matches card */
+  --input-background: oklch(0.22 0.01 250); /* Match card */
+  --ring: oklch(0.65 0.20 250); /* Blue focus ring */
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  /* Sidebar is slightly different from main background */
+  --sidebar: oklch(0.20 0.01 250); /* Slightly different from background */
+  --sidebar-foreground: oklch(0.92 0.002 250);
+  --sidebar-primary: oklch(0.65 0.20 250); /* GitHub blue */
+  --sidebar-primary-foreground: oklch(0.92 0.002 250);
+  --sidebar-accent: oklch(0.25 0.01 250); /* Matches accent */
+  --sidebar-accent-foreground: oklch(0.92 0.002 250);
+  --sidebar-border: oklch(0.30 0.01 250); /* Matches border */
+  --sidebar-ring: oklch(0.65 0.20 250); /* Matches ring */
+  /* Overlay color - darker in dark mode for better contrast */
+  --overlay: oklch(0 0 0 / 0.7); /* Darker overlay in dark mode */
+  /* Status colors - GitHub dark mode */
+  --color-amber-200: oklch(0.4 0.12 95.746);
+  --color-amber-500: oklch(0.5 0.15 70.08);
+  --color-amber-600: oklch(0.55 0.15 58.318);
+  --color-green-200: oklch(0.4 0.12 149.214);
+  --color-green-500: oklch(0.55 0.15 149.214); /* #3fb950 equivalent */
+  --color-green-600: oklch(0.55 0.15 149.214);
+  --color-blue-200: oklch(0.4 0.08 254.128);
+  --color-blue-500: oklch(0.65 0.20 250); /* #58a6ff equivalent */
+  --color-blue-600: oklch(0.55 0.18 262.881);
+  --color-red-100: oklch(0.3 0.08 25);
+  --color-red-200: oklch(0.35 0.12 25);
+  --color-red-800: oklch(0.55 0.20 25); /* #f85149 equivalent */
+  /* Badge semantic colors (dark mode) */
+  --badge-info-bg: oklch(0.25 0.05 250);
+  --badge-info-text: oklch(0.75 0.10 250);
+  --badge-success-bg: oklch(0.25 0.05 149);
+  --badge-success-text: oklch(0.75 0.10 149);
+  --badge-warning-bg: oklch(0.25 0.05 70);
+  --badge-warning-text: oklch(0.75 0.10 70);
+  --badge-purple-bg: oklch(0.25 0.05 300);
+  --badge-purple-text: oklch(0.75 0.10 300);
+  /* Vote colors for progress bars (dark mode) */
+  --vote-pro: #22c55e; /* Green for approve/yes */
+  --vote-neutral: #3b82f6; /* Blue for neutral/abstain */
+  --vote-contra: #ef4444; /* Red for reject/no */
+  --vote-not-voted: oklch(0.50 0 0); /* Lighter gray for dark mode */
+  --vote-background: oklch(0.25 0.01 250); /* Dark gray background */
+  /* Footer colors (dark mode - same as light for consistency) */
+  --footer-bg: #2d2416; /* Dark earthy brown */
+  --footer-text: #f5f1e8; /* Light cream text */
+  --footer-text-muted: rgba(245, 241, 232, 0.6); /* Slightly more transparent */
+  
+  /* Status colors - Dark theme */
+  --status-draft-bg: oklch(0.25 0.01 250);
+  --status-draft-text: oklch(0.65 0.002 250);
+  --status-draft-border: oklch(0.30 0.01 250);
+  --status-draft-solid: oklch(0.50 0 0);
+  
+  --status-pending-bg: oklch(0.25 0.05 70);
+  --status-pending-text: oklch(0.75 0.10 70);
+  --status-pending-border: oklch(0.30 0.05 70);
+  --status-pending-solid: oklch(0.5 0.15 70.08);
+  
+  --status-proposed-bg: oklch(0.25 0.05 60);
+  --status-proposed-text: oklch(0.75 0.10 60);
+  --status-proposed-border: oklch(0.30 0.05 60);
+  --status-proposed-solid: oklch(0.5 0.15 60);
+  
+  --status-active-bg: oklch(0.25 0.05 250);
+  --status-active-text: oklch(0.75 0.10 250);
+  --status-active-border: oklch(0.30 0.05 250);
+  --status-active-solid: oklch(0.65 0.20 250);
+  
+  --status-approved-bg: oklch(0.25 0.05 149);
+  --status-approved-text: oklch(0.75 0.10 149);
+  --status-approved-border: oklch(0.30 0.05 149);
+  --status-approved-solid: oklch(0.55 0.15 149.214);
+  
+  --status-passed-bg: oklch(0.25 0.05 149);
+  --status-passed-text: oklch(0.75 0.10 149);
+  --status-passed-border: oklch(0.30 0.05 149);
+  --status-passed-solid: oklch(0.55 0.15 149.214);
+  
+  --status-rejected-bg: oklch(0.25 0.05 25);
+  --status-rejected-text: oklch(0.75 0.10 25);
+  --status-rejected-border: oklch(0.30 0.05 25);
+  --status-rejected-solid: oklch(0.55 0.20 25);
+  
+  --status-failed-bg: oklch(0.25 0.05 25);
+  --status-failed-text: oklch(0.75 0.10 25);
+  --status-failed-border: oklch(0.30 0.05 25);
+  --status-failed-solid: oklch(0.55 0.20 25);
+  
+  --status-expired-bg: oklch(0.25 0.01 250);
+  --status-expired-text: oklch(0.60 0.002 250);
+  --status-expired-border: oklch(0.30 0.01 250);
+  --status-expired-solid: oklch(0.40 0 0);
+  
+  --status-completed-bg: oklch(0.25 0.01 250);
+  --status-completed-text: oklch(0.65 0.002 250);
+  --status-completed-border: oklch(0.30 0.01 250);
+  --status-completed-solid: oklch(0.50 0 0);
+  
+  --status-implemented-bg: oklch(0.25 0.05 300);
+  --status-implemented-text: oklch(0.75 0.10 300);
+  --status-implemented-border: oklch(0.30 0.05 300);
+  --status-implemented-solid: oklch(0.60 0.15 300);
+  
+  --status-applied-bg: oklch(0.25 0.05 160);
+  --status-applied-text: oklch(0.75 0.10 160);
+  --status-applied-border: oklch(0.30 0.05 160);
+  --status-applied-solid: oklch(0.65 0.18 160);
+  
+  /* Activity colors - Dark theme */
+  --activity-vote-cast-bg: oklch(0.25 0.05 300);
+  --activity-vote-cast-text: oklch(0.75 0.10 300);
+  --activity-vote-cast-border: oklch(0.30 0.05 300);
+  --activity-vote-cast-solid: oklch(0.60 0.15 300);
+  
+  --activity-comment-added-bg: oklch(0.25 0.05 40);
+  --activity-comment-added-text: oklch(0.75 0.10 40);
+  --activity-comment-added-border: oklch(0.30 0.05 40);
+  --activity-comment-added-solid: oklch(0.65 0.15 40);
+  
+  --activity-structure-proposal-created-bg: oklch(0.25 0.05 300);
+  --activity-structure-proposal-created-text: oklch(0.75 0.10 300);
+  --activity-structure-proposal-created-border: oklch(0.30 0.05 300);
+  --activity-structure-proposal-created-solid: oklch(0.60 0.15 300);
+  
+  --activity-structure-proposal-vote-bg: oklch(0.25 0.05 270);
+  --activity-structure-proposal-vote-text: oklch(0.75 0.10 270);
+  --activity-structure-proposal-vote-border: oklch(0.30 0.05 270);
+  --activity-structure-proposal-vote-solid: oklch(0.60 0.15 270);
+
+  /* Organization folder/register tab nav — muted inactive dividers (dark mode) */
+  --org-folder-tab-inactive: var(--muted);
+  --org-folder-tab-inactive-border: var(--border);
+  --org-folder-tab-highlight: oklch(0.24 0.01 250);
+  --org-folder-shelf: var(--border);
+  --org-folder-accent: var(--primary);
+}
+
+@theme inline {
+  /* Default font so utilities and base use Inter */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  /* Spacing scale (Tailwind: 1 unit = 0.25rem) */
+  --spacing: 0.25rem;
+  /* Typography scale for utilities (align with :root --text-*) */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-amber-200: var(--color-amber-200);
+  --color-amber-500: var(--color-amber-500);
+  --color-amber-600: var(--color-amber-600);
+  --color-green-200: var(--color-green-200);
+  --color-green-500: var(--color-green-500);
+  --color-green-600: var(--color-green-600);
+  --color-blue-200: var(--color-blue-200);
+  --color-blue-500: var(--color-blue-500);
+  --color-blue-600: var(--color-blue-600);
+  --color-red-100: var(--color-red-100);
+  --color-red-200: var(--color-red-200);
+  --color-red-800: var(--color-red-800);
+  --color-overlay: var(--overlay);
+  --color-badge-info-bg: var(--badge-info-bg);
+  --color-badge-info-text: var(--badge-info-text);
+  --color-badge-success-bg: var(--badge-success-bg);
+  --color-badge-success-text: var(--badge-success-text);
+  --color-badge-warning-bg: var(--badge-warning-bg);
+  --color-badge-warning-text: var(--badge-warning-text);
+  --color-badge-purple-bg: var(--badge-purple-bg);
+  --color-badge-purple-text: var(--badge-purple-text);
+  --color-vote-pro: var(--vote-pro);
+  --color-vote-neutral: var(--vote-neutral);
+  --color-vote-contra: var(--vote-contra);
+  --color-vote-not-voted: var(--vote-not-voted);
+  --color-vote-background: var(--vote-background);
+}
+
+/* Single base layer: borders, body, and typography (not applied when ancestor has Tailwind text class) */
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-size: var(--text-base);
+    line-height: 1.5;
+  }
+
+  :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) {
+    h1 {
+      font-size: var(--text-2xl);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h2 {
+      font-size: var(--text-xl);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h3 {
+      font-size: var(--text-lg);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h4 {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    p {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-normal);
+      line-height: 1.5;
+    }
+
+    label {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    button {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    input {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-normal);
+      line-height: 1.5;
+    }
+  }
+}
+
+html {
+  font-size: var(--font-size);
+}
+
+/* Calendar: dot on days that have events (react-day-picker modifier) */
+.calendar-day-has-events {
+  position: relative;
+}
+.calendar-day-has-events::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
+/* Mobile layout chrome — desktop uses --mobile-chrome-bottom: 0 via min-width media */
+@media (max-width: 639px) {
+  :root {
+    --mobile-chrome-bottom: 0px;
+    --header-height: 3.5rem;
+  }
+
+  .mobile-unified-nav {
+    --mobile-chrome-bottom: 4rem;
+    --header-height: 0px;
+  }
+}
+
+@media (min-width: 640px) {
+  :root {
+    --mobile-chrome-bottom: 0px;
+    --header-height: 3.5rem;
+  }
+}
+
+@layer utilities {
+  .min-h-screen {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+}
+
+/* Match autofill backgrounds to theme (avoids yellow browser default in dark mode) */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--foreground);
+  -webkit-box-shadow: 0 0 0 1000px var(--input-background) inset;
+  box-shadow: 0 0 0 1000px var(--input-background) inset;
+  transition: background-color 99999s ease-in-out 0s;
+}

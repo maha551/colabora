@@ -1,0 +1,22 @@
+{
+  "errorBoundary": {
+    "description": "Si è verificato un errore imprevisto. Potrebbe essere un problema temporaneo.",
+    "reloadPage": "Ricarica pagina",
+    "reportError": "Segnala errore",
+    "stackTrace": "Traccia dello stack",
+    "title": "Qualcosa è andato storto",
+    "tryAgain": "Riprova"
+  },
+  "generic": "Qualcosa è andato storto",
+  "reportForm": {
+    "addLogs": "Add Logs",
+    "consoleLabel": "Console Logs (optional)",
+    "consolePlaceholder": "Any relevant console errors or logs",
+    "descriptionLabel": "Description *",
+    "descriptionPlaceholder": "What happened? What were you trying to do? What did you expect to happen?",
+    "titleLabel": "Title *",
+    "titlePlaceholder": "Brief description of the issue"
+  },
+  "reportIssue": "Segnala un problema",
+  "tryAgain": "Riprova"
+}

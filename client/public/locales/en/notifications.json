@@ -1,0 +1,22 @@
+{
+  "digest": {
+    "subject": "{{count}} updates — {{frequency}} digest",
+    "title": "{{count}} updates — {{frequency}} digest",
+    "body": "You have {{count}} new updates. Open your activity digest to review.",
+    "frequency": {
+      "weekly": "weekly",
+      "monthly": "monthly"
+    }
+  },
+  "immediate": {
+    "votingStarted": {
+      "body": "{{votingType}} for {{title}}{{orgSuffix}}. Deadline: {{deadline}}."
+    },
+    "deadlineApproaching": {
+      "body": "{{deadlineType}} for {{title}}{{orgSuffix}}. Due {{deadline}}."
+    }
+  },
+  "fallback": {
+    "body": "You have a new notification from {{appName}}."
+  }
+}

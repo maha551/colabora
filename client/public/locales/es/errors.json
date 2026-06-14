@@ -1,0 +1,22 @@
+{
+  "generic": "Algo salió mal",
+  "reportIssue": "Reportar un problema",
+  "tryAgain": "Por favor, inténtelo de nuevo",
+  "errorBoundary": {
+    "title": "Algo salió mal",
+    "description": "Ha ocurrido un error inesperado. Puede ser un problema temporal.",
+    "tryAgain": "Intentar de nuevo",
+    "reloadPage": "Recargar página",
+    "reportError": "Reportar error",
+    "stackTrace": "Seguimiento de pila"
+  },
+  "reportForm": {
+    "titleLabel": "Título *",
+    "descriptionLabel": "Descripción *",
+    "titlePlaceholder": "Breve descripción del problema",
+    "descriptionPlaceholder": "¿Qué ocurrió? ¿Qué intentabas hacer? ¿Qué esperabas que ocurriera?",
+    "consolePlaceholder": "Errores de consola o registros relevantes",
+    "consoleLabel": "Registros de consola (opcional)",
+    "addLogs": "Añadir registros"
+  }
+}

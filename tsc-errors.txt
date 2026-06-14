@@ -1,0 +1,794 @@
+﻿src/components/ActivityFeed/AggregatedHistoryEntry.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/ActivityFeed/AgreedViewPreview.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/ActivityFeed/AgreedViewPreview.tsx(19,39): error TS2339: Property 'createdAt' does not exist on type 'VersionHistory'.
+src/components/ActivityFeed/AgreedViewPreview.tsx(19,94): error TS2339: Property 'createdAt' does not exist on type 'VersionHistory'.
+src/components/ActivityFeed/AgreedViewPreview.tsx(22,21): error TS2339: Property 'newText' does not exist on type 'VersionHistory'.
+src/components/ActivityFeed/DecisionCard.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/ActivityFeed/decisions/DocumentStatusDecisionCard.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/ActivityFeed/decisions/ElectionDecisionCard.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/ActivityFeed/decisions/OrganizationVoteDecisionCard.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/ActivityFeed/decisions/ParagraphChangeDecisionCard.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/ActivityFeed/decisions/RuleProposalDecisionCard.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/ActivityFeed/decisions/StructureProposalDecisionCard.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/ActivityFeed/decisions/TreeProposalDecisionCard.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/ActivityFeed/HistoryViewToggle.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/ActivityFeed/PendingDecisionCard.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/ActivityFeed/PendingDecisionCard.tsx(4,143): error TS2307: Cannot find module '../types' or its corresponding type declarations.
+src/components/ActivityFeed/PendingDecisionCard.tsx(5,43): error TS2307: Cannot find module '../types/decisions' or its corresponding type declarations.
+src/components/ActivityFeed/PendingDecisionCard.tsx(20,43): error TS2307: Cannot find module '../utils/proposalAdapter' or its corresponding type declarations.
+src/components/ActivityFeed/PendingDecisionCard.tsx(23,47): error TS2307: Cannot find module '../utils/proposalAdapter' or its corresponding type declarations.
+src/components/ActivityFeed/PendingDecisionCard.tsx(118,13): error TS2322: Type 'unknown[]' is not assignable to type 'Proposal[]'.
+  Type 'unknown' is not assignable to type 'Proposal'.
+src/components/ActivityFeed/PendingDecisionCard.tsx(119,13): error TS2322: Type 'unknown' is not assignable to type '{ text: string; previousText?: string | undefined; proposalId?: string | undefined; acceptedAt?: string | undefined; type?: "BODY" | "TITLE" | undefined; } | undefined'.
+src/components/ActivityFeed/PendingDecisionCard.tsx(120,13): error TS2322: Type 'unknown' is not assignable to type 'DocumentOptions | undefined'.
+src/components/ActivityFeed/PendingDecisionCard.tsx(127,13): error TS2322: Type '(proposalId: string, documentId: string, paragraphId: string) => void' is not assignable to type '(proposalId: string) => Promise<void>'.
+  Target signature provides too few arguments. Expected 3 or more, but got 1.
+src/components/ActivityFeed/PendingDecisionCard.tsx(188,13): error TS6133: 'isRep' is declared but its value is never read.
+src/components/ActivityFeed/PendingDecisionCard.tsx(224,60): error TS7006: Parameter 'm' implicitly has an 'any' type.
+src/components/ActivityFeed/PendingDecisionCard.tsx(224,92): error TS7006: Parameter 'm' implicitly has an 'any' type.
+src/components/ActivityFeed/PendingDecisionCard.tsx(264,76): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/components/ActivityFeed/TimelineHistoryView.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/ActivityFeedProposalCard.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/ActivityFeedProposalCard.tsx(6,48): error TS6133: 'adaptProposalToSuggestion' is declared but its value is never read.
+src/components/ActivityFeedView.tsx(136,45): error TS2339: Property 'entries' does not exist on type 'DecisionsResponse'.
+src/components/ActivityFeedView.tsx(145,21): error TS2339: Property 'pagination' does not exist on type 'DecisionsResponse'.
+src/components/ActivityFeedView.tsx(146,21): error TS2339: Property 'pagination' does not exist on type 'DecisionsResponse'.
+src/components/ActivityFeedView.tsx(147,22): error TS2339: Property 'pagination' does not exist on type 'DecisionsResponse'.
+src/components/ActivityFeedView.tsx(148,23): error TS2339: Property 'pagination' does not exist on type 'DecisionsResponse'.
+src/components/AdminDashboard.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/AdminDashboard.tsx(18,1): error TS6133: 'ErrorState' is declared but its value is never read.
+src/components/AdminDashboard.tsx(19,10): error TS6133: 'documentsApi' is declared but its value is never read.
+src/components/AdminDashboard.tsx(147,47): error TS6133: 'onBack' is declared but its value is never read.
+src/components/AdminDashboard.tsx(154,10): error TS6133: 'dashboardError' is declared but its value is never read.
+src/components/AdminDashboard.tsx(154,26): error TS6133: 'setDashboardError' is declared but its value is never read.
+src/components/AdminDashboard.tsx(228,16): error TS18046: 'statsResponse' is of type 'unknown'.
+src/components/AdminDashboard.tsx(229,24): error TS18046: 'orgsResponse' is of type 'unknown'.
+src/components/AdminDashboard.tsx(230,16): error TS18046: 'usersResponse' is of type 'unknown'.
+src/components/AdminDashboard.tsx(400,21): error TS2339: Property 'description' does not exist on type '{ name: string; membershipPolicy: "open" | "invitation"; votingThreshold: number; }'.
+src/components/AdminDashboard.tsx(404,19): error TS2339: Property 'governanceRules' does not exist on type '{ name: string; membershipPolicy: "open" | "invitation"; votingThreshold: number; }'.
+src/components/AdminDashboard.tsx(415,21): error TS2339: Property 'representatives' does not exist on type '{ name: string; membershipPolicy: "open" | "invitation"; votingThreshold: number; }'.
+src/components/AdminDashboard.tsx(418,21): error TS2339: Property 'representativeEmails' does not exist on type '{ name: string; membershipPolicy: "open" | "invitation"; votingThreshold: number; }'.
+src/components/AdminDashboard.tsx(429,43): error TS2339: Property 'representativeEmails' does not exist on type '{ name: string; membershipPolicy: "open" | "invitation"; votingThreshold: number; }'.
+src/components/AdminDashboard.tsx(430,38): error TS2339: Property 'representatives' does not exist on type '{ name: string; membershipPolicy: "open" | "invitation"; votingThreshold: number; }'.
+src/components/AdminDashboard.tsx(438,30): error TS18046: 'response' is of type 'unknown'.
+src/components/AdminDashboard.tsx(477,19): error TS2339: Property 'fieldErrors' does not exist on type 'object'.
+src/components/AdminDashboard.tsx(477,52): error TS2339: Property 'fieldErrors' does not exist on type 'object'.
+src/components/AdminDashboard.tsx(478,54): error TS2339: Property 'fieldErrors' does not exist on type 'object'.
+src/components/AdminDashboard.tsx(482,26): error TS2339: Property 'details' does not exist on type 'object'.
+src/components/AdminDashboard.tsx(484,35): error TS2339: Property 'details' does not exist on type 'object'.
+src/components/AdminDashboard.tsx(485,41): error TS2339: Property 'details' does not exist on type 'object'.
+src/components/AdminDashboard.tsx(489,35): error TS2339: Property 'details' does not exist on type 'object'.
+src/components/AdminDashboard.tsx(490,34): error TS2339: Property 'details' does not exist on type 'object'.
+src/components/AdminDashboard.tsx(491,28): error TS2339: Property 'details' does not exist on type 'object'.
+src/components/AdminDashboard.tsx(491,67): error TS2339: Property 'details' does not exist on type 'object'.
+src/components/AdminDashboard.tsx(492,41): error TS2339: Property 'details' does not exist on type 'object'.
+src/components/AdminDashboard.tsx(497,26): error TS2339: Property 'message' does not exist on type 'object'.
+src/components/AdminDashboard.tsx(498,32): error TS2339: Property 'message' does not exist on type 'object'.
+src/components/AdminDashboard.tsx(699,38): error TS6133: 'e' is declared but its value is never read.
+src/components/AdminDashboard.tsx(710,38): error TS6133: 'e' is declared but its value is never read.
+src/components/AdminDashboard.tsx(1035,51): error TS2339: Property 'createdAt' does not exist on type 'AdminUser'.
+src/components/AdminDashboard.tsx(1035,69): error TS2339: Property 'created_at' does not exist on type 'AdminUser'.
+src/components/AgreedDocument.tsx(40,44): error TS6133: 'totalUsers' is declared but its value is never read.
+src/components/AgreedDocument.tsx(40,56): error TS6133: 'organization' is declared but its value is never read.
+src/components/AgreedDocument.tsx(205,48): error TS2339: Property 'createdAt' does not exist on type 'VersionHistory'.
+src/components/AgreedDocument.tsx(206,48): error TS2339: Property 'createdAt' does not exist on type 'VersionHistory'.
+src/components/AgreedDocument.tsx(224,34): error TS2339: Property 'newText' does not exist on type 'VersionHistory'.
+src/components/AgreedDocument.tsx(435,52): error TS6133: 'index' is declared but its value is never read.
+src/components/AgreedDocument.tsx(445,49): error TS2339: Property 'new_text' does not exist on type 'VersionHistory & { isPending?: boolean | undefined; }'.
+src/components/AgreedDocument.tsx(445,75): error TS2339: Property 'newText' does not exist on type 'VersionHistory & { isPending?: boolean | undefined; }'.
+src/components/AgreedDocument.tsx(446,47): error TS2551: Property 'heading_level' does not exist on type 'VersionHistory & { isPending?: boolean | undefined; }'. Did you mean 'headingLevel'?
+src/components/AgreedDocument.tsx(447,50): error TS2551: Property 'heading_level' does not exist on type 'VersionHistory & { isPending?: boolean | undefined; }'. Did you mean 'headingLevel'?
+src/components/AnimatedBackground.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/AppLoadingScreen.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/CollaboratorManagement.tsx(154,9): error TS6133: 'isOrganizationOwner' is declared but its value is never read.
+src/components/CollaboratorManagement.tsx(197,36): error TS2339: Property 'collaborator' does not exist on type '{ success: boolean; message: string; }'.
+src/components/CollaboratorManagement.tsx(206,52): error TS2339: Property 'collaborator' does not exist on type '{ success: boolean; message: string; }'.
+src/components/CollaboratorManagement.tsx(208,26): error TS2339: Property 'collaborator' does not exist on type '{ success: boolean; message: string; }'.
+src/components/CollaboratorManagement.tsx(345,21): error TS2322: Type '{ id: string; name: string; email?: string | undefined; avatar?: string | undefined; type?: "organization" | "user" | undefined; }' is not assignable to type '{ id: string; name: string; email: string; avatar?: string | undefined; }'.
+  Types of property 'email' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+src/components/ConnectionStatus.tsx(6,8): error TS6133: 'React' is declared but its value is never read.
+src/components/ConnectionStatus.tsx(24,5): error TS6133: 'lastStatusChange' is declared but its value is never read.
+src/components/ConnectionStatus.tsx(152,3): error TS6133: 'showToasts' is declared but its value is never read.
+src/components/dashboard/DocumentCreateDialog.tsx(48,3): error TS6133: 'currentUser' is declared but its value is never read.
+src/components/dashboard/DocumentCreateDialog.tsx(50,3): error TS6133: 'organizations' is declared but its value is never read.
+src/components/dashboard/DocumentDashboardCreateSection.tsx(39,7): error TS2322: Type '(title: string, description?: string | undefined, contributors?: string[] | undefined, options?: object | undefined, ownershipType?: string | undefined, organizationId?: string | undefined) => void | Promise<...>' is not assignable to type '(title: string, description?: string | undefined, contributors?: string[] | undefined, options?: DocumentCreateOptions | undefined, ownershipType?: "personal" | "shared" | "organizational" | undefined, organizationId?: string | undefined) => Promise<...>'.
+  Type 'void | Promise<void>' is not assignable to type 'Promise<void>'.
+    Type 'void' is not assignable to type 'Promise<void>'.
+src/components/dashboard/DocumentDashboardCreateSection.tsx(44,7): error TS2322: Type '((name: string) => void) | undefined' is not assignable to type '() => void'.
+  Type 'undefined' is not assignable to type '() => void'.
+src/components/dashboard/DocumentFilters.tsx(5,1): error TS6133: 'Button' is declared but its value is never read.
+src/components/dashboard/ProposalsOverview.tsx(76,13): error TS2322: Type '() => void' is not assignable to type '() => Promise<void>'.
+  Type 'void' is not assignable to type 'Promise<void>'.
+src/components/DiffContextBar.tsx(88,3): error TS6133: 'currentUserId' is declared but its value is never read.
+src/components/DiffStatistics.tsx(3,90): error TS6133: 'DiffStatisticsType' is declared but its value is never read.
+src/components/document-tree/DocumentTree.tsx(3,1): error TS6133: 'Document' is declared but its value is never read.
+src/components/document-tree/DocumentTree.tsx(79,40): error TS2344: Type 'DocumentTreeNode' does not satisfy the constraint '(...args: any) => any'.
+  Type 'DocumentTreeNode' provides no match for the signature '(...args: any): any'.
+src/components/document-tree/DocumentTree.tsx(105,32): error TS7006: Parameter 'child' implicitly has an 'any' type.
+src/components/document-tree/DocumentTreeFilters.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/document-tree/DocumentTreeFilters.tsx(84,34): error TS2538: Type 'undefined' cannot be used as an index type.
+src/components/document-tree/DocumentTreeFilters.tsx(109,37): error TS2538: Type 'undefined' cannot be used as an index type.
+src/components/document-tree/DocumentTreeNode.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/document-tree/utils.ts(137,11): error TS6133: 'docMap' is declared but its value is never read.
+src/components/DocumentCard.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/DocumentDashboard.tsx(237,13): error TS2322: Type '(title: string, description?: string, contributors?: string[], options?: Parameters<DocumentDashboardProps["onCreateDocument"]>[3], ownershipType?: "personal" | "shared" | "organizational", organizationId?: string) => Promise<...>' is not assignable to type '(title: string, description?: string | undefined, contributors?: string[] | undefined, options?: object | undefined, ownershipType?: string | undefined, organizationId?: string | undefined) => void | Promise<...>'.
+  Types of parameters 'ownershipType' and 'ownershipType' are incompatible.
+    Type 'string | undefined' is not assignable to type '"personal" | "shared" | "organizational" | undefined'.
+      Type 'string' is not assignable to type '"personal" | "shared" | "organizational" | undefined'.
+src/components/DocumentDeletionProposal.tsx(6,8): error TS6133: 'React' is declared but its value is never read.
+src/components/DocumentDeletionProposal.tsx(13,1): error TS6133: 'Badge' is declared but its value is never read.
+src/components/DocumentDeletionProposal.tsx(36,3): error TS6133: 'currentUser' is declared but its value is never read.
+src/components/DocumentDeletionProposal.tsx(66,25): error TS2345: Argument of type '{ proposed: boolean; proposedAt?: string | undefined; proposedBy?: string | undefined; voteDeadline?: string | undefined; votes?: { PRO: number; NEUTRAL: number; CONTRA: number; } | undefined; }' is not assignable to parameter of type 'SetStateAction<DeletionStatusResponse | null>'.
+  Type '{ proposed: boolean; proposedAt?: string | undefined; proposedBy?: string | undefined; voteDeadline?: string | undefined; votes?: { PRO: number; NEUTRAL: number; CONTRA: number; } | undefined; }' is not assignable to type 'DeletionStatusResponse'.
+    Types of property 'votes' are incompatible.
+      Type '{ PRO: number; NEUTRAL: number; CONTRA: number; } | undefined' is not assignable to type '{ total: number; breakdown: { PRO: number; NEUTRAL: number; CONTRA: number; }; approvalRate: number; } | undefined'.
+        Type '{ PRO: number; NEUTRAL: number; CONTRA: number; }' is missing the following properties from type '{ total: number; breakdown: { PRO: number; NEUTRAL: number; CONTRA: number; }; approvalRate: number; }': total, breakdown, approvalRate
+src/components/DocumentDeletionProposal.tsx(182,43): error TS6133: 'quorumRequired' is declared but its value is never read.
+src/components/DocumentEditor.tsx(80,10): error TS6133: 'areProposalsAllowed' is declared but its value is never read.
+src/components/DocumentInviteSystem.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/DocumentInviteSystem.tsx(68,22): error TS2345: Argument of type '{ id: string; document_id: string; email: string; invitation_token: string; status: "expired" | "pending" | "cancelled" | "accepted"; expires_at: string; accepted_at: string | null; created_at: string; invited_by: string; inviter_name: string | null; accepted_by_name: string | null; isExpired: boolean; }[]' is not assignable to parameter of type 'SetStateAction<{ id: string; email: string; status: "expired" | "pending" | "cancelled" | "accepted"; expiresAt: string; acceptedAt: string | null; createdAt: string; inviterName: string | null; acceptedByName: string | null; isExpired: boolean; }[]>'.
+  Type '{ id: string; document_id: string; email: string; invitation_token: string; status: "expired" | "pending" | "cancelled" | "accepted"; expires_at: string; accepted_at: string | null; created_at: string; invited_by: string; inviter_name: string | null; accepted_by_name: string | null; isExpired: boolean; }[]' is not assignable to type '{ id: string; email: string; status: "expired" | "pending" | "cancelled" | "accepted"; expiresAt: string; acceptedAt: string | null; createdAt: string; inviterName: string | null; acceptedByName: string | null; isExpired: boolean; }[]'.
+    Type '{ id: string; document_id: string; email: string; invitation_token: string; status: "expired" | "pending" | "cancelled" | "accepted"; expires_at: string; accepted_at: string | null; created_at: string; invited_by: string; inviter_name: string | null; accepted_by_name: string | null; isExpired: boolean; }' is missing the following properties from type '{ id: string; email: string; status: "expired" | "pending" | "cancelled" | "accepted"; expiresAt: string; acceptedAt: string | null; createdAt: string; inviterName: string | null; acceptedByName: string | null; isExpired: boolean; }': expiresAt, acceptedAt, createdAt, inviterName, acceptedByName
+src/components/DocumentLifecycleCompactRow.tsx(7,1): error TS6133: 'React' is declared but its value is never read.
+src/components/DocumentLifecycleStepper.tsx(23,18): error TS2352: Conversion of type 'Document | DocumentApiResponse' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type 'DocumentApiResponse' is not comparable to type 'Record<string, unknown>'.
+    Index signature for type 'string' is missing in type 'DocumentApiResponse'.
+src/components/DocumentLifecycleStepper.tsx(64,63): error TS2352: Conversion of type 'Document | DocumentApiResponse' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type 'DocumentApiResponse' is not comparable to type 'Record<string, unknown>'.
+    Index signature for type 'string' is missing in type 'DocumentApiResponse'.
+src/components/EmailInviteSystem.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/EnhancedDiffView.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/EnhancedDiffView.tsx(7,1): error TS6133: 'Separator' is declared but its value is never read.
+src/components/governance/BootstrapCompletionDialog.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/governance/CandidateNominationInterface.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/governance/CandidateNominationInterface.tsx(7,1): error TS6133: 'Input' is declared but its value is never read.
+src/components/governance/CandidateNominationInterface.tsx(11,1): error TS6192: All imports in import declaration are unused.
+src/components/governance/CandidateNominationInterface.tsx(66,96): error TS18047: 'currentUser' is possibly 'null'.
+src/components/governance/CandidateNominationInterface.tsx(86,26): error TS18047: 'currentUser' is possibly 'null'.
+src/components/governance/CandidateNominationInterface.tsx(128,71): error TS18047: 'currentUser' is possibly 'null'.
+src/components/governance/CandidateNominationInterface.tsx(129,39): error TS2339: Property 'nominationDeadline' does not exist on type 'RepresentativeElection'.
+src/components/governance/CandidateNominationInterface.tsx(129,78): error TS2339: Property 'nominationDeadline' does not exist on type 'RepresentativeElection'.
+src/components/governance/CandidateNominationInterface.tsx(190,76): error TS2339: Property 'status' does not exist on type 'ElectionCandidate'.
+src/components/governance/CandidateNominationInterface.tsx(198,48): error TS2339: Property 'status' does not exist on type 'ElectionCandidate'.
+src/components/governance/CandidateNominationInterface.tsx(204,35): error TS2339: Property 'nominationStatement' does not exist on type 'ElectionCandidate'.
+src/components/governance/CandidateNominationInterface.tsx(208,41): error TS2339: Property 'nominationStatement' does not exist on type 'ElectionCandidate'.
+src/components/governance/CandidateNominationInterface.tsx(215,20): error TS2693: 'User' only refers to a type, but is being used as a value here.
+src/components/governance/CandidateNominationInterface.tsx(318,20): error TS2693: 'User' only refers to a type, but is being used as a value here.
+src/components/governance/CandidateNominationInterface.tsx(328,28): error TS2693: 'User' only refers to a type, but is being used as a value here.
+src/components/governance/CandidateNominationInterface.tsx(334,53): error TS18047: 'currentUser' is possibly 'null'.
+src/components/governance/CandidateNominationInterface.tsx(338,65): error TS2339: Property 'status' does not exist on type 'ElectionCandidate'.
+src/components/governance/CandidateNominationInterface.tsx(340,38): error TS2339: Property 'nominationStatement' does not exist on type 'ElectionCandidate'.
+src/components/governance/CandidateNominationInterface.tsx(342,42): error TS2339: Property 'nominationStatement' does not exist on type 'ElectionCandidate'.
+src/components/governance/CandidateNominationInterface.tsx(346,67): error TS2551: Property 'nominatedAt' does not exist on type 'ElectionCandidate'. Did you mean 'nominatedBy'?
+src/components/governance/CandidateNominationInterface.tsx(347,40): error TS2339: Property 'status' does not exist on type 'ElectionCandidate'.
+src/components/governance/ElectionCreationDialog.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/governance/ElectionCreationDialog.tsx(9,1): error TS6192: All imports in import declaration are unused.
+src/components/governance/ElectionCreationDialog.tsx(36,10): error TS6133: 'loading' is declared but its value is never read.
+src/components/governance/ElectionCreationDialog.tsx(36,19): error TS6133: 'setLoading' is declared but its value is never read.
+src/components/governance/ElectionCreationDialog.tsx(144,67): error TS18047: 'currentUser' is possibly 'null'.
+src/components/governance/ElectionCreationDialog.tsx(244,18): error TS2304: Cannot find name 'AlertTriangle'.
+src/components/governance/ElectionResults.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/governance/ElectionResults.tsx(66,39): error TS2339: Property 'candidates' does not exist on type 'ElectionResultsResponse'.
+src/components/governance/ElectionResults.tsx(66,51): error TS2339: Property 'stats' does not exist on type 'ElectionResultsResponse'.
+src/components/governance/ElectionResults.tsx(69,87): error TS6133: 'index' is declared but its value is never read.
+src/components/governance/ElectionResults.tsx(70,20): error TS2352: Conversion of type '{ id: string; electionId: string; userId: string; user: { name: string; }; nominatedAt: string | undefined; nominationStatement: string | undefined; acceptedNomination: true; votesReceived: number; elected: false; }' to type 'ElectionCandidate' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type '{ id: string; electionId: string; userId: string; user: { name: string; }; nominatedAt: string | undefined; nominationStatement: string | undefined; acceptedNomination: true; votesReceived: number; elected: false; }' is missing the following properties from type 'ElectionCandidate': createdAt, updatedAt
+src/components/governance/ElectionResults.tsx(81,34): error TS2551: Property 'votes_received' does not exist on type 'ElectionCandidate'. Did you mean 'votesReceived'?
+src/components/governance/ElectionResults.tsx(82,60): error TS2551: Property 'votes_received' does not exist on type 'ElectionCandidate'. Did you mean 'votesReceived'?
+src/components/governance/ElectionResults.tsx(83,29): error TS2551: Property 'elected_position' does not exist on type 'ElectionCandidate'. Did you mean 'electedPosition'?
+src/components/governance/ElectionResults.tsx(83,59): error TS2551: Property 'elected_position' does not exist on type 'ElectionCandidate'. Did you mean 'electedPosition'?
+src/components/governance/ElectionResults.tsx(84,29): error TS2551: Property 'elected_position' does not exist on type 'ElectionCandidate'. Did you mean 'electedPosition'?
+src/components/governance/ElectionResults.tsx(93,22): error TS2367: This comparison appears to be unintentional because the types '"draft" | "voting" | "cancelled" | "nomination" | "completed"' and '"active"' have no overlap.
+src/components/governance/ElectionResults.tsx(119,67): error TS18047: 'currentUser' is possibly 'null'.
+src/components/governance/ElectionResults.tsx(121,51): error TS2367: This comparison appears to be unintentional because the types '"draft" | "voting" | "cancelled" | "nomination" | "completed"' and '"active"' have no overlap.
+src/components/governance/ElectionResults.tsx(181,48): error TS2339: Property 'quorumPercentage' does not exist on type 'RepresentativeElection'.
+src/components/governance/ElectionResults.tsx(255,45): error TS2339: Property 'nominationStatement' does not exist on type 'ElectionCandidate'.
+src/components/governance/ElectionResults.tsx(257,49): error TS2339: Property 'nominationStatement' does not exist on type 'ElectionCandidate'.
+src/components/governance/ElectionResults.tsx(315,47): error TS2339: Property 'termMonths' does not exist on type 'RepresentativeElection'.
+src/components/governance/ElectionVotingInterface.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/governance/ElectionVotingInterface.tsx(7,1): error TS6133: 'Input' is declared but its value is never read.
+src/components/governance/ElectionVotingInterface.tsx(12,1): error TS6192: All imports in import declaration are unused.
+src/components/governance/ElectionVotingInterface.tsx(59,20): error TS2339: Property 'votingMethod' does not exist on type 'RepresentativeElection'.
+src/components/governance/ElectionVotingInterface.tsx(61,27): error TS2339: Property 'votingMethod' does not exist on type 'RepresentativeElection'.
+src/components/governance/ElectionVotingInterface.tsx(105,18): error TS2339: Property 'votingMethod' does not exist on type 'RepresentativeElection'.
+src/components/governance/ElectionVotingInterface.tsx(128,18): error TS2339: Property 'votingMethod' does not exist on type 'RepresentativeElection'.
+src/components/governance/ElectionVotingInterface.tsx(141,20): error TS2339: Property 'votingMethod' does not exist on type 'RepresentativeElection'.
+src/components/governance/ElectionVotingInterface.tsx(143,27): error TS2339: Property 'votingMethod' does not exist on type 'RepresentativeElection'.
+src/components/governance/ElectionVotingInterface.tsx(150,81): error TS2345: Argument of type 'Record<string, unknown>' is not assignable to parameter of type '{ candidateRanking: string[]; }'.
+  Property 'candidateRanking' is missing in type 'Record<string, unknown>' but required in type '{ candidateRanking: string[]; }'.
+src/components/governance/ElectionVotingInterface.tsx(154,71): error TS18047: 'currentUser' is possibly 'null'.
+src/components/governance/ElectionVotingInterface.tsx(176,34): error TS2769: No overload matches this call.
+  Overload 1 of 4, '(value: string | number | Date): Date', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | Date'.
+      Type 'undefined' is not assignable to type 'string | number | Date'.
+  Overload 2 of 4, '(value: string | number): Date', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | number'.
+      Type 'undefined' is not assignable to type 'string | number'.
+src/components/governance/ElectionVotingInterface.tsx(177,27): error TS2769: No overload matches this call.
+  Overload 1 of 4, '(value: string | number | Date): Date', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | Date'.
+      Type 'undefined' is not assignable to type 'string | number | Date'.
+  Overload 2 of 4, '(value: string | number): Date', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | number'.
+      Type 'undefined' is not assignable to type 'string | number'.
+src/components/governance/ElectionVotingInterface.tsx(240,79): error TS2339: Property 'votingMethod' does not exist on type 'RepresentativeElection'.
+src/components/governance/ElectionVotingInterface.tsx(254,29): error TS2339: Property 'votingMethod' does not exist on type 'RepresentativeElection'.
+src/components/governance/ElectionVotingInterface.tsx(259,47): error TS6133: 'index' is declared but its value is never read.
+src/components/governance/ElectionVotingInterface.tsx(261,33): error TS2339: Property 'votingMethod' does not exist on type 'RepresentativeElection'.
+src/components/governance/ElectionVotingInterface.tsx(264,27): error TS2322: Type 'number' is not assignable to type 'string'.
+src/components/governance/ElectionVotingInterface.tsx(288,36): error TS2339: Property 'nominationStatement' does not exist on type 'ElectionCandidate'.
+src/components/governance/ElectionVotingInterface.tsx(290,40): error TS2339: Property 'nominationStatement' does not exist on type 'ElectionCandidate'.
+src/components/governance/ElectionVotingInterface.tsx(295,89): error TS2551: Property 'nominatedAt' does not exist on type 'ElectionCandidate'. Did you mean 'nominatedBy'?
+src/components/governance/ElectionVotingInterface.tsx(297,49): error TS18047: 'currentUser' is possibly 'null'.
+src/components/governance/ElectionVotingInterface.tsx(330,31): error TS2339: Property 'votingMethod' does not exist on type 'RepresentativeElection'.
+src/components/governance/ElectionVotingInterface.tsx(359,23): error TS2322: Type 'Dispatch<SetStateAction<boolean>>' is not assignable to type '(checked: CheckedState) => void'.
+  Types of parameters 'value' and 'checked' are incompatible.
+    Type 'CheckedState' is not assignable to type 'SetStateAction<boolean>'.
+      Type '"indeterminate"' is not assignable to type 'SetStateAction<boolean>'.
+src/components/governance/GovernanceRulesDialog.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/governance/GovernanceRulesDialog.tsx(10,1): error TS6133: 'Badge' is declared but its value is never read.
+src/components/governance/GovernanceRulesDialog.tsx(12,1): error TS6133: 'Separator' is declared but its value is never read.
+src/components/governance/GovernanceRulesDialog.tsx(45,5): error TS2322: Type 'null' is not assignable to type 'number | undefined'.
+src/components/governance/GovernanceRulesDialog.tsx(67,10): error TS6133: 'originalRules' is declared but its value is never read.
+src/components/governance/GovernanceRulesDialog.tsx(129,17): error TS6133: 'field' is declared but its value is never read.
+src/components/governance/GovernanceRulesDialog.tsx(157,67): error TS18047: 'currentUser' is possibly 'null'.
+src/components/governance/PublicGovernanceDashboard.tsx(30,59): error TS6133: 'currentUser' is declared but its value is never read.
+src/components/governance/PublicGovernanceDashboard.tsx(68,20): error TS2345: Argument of type '{ id: string | undefined; action_type: string; created_at: string; performed_by_name: string; affected_user_name: string | undefined; details: string | undefined; }[]' is not assignable to parameter of type 'SetStateAction<AuditLogEntry[]>'.
+  Type '{ id: string | undefined; action_type: string; created_at: string; performed_by_name: string; affected_user_name: string | undefined; details: string | undefined; }[]' is not assignable to type 'AuditLogEntry[]'.
+    Type '{ id: string | undefined; action_type: string; created_at: string; performed_by_name: string; affected_user_name: string | undefined; details: string | undefined; }' is not assignable to type 'AuditLogEntry'.
+      Types of property 'id' are incompatible.
+        Type 'string | undefined' is not assignable to type 'string'.
+          Type 'undefined' is not assignable to type 'string'.
+src/components/governance/RecoveryModeBanner.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/HistoryDisplay.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/HistoryDisplay.tsx(60,49): error TS2339: Property 'avatar' does not exist on type '{ id: string; name: string; email?: string | undefined; }'.
+src/components/InlineExpandedView.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/InlineExpandedView.tsx(1,27): error TS6133: 'useRef' is declared but its value is never read.
+src/components/InlineExpandedView.tsx(4,1): error TS6133: 'Card' is declared but its value is never read.
+src/components/InlineExpandedView.tsx(32,9): error TS6133: 'mockDocument' is declared but its value is never read.
+src/components/InlineExpandedView.tsx(43,23): error TS2551: Property 'paragraphTitle' does not exist on type 'Proposal'. Did you mean 'paragraphId'?
+src/components/InlineExpandedView.tsx(44,22): error TS2339: Property 'currentText' does not exist on type 'Proposal'.
+src/components/InlineExpandedView.tsx(54,9): error TS6133: 'mockParagraph' is declared but its value is never read.
+src/components/InlineExpandedView.tsx(57,21): error TS2551: Property 'paragraphTitle' does not exist on type 'Proposal'. Did you mean 'paragraphId'?
+src/components/InlineExpandedView.tsx(58,20): error TS2339: Property 'currentText' does not exist on type 'Proposal'.
+src/components/InlineExpandedView.tsx(71,20): error TS2339: Property 'proposedText' does not exist on type 'Proposal'.
+src/components/InlineExpandedView.tsx(129,31): error TS2339: Property 'currentText' does not exist on type 'Proposal'.
+src/components/InlineExpandedView.tsx(138,31): error TS2339: Property 'currentText' does not exist on type 'Proposal'.
+src/components/InlineExpandedView.tsx(144,44): error TS2339: Property 'currentText' does not exist on type 'Proposal'.
+src/components/InlineExpandedView.tsx(145,47): error TS2339: Property 'proposedText' does not exist on type 'Proposal'.
+src/components/InlineExpandedView.tsx(169,28): error TS6133: 'suggestionId' is declared but its value is never read.
+src/components/InlineExpandedView.tsx(173,31): error TS6133: 'suggestionId' is declared but its value is never read.
+src/components/InlineExpandedView.tsx(173,45): error TS6133: 'text' is declared but its value is never read.
+src/components/InlineExpandedView.tsx(173,51): error TS6133: 'parentId' is declared but its value is never read.
+src/components/InlineExpandedView.tsx(176,42): error TS2339: Property 'currentText' does not exist on type 'Proposal'.
+src/components/InlineParagraphForm.tsx(58,9): error TS6133: 'headingLevelValue' is declared but its value is never read.
+src/components/InlineParagraphForm.tsx(63,9): error TS6133: 'showToggle' is declared but its value is never read.
+src/components/InlineParagraphForm.tsx(64,9): error TS6133: 'effectiveIncludeHeading' is declared but its value is never read.
+src/components/layout/AppFooter.tsx(20,3): error TS6133: 'organizations' is declared but its value is never read.
+src/components/layout/AppFooter.tsx(21,3): error TS6133: 'isSingleOrg' is declared but its value is never read.
+src/components/layout/AppHeader.tsx(3,36): error TS2307: Cannot find module '../types' or its corresponding type declarations.
+src/components/layout/AppLayout.tsx(73,9): error TS6133: 'performanceTier' is declared but its value is never read.
+src/components/layout/AppLayout.tsx(75,9): error TS6133: 'brandingColor' is declared but its value is never read.
+src/components/layout/AppLayout.tsx(80,9): error TS6133: 'brandingStyles' is declared but its value is never read.
+src/components/OrganizationManagement/blocks/__tests__/BlockCanvas.test.tsx(3,1): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/blocks/__tests__/BlockInserter.test.tsx(3,1): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/blocks/__tests__/BlockRenderer.test.tsx(321,9): error TS2322: Type 'null' is not assignable to type 'string'.
+src/components/OrganizationManagement/blocks/__tests__/BrainstormBlock.test.tsx(3,1): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/blocks/__tests__/BrainstormBlock.test.tsx(11,5): error TS7034: Variable 'orgI18n' implicitly has type 'any' in some locations where its type cannot be determined.
+src/components/OrganizationManagement/blocks/__tests__/BrainstormBlock.test.tsx(13,28): error TS7006: Parameter 'ui' implicitly has an 'any' type.
+src/components/OrganizationManagement/blocks/__tests__/BrainstormBlock.test.tsx(18,40): error TS7005: Variable 'orgI18n' implicitly has an 'any' type.
+src/components/OrganizationManagement/blocks/__tests__/BrainstormBlock.test.tsx(55,23): error TS2345: Argument of type '(instance: unknown) => void' is not assignable to parameter of type 'Module | NewableModule<Module> | Newable<Module>'.
+src/components/OrganizationManagement/blocks/__tests__/BrainstormBlock.test.tsx(76,24): error TS2322: Type '{ id: string; type: string; status: string; occurredAt: string; orderIndex: number; sourceTimelineItemId: string; event: { type: string; id: string; occurredAt: string; orderIndex: number; eventType: string; payload: null; }; options: never[]; }' is not assignable to type 'BrainstormProtocolBlock'.
+  Types of property 'type' are incompatible.
+    Type 'string' is not assignable to type '"brainstorm"'.
+src/components/OrganizationManagement/blocks/__tests__/BrainstormBlock.test.tsx(85,24): error TS2322: Type '{ id: string; type: string; status: string; occurredAt: string; orderIndex: number; sourceTimelineItemId: string; event: { type: string; id: string; occurredAt: string; orderIndex: number; eventType: string; payload: null; }; options: never[]; }' is not assignable to type 'BrainstormProtocolBlock'.
+  Types of property 'type' are incompatible.
+    Type 'string' is not assignable to type '"brainstorm"'.
+src/components/OrganizationManagement/blocks/__tests__/BrainstormBlock.test.tsx(93,71): error TS2322: Type '{ id: string; type: string; status: string; occurredAt: string; orderIndex: number; sourceTimelineItemId: string; event: { type: string; id: string; occurredAt: string; orderIndex: number; eventType: string; payload: null; }; options: never[]; }' is not assignable to type 'BrainstormProtocolBlock'.
+  Types of property 'type' are incompatible.
+    Type 'string' is not assignable to type '"brainstorm"'.
+src/components/OrganizationManagement/blocks/__tests__/BrainstormBlock.test.tsx(100,71): error TS2322: Type '{ id: string; type: string; status: string; occurredAt: string; orderIndex: number; sourceTimelineItemId: string; event: { type: string; id: string; occurredAt: string; orderIndex: number; eventType: string; payload: null; }; options: never[]; }' is not assignable to type 'BrainstormProtocolBlock'.
+  Types of property 'type' are incompatible.
+    Type 'string' is not assignable to type '"brainstorm"'.
+src/components/OrganizationManagement/blocks/__tests__/BrainstormBlock.test.tsx(109,24): error TS2322: Type '{ id: string; type: string; status: string; occurredAt: string; orderIndex: number; sourceTimelineItemId: string; event: { type: string; id: string; occurredAt: string; orderIndex: number; eventType: string; payload: null; }; options: never[]; }' is not assignable to type 'BrainstormProtocolBlock'.
+  Types of property 'type' are incompatible.
+    Type 'string' is not assignable to type '"brainstorm"'.
+src/components/OrganizationManagement/blocks/__tests__/BrainstormBlock.test.tsx(119,30): error TS7005: Variable 'orgI18n' implicitly has an 'any' type.
+src/components/OrganizationManagement/blocks/__tests__/BrainstormBlock.test.tsx(120,26): error TS2322: Type '{ id: string; type: string; status: string; occurredAt: string; orderIndex: number; sourceTimelineItemId: string; event: { type: string; id: string; occurredAt: string; orderIndex: number; eventType: string; payload: null; }; options: never[]; }' is not assignable to type 'BrainstormProtocolBlock'.
+  Types of property 'type' are incompatible.
+    Type 'string' is not assignable to type '"brainstorm"'.
+src/components/OrganizationManagement/blocks/__tests__/BrainstormBlock.test.tsx(126,28): error TS2532: Object is possibly 'undefined'.
+src/components/OrganizationManagement/blocks/__tests__/BrainstormBlock.test.tsx(127,7): error TS2684: The 'this' context of type '((v: any) => void) | undefined' is not assignable to method's 'this' of type '(this: HTMLTextAreaElement | null, args_0: string) => void'.
+  Type 'undefined' is not assignable to type '(this: HTMLTextAreaElement | null, args_0: string) => void'.
+src/components/OrganizationManagement/blocks/__tests__/BrainstormBlock.test.tsx(127,7): error TS18048: 'nativeSetter' is possibly 'undefined'.
+src/components/OrganizationManagement/blocks/__tests__/BrainstormBlock.test.tsx(128,7): error TS18047: 'textarea' is possibly 'null'.
+src/components/OrganizationManagement/blocks/__tests__/BrainstormBlock.test.tsx(130,22): error TS2339: Property 'toHaveValue' does not exist on type 'JestMatchers<HTMLTextAreaElement | null>'.
+src/components/OrganizationManagement/blocks/__tests__/BrainstormBlock.test.tsx(135,7): error TS18048: 'addBtn' is possibly 'undefined'.
+src/components/OrganizationManagement/blocks/__tests__/BrainstormBlock.test.tsx(138,22): error TS2339: Property 'toHaveValue' does not exist on type 'JestMatchers<HTMLTextAreaElement | null>'.
+src/components/OrganizationManagement/blocks/__tests__/mocks/IconMock.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/blocks/__tests__/protocolBlocks.test.ts(346,7): error TS2322: Type '{ type: "event"; id: string; occurredAt: string; eventType: string; payload: { agendaItemId: string; }; options: { id: string; label: string; }[]; orderIndex: number; }' is not assignable to type 'TimelineItem'.
+  Types of property 'options' are incompatible.
+    Type '{ id: string; label: string; }[]' is not assignable to type '{ id: string; label: string; sortOrder: number; createdAt: string; }[]'.
+      Type '{ id: string; label: string; }' is missing the following properties from type '{ id: string; label: string; sortOrder: number; createdAt: string; }': sortOrder, createdAt
+src/components/OrganizationManagement/blocks/__tests__/protocolBlocks.test.ts(355,7): error TS2322: Type '{ type: "event"; id: string; occurredAt: string; eventType: string; payload: { agendaItemId: string; sourceEventId: string; }; options: { id: string; label: string; }[]; orderIndex: number; }' is not assignable to type 'TimelineItem'.
+  Types of property 'options' are incompatible.
+    Type '{ id: string; label: string; }[]' is not assignable to type '{ id: string; label: string; sortOrder: number; createdAt: string; }[]'.
+      Type '{ id: string; label: string; }' is missing the following properties from type '{ id: string; label: string; sortOrder: number; createdAt: string; }': sortOrder, createdAt
+src/components/OrganizationManagement/blocks/__tests__/protocolBlocks.test.ts(367,7): error TS2322: Type '{ type: "event"; id: string; occurredAt: string; eventType: string; payload: { agendaItemId: string; sourceEventId: string; }; options: { id: string; label: string; }[]; orderIndex: number; }' is not assignable to type 'TimelineItem'.
+  Types of property 'options' are incompatible.
+    Type '{ id: string; label: string; }[]' is not assignable to type '{ id: string; label: string; sortOrder: number; createdAt: string; }[]'.
+      Type '{ id: string; label: string; }' is missing the following properties from type '{ id: string; label: string; sortOrder: number; createdAt: string; }': sortOrder, createdAt
+src/components/OrganizationManagement/blocks/BlockLinkChip.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/blocks/BottomActionBar.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/blocks/renderers/AgendaItemBlock.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/blocks/renderers/BrainstormBlock.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/blocks/renderers/DocumentLinkBlock.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/blocks/renderers/ParagraphBlock.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/blocks/renderers/ParagraphBlock.tsx(66,32): error TS2345: Argument of type 'string[]' is not assignable to parameter of type 'string'.
+src/components/OrganizationManagement/blocks/renderers/TodoBlock.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/blocks/renderers/TodoBlock.tsx(71,32): error TS2345: Argument of type 'string[]' is not assignable to parameter of type 'string'.
+src/components/OrganizationManagement/blocks/renderers/VoteBlock.tsx(55,3): error TS2322: Type '({ id: string | undefined; label: string; } | null)[]' is not assignable to type '{ id?: string | undefined; label: string; }[]'.
+  Type '{ id: string | undefined; label: string; } | null' is not assignable to type '{ id?: string | undefined; label: string; }'.
+    Type 'null' is not assignable to type '{ id?: string | undefined; label: string; }'.
+src/components/OrganizationManagement/blocks/renderers/VoteBlock.tsx(73,33): error TS2677: A type predicate's type must be assignable to its parameter's type.
+  Type '{ id?: string | undefined; label: string; }' is not assignable to type '{ id: string | undefined; label: string; }'.
+    Property 'id' is optional in type '{ id?: string | undefined; label: string; }' but required in type '{ id: string | undefined; label: string; }'.
+src/components/OrganizationManagement/CreateMeetingDialog.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/CreateMeetingDialog.tsx(54,10): error TS6133: 'resetForm' is declared but its value is never read.
+src/components/OrganizationManagement/DocumentCreationModal.tsx(10,24): error TS6133: 'governanceApi' is declared but its value is never read.
+src/components/OrganizationManagement/DocumentCreationModal.tsx(81,10): error TS6133: 'votingAnonymityLocked' is declared but its value is never read.
+src/components/OrganizationManagement/DocumentCreationModal.tsx(288,23): error TS2322: Type '{ i18nKey: string; values: { title: string | undefined; }; components: { strong: Element; }; }' is not assignable to type 'IntrinsicAttributes & { i18nKey?: string | undefined; components?: Record<string, ReactNode> | undefined; children?: ReactNode; }'.
+  Property 'values' does not exist on type 'IntrinsicAttributes & { i18nKey?: string | undefined; components?: Record<string, ReactNode> | undefined; children?: ReactNode; }'.
+src/components/OrganizationManagement/DocumentCreationModal.tsx(295,23): error TS2322: Type '{ i18nKey: string; values: { title: string | undefined; }; components: { strong: Element; }; }' is not assignable to type 'IntrinsicAttributes & { i18nKey?: string | undefined; components?: Record<string, ReactNode> | undefined; children?: ReactNode; }'.
+  Property 'values' does not exist on type 'IntrinsicAttributes & { i18nKey?: string | undefined; components?: Record<string, ReactNode> | undefined; children?: ReactNode; }'.
+src/components/OrganizationManagement/DocumentCreationModal.tsx(302,23): error TS2322: Type '{ i18nKey: string; values: { title: string | undefined; }; components: { strong: Element; }; }' is not assignable to type 'IntrinsicAttributes & { i18nKey?: string | undefined; components?: Record<string, ReactNode> | undefined; children?: ReactNode; }'.
+  Property 'values' does not exist on type 'IntrinsicAttributes & { i18nKey?: string | undefined; components?: Record<string, ReactNode> | undefined; children?: ReactNode; }'.
+src/components/OrganizationManagement/MeetingMinutesPanel.tsx(346,3): error TS6133: 'currentUserId' is declared but its value is never read.
+src/components/OrganizationManagement/MeetingMinutesPanel.tsx(357,3): error TS6133: 'onDeleteAgendaItem' is declared but its value is never read.
+src/components/OrganizationManagement/MeetingMinutesPanel.tsx(358,3): error TS6133: 'onEditAgendaItem' is declared but its value is never read.
+src/components/OrganizationManagement/MeetingProtocolChrome.tsx(5,8): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/MeetingVoteCard.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/MeetingVoteCard.tsx(101,51): error TS2339: Property 'optionId' does not exist on type 'never'.
+src/components/OrganizationManagement/minutes/FinalizeMinutesDialog.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/minutes/UnfinalizeMinutesDialog.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/NewMeetingPage.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/OrganizationBrandingDialog.tsx(226,66): error TS2345: Argument of type '{ brandingColor?: string | undefined; brandingLogoUrl?: string | null | undefined; brandingTitle?: string | null | undefined; brandingBannerUrl?: string | null | undefined; iconSet?: "lucide" | ... 3 more ... | undefined; fontFamily?: "inter" | ... 4 more ... | undefined; }' is not assignable to parameter of type '{ name?: string | undefined; description?: string | undefined; membershipPolicy?: "open" | "invitation" | undefined; votingThreshold?: number | undefined; brandingColor?: string | undefined; ... 4 more ...; fontFamily?: "inter" | ... 3 more ... | undefined; }'.
+  Types of property 'brandingLogoUrl' are incompatible.
+    Type 'string | null | undefined' is not assignable to type 'string | undefined'.
+      Type 'null' is not assignable to type 'string | undefined'.
+src/components/OrganizationManagement/shared/MemberCard.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/shared/MemberCard.tsx(3,1): error TS6133: 'Badge' is declared but its value is never read.
+src/components/OrganizationManagement/shared/OrganizationCard.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/shared/OrganizationCard.tsx(26,41): error TS2339: Property 'membershipStatus' does not exist on type 'Organization'.
+src/components/OrganizationManagement/shared/OrganizationStats.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/shared/RepresentativeCard.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/shared/RepresentativeNominationDialog.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/shared/RepresentativesList.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/shared/StatusBadges.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/__tests__/DocumentsTab.test.tsx(3,1): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/DashboardTab.tsx(5,1): error TS6133: 'Badge' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/DashboardTab.tsx(9,48): error TS6133: 'documentsApi' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/DashboardTab.tsx(10,1): error TS6133: 'formatDistanceToNow' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/DashboardTab.tsx(11,1): error TS6133: 'VoteProgressBar' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/DashboardTab.tsx(12,1): error TS6192: All imports in import declaration are unused.
+src/components/OrganizationManagement/tabs/DashboardTab.tsx(13,22): error TS2459: Module '"../../shared/VoteDialog"' declares 'VoteValue' locally, but it is not exported.
+src/components/OrganizationManagement/tabs/DashboardTab.tsx(14,1): error TS6192: All imports in import declaration are unused.
+src/components/OrganizationManagement/tabs/DashboardTab.tsx(33,1): error TS6133: 'getRuleDisplayInfo' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/DashboardTab.tsx(36,1): error TS6133: 'getUserFriendlyErrorMessage' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/DashboardTab.tsx(42,1): error TS6133: 'Label' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/DashboardTab.tsx(90,3): error TS6133: 'permissions' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/DashboardTab.tsx(106,3): error TS6133: 'onCreateElection' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/DashboardTab.tsx(108,3): error TS6133: 'onNavigateToMembers' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/DashboardTab.tsx(119,10): error TS6133: 'expandedProposals' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/DashboardTab.tsx(120,10): error TS6133: 'votingProposalId' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/DashboardTab.tsx(127,10): error TS6133: 'userVoteChoice' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/DashboardTab.tsx(264,49): error TS2367: This comparison appears to be unintentional because the types '"draft" | "voting" | "cancelled" | "nomination" | "completed"' and '"active"' have no overlap.
+src/components/OrganizationManagement/tabs/DashboardTab.tsx(264,74): error TS2367: This comparison appears to be unintentional because the types '"draft" | "voting" | "cancelled" | "nomination" | "completed"' and '"announced"' have no overlap.
+src/components/OrganizationManagement/tabs/DashboardTab.tsx(361,9): error TS6133: 'getProposedValueDisplay' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/DashboardTab.tsx(366,9): error TS6133: 'handleRuleProposalVote' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/DashboardTab.tsx(383,9): error TS6133: 'toggleProposalExpansion' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/DashboardTab.tsx(396,9): error TS6133: 'getUserVote' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/DashboardTab.tsx(576,9): error TS2322: Type '"manual" | "auto"' is not assignable to type '"manual"'.
+  Type '"auto"' is not assignable to type '"manual"'.
+src/components/OrganizationManagement/tabs/DashboardTab.tsx(842,21): error TS2322: Type 'false | "" | undefined' is not assignable to type 'boolean | undefined'.
+  Type '""' is not assignable to type 'boolean | undefined'.
+src/components/OrganizationManagement/tabs/DashboardTab.tsx(1025,35): error TS2304: Cannot find name 'onCompleteOrganizationVote'.
+src/components/OrganizationManagement/tabs/DocumentsTab.tsx(209,72): error TS2345: Argument of type 'Set<"proposal" | "draft" | "agreed" | "voting" | "rejected" | "expired" | undefined>' is not assignable to parameter of type 'Set<string>'.
+  Type 'string | undefined' is not assignable to type 'string'.
+    Type 'undefined' is not assignable to type 'string'.
+src/components/OrganizationManagement/tabs/DocumentsTab.tsx(221,40): error TS2345: Argument of type 'Set<"proposal" | "draft" | "agreed" | "voting" | "rejected" | "expired" | undefined>' is not assignable to parameter of type 'Set<string>'.
+  Type 'string | undefined' is not assignable to type 'string'.
+    Type 'undefined' is not assignable to type 'string'.
+src/components/OrganizationManagement/tabs/DocumentsTab.tsx(222,47): error TS2345: Argument of type 'Set<"proposal" | "draft" | "agreed" | "voting" | "rejected" | "expired" | undefined>' is not assignable to parameter of type 'Set<string>'.
+  Type 'string | undefined' is not assignable to type 'string'.
+    Type 'undefined' is not assignable to type 'string'.
+src/components/OrganizationManagement/tabs/DocumentsTab.tsx(442,9): error TS6133: 'handleExportMinutes' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/DocumentsTab.tsx(1218,51): error TS2322: Type '(v: "all" | Document["status"]) => void' is not assignable to type '(value: string) => void'.
+  Types of parameters 'v' and 'value' are incompatible.
+    Type 'string' is not assignable to type '"proposal" | "draft" | "agreed" | "voting" | "rejected" | "expired" | "all" | undefined'.
+src/components/OrganizationManagement/tabs/DocumentsTab.tsx(1304,24): error TS18048: 'statusFilterValue' is possibly 'undefined'.
+src/components/OrganizationManagement/tabs/DocumentsTab.tsx(1304,68): error TS18048: 'statusFilterValue' is possibly 'undefined'.
+src/components/OrganizationManagement/tabs/GovernanceTab.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/GovernanceTab.tsx(6,83): error TS6133: 'ElectionCandidate' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/GovernanceTab.tsx(17,1): error TS6133: 'getRuleLabel' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/GovernanceTab.tsx(52,3): error TS6133: 'onCreateElection' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/GovernanceTab.tsx(65,10): error TS6133: 'loadingProposals' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/GovernanceTab.tsx(79,24): error TS2345: Argument of type '{ id: string; organizationId: string; title: string; description?: string | undefined; ruleField: string; proposedValue: unknown; status: string; createdAt: string; updatedAt: string; }[]' is not assignable to parameter of type 'SetStateAction<RuleProposal[]>'.
+  Type '{ id: string; organizationId: string; title: string; description?: string | undefined; ruleField: string; proposedValue: unknown; status: string; createdAt: string; updatedAt: string; }[]' is not assignable to type 'RuleProposal[]'.
+    Property 'createdBy' is missing in type '{ id: string; organizationId: string; title: string; description?: string | undefined; ruleField: string; proposedValue: unknown; status: string; createdAt: string; updatedAt: string; }' but required in type 'RuleProposal'.
+src/components/OrganizationManagement/tabs/GovernanceTab.tsx(142,35): error TS2339: Property 'current_rule_field' does not exist on type 'RuleProposal'.
+src/components/OrganizationManagement/tabs/GovernanceTab.tsx(150,35): error TS2339: Property 'current_rule_field' does not exist on type 'RuleProposal'.
+src/components/OrganizationManagement/tabs/GovernanceTab.tsx(364,38): error TS2367: This comparison appears to be unintentional because the types '"draft" | "voting" | "cancelled" | "nomination" | "completed"' and '"announced"' have no overlap.
+src/components/OrganizationManagement/tabs/GovernanceTab.tsx(365,34): error TS2367: This comparison appears to be unintentional because the types '"draft" | "voting" | "cancelled" | "nomination" | "completed"' and '"active"' have no overlap.
+src/components/OrganizationManagement/tabs/GovernanceTab.tsx(498,46): error TS2551: Property 'nominatedByName' does not exist on type 'ElectionCandidate'. Did you mean 'nominatedBy'?
+src/components/OrganizationManagement/tabs/GovernanceTab.tsx(499,83): error TS2551: Property 'nominatedByName' does not exist on type 'ElectionCandidate'. Did you mean 'nominatedBy'?
+src/components/OrganizationManagement/tabs/MeetingsTab.tsx(1209,9): error TS6133: 'openStartVoteWithOptions' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/MembersTab.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/MembersTab.tsx(59,19): error TS2322: Type 'OrganizationMember' is not assignable to type 'Member'.
+  Types of property 'status' are incompatible.
+    Type '"active" | "legacy" | "suspended"' is not assignable to type '"active" | "legacy"'.
+      Type '"suspended"' is not assignable to type '"active" | "legacy"'.
+src/components/OrganizationManagement/tabs/MembersTab.tsx(71,25): error TS2322: Type 'OrganizationMember' is not assignable to type 'Member'.
+  Types of property 'status' are incompatible.
+    Type '"active" | "legacy" | "suspended"' is not assignable to type '"active" | "legacy"'.
+      Type '"suspended"' is not assignable to type '"active" | "legacy"'.
+src/components/OrganizationManagement/tabs/ScheduleTab.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/ScheduleTab.tsx(63,9): error TS6133: 'isMobile' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/SchedulingPollGrid.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/SchedulingTab.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/SchedulingTab.tsx(22,25): error TS6133: 'meetingsApi' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/TransparencyTab.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/TransparencyTab.tsx(42,3): error TS6133: 'currentUser' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/TransparencyTab.tsx(119,76): error TS6133: 'title' is declared but its value is never read.
+src/components/OrganizationManagement/tabs/TransparencyTab.tsx(164,20): error TS2345: Argument of type '{ id: string | undefined; action_type: string; created_at: string; performed_by_name: string; affected_user_name: string | undefined; details: string | undefined; }[]' is not assignable to parameter of type 'SetStateAction<AuditLogEntry[]>'.
+  Type '{ id: string | undefined; action_type: string; created_at: string; performed_by_name: string; affected_user_name: string | undefined; details: string | undefined; }[]' is not assignable to type 'AuditLogEntry[]'.
+    Type '{ id: string | undefined; action_type: string; created_at: string; performed_by_name: string; affected_user_name: string | undefined; details: string | undefined; }' is not assignable to type 'AuditLogEntry'.
+      Types of property 'id' are incompatible.
+        Type 'string | undefined' is not assignable to type 'string'.
+          Type 'undefined' is not assignable to type 'string'.
+src/components/OrganizationManagement/tabs/TransparencyTab.tsx(186,9): error TS6133: 'completedElections' is declared but its value is never read.
+src/components/ParagraphWithSuggestions.tsx(3,70): error TS6133: 'Vote' is declared but its value is never read.
+src/components/ParagraphWithSuggestions.tsx(82,3): error TS6133: 'onEditComment' is declared but its value is never read.
+src/components/ProposalText.tsx(3,1): error TS6133: 'Badge' is declared but its value is never read.
+src/components/ProposalText.tsx(29,3): error TS6133: 'organization' is declared but its value is never read.
+src/components/ProposalText.tsx(30,3): error TS6133: 'document' is declared but its value is never read.
+src/components/ProposalText.tsx(49,39): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/components/RepresentativeSelector.tsx(4,1): error TS6133: 'Input' is declared but its value is never read.
+src/components/RepresentativeSelector.tsx(18,1): error TS6133: 'COLORS' is declared but its value is never read.
+src/components/RepresentativeSelector.tsx(95,9): error TS6133: 'isValidSelection' is declared but its value is never read.
+src/components/RuleProposalCardWrapper.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/RuleProposalCardWrapper.tsx(38,3): error TS6133: 'onNavigateToDetails' is declared but its value is never read.
+src/components/shared/ActivityItemRenderer.tsx(157,62): error TS2345: Argument of type '(key: string, options?: Record<string, unknown> | undefined) => string' is not assignable to parameter of type 'TFunction<"activity", undefined>'.
+  Property '$TFunctionBrand' is missing in type '(key: string, options?: Record<string, unknown> | undefined) => string' but required in type 'TFunction<"activity", undefined>'.
+src/components/shared/AppLogo.tsx(8,8): error TS6133: 'React' is declared but its value is never read.
+src/components/shared/CompleteVoteButton.tsx(8,8): error TS6133: 'React' is declared but its value is never read.
+src/components/shared/DocumentAvatar.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/shared/DocumentVotingCard.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/shared/ElectionVoteCard.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/shared/ElectionVoteCard.tsx(78,3): error TS6133: 'variant' is declared but its value is never read.
+src/components/shared/ElectionVoteCard.tsx(105,41): error TS2339: Property 'electionsApi' does not exist on type '{ getGovernanceRules: (organizationId: string) => Promise<GovernanceRulesResponse>; updateGovernanceRules: (organizationId: string, updates: Partial<OrganizationGovernanceRules>) => Promise<...>; ... 22 more ...; auditLogsApi: { ...; }; }'.
+src/components/shared/ElectionVoteCard.tsx(128,29): error TS2339: Property 'electionsApi' does not exist on type '{ getGovernanceRules: (organizationId: string) => Promise<GovernanceRulesResponse>; updateGovernanceRules: (organizationId: string, updates: Partial<OrganizationGovernanceRules>) => Promise<...>; ... 22 more ...; auditLogsApi: { ...; }; }'.
+src/components/shared/ElectionVoteCard.tsx(146,29): error TS2339: Property 'electionsApi' does not exist on type '{ getGovernanceRules: (organizationId: string) => Promise<GovernanceRulesResponse>; updateGovernanceRules: (organizationId: string, updates: Partial<OrganizationGovernanceRules>) => Promise<...>; ... 22 more ...; auditLogsApi: { ...; }; }'.
+src/components/shared/ElectionVoteCard.tsx(244,22): error TS2367: This comparison appears to be unintentional because the types '"draft" | "voting" | "cancelled" | "nomination" | "completed"' and '"active"' have no overlap.
+src/components/shared/ElectionVoteCard.tsx(245,25): error TS2367: This comparison appears to be unintentional because the types '"draft" | "voting" | "cancelled" | "nomination" | "completed"' and '"announced"' have no overlap.
+src/components/shared/ElectionVoteCard.tsx(312,55): error TS2322: Type '(voteValue?: "yes" | "no" | "abstain" | undefined) => void | Promise<void>' is not assignable to type 'MouseEventHandler<HTMLButtonElement>'.
+  Types of parameters 'voteValue' and 'event' are incompatible.
+    Type 'MouseEvent<HTMLButtonElement, MouseEvent>' is not assignable to type '"yes" | "no" | "abstain" | undefined'.
+src/components/shared/ElectionVoteCard.tsx(515,21): error TS2322: Type '() => void' is not assignable to type '() => Promise<void>'.
+  Type 'void' is not assignable to type 'Promise<void>'.
+src/components/shared/ElectionVoteCard.tsx(541,19): error TS2322: Type '() => void' is not assignable to type '() => Promise<void>'.
+  Type 'void' is not assignable to type 'Promise<void>'.
+src/components/shared/MultipleChoiceVoting.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/shared/MultipleChoiceVoting.tsx(4,24): error TS6133: 'GovernanceRuleValue' is declared but its value is never read.
+src/components/shared/ParagraphChangeCard.tsx(71,53): error TS2339: Property 'avatar' does not exist on type '{ id: string; name: string; email?: string | undefined; }'.
+src/components/shared/ProposalDetailsDialog.tsx(1,27): error TS6133: 'useEffect' is declared but its value is never read.
+src/components/shared/ProposalDetailsDialog.tsx(45,3): error TS6133: 'currentUserId' is declared but its value is never read.
+src/components/shared/ProposalDetailsDialog.tsx(151,13): error TS2322: Type '{ id: string; name: string; email?: string | undefined; }[]' is not assignable to type 'User[]'.
+  Type '{ id: string; name: string; email?: string | undefined; }' is not assignable to type 'User'.
+    Types of property 'email' are incompatible.
+      Type 'string | undefined' is not assignable to type 'string'.
+        Type 'undefined' is not assignable to type 'string'.
+src/components/shared/ProposalDetailsDialog.tsx(319,55): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(predicate: (value: { id?: string | undefined; userId: string; selectedOptionId?: string | undefined; voteChoice?: "yes" | "no" | "abstain" | undefined; votedAt?: string | undefined; user?: { id: string; name: string; email?: string | undefined; } | undefined; }, index: number, array: { ...; }[]) => value is { ...; }, thisArg?: any): { ...; }[]', gave the following error.
+    Argument of type '(vote: { isPlaceholder?: boolean; }) => boolean' is not assignable to parameter of type '(value: { id?: string | undefined; userId: string; selectedOptionId?: string | undefined; voteChoice?: "yes" | "no" | "abstain" | undefined; votedAt?: string | undefined; user?: { id: string; name: string; email?: string | undefined; } | undefined; }, index: number, array: { ...; }[]) => value is { ...; }'.
+      Types of parameters 'vote' and 'value' are incompatible.
+        Type '{ id?: string | undefined; userId: string; selectedOptionId?: string | undefined; voteChoice?: "yes" | "no" | "abstain" | undefined; votedAt?: string | undefined; user?: { id: string; name: string; email?: string | undefined; } | undefined; }' has no properties in common with type '{ isPlaceholder?: boolean | undefined; }'.
+  Overload 2 of 2, '(predicate: (value: { id?: string | undefined; userId: string; selectedOptionId?: string | undefined; voteChoice?: "yes" | "no" | "abstain" | undefined; votedAt?: string | undefined; user?: { id: string; name: string; email?: string | undefined; } | undefined; }, index: number, array: { ...; }[]) => unknown, thisArg?: any): { ...; }[]', gave the following error.
+    Argument of type '(vote: { isPlaceholder?: boolean; }) => boolean' is not assignable to parameter of type '(value: { id?: string | undefined; userId: string; selectedOptionId?: string | undefined; voteChoice?: "yes" | "no" | "abstain" | undefined; votedAt?: string | undefined; user?: { id: string; name: string; email?: string | undefined; } | undefined; }, index: number, array: { ...; }[]) => unknown'.
+      Types of parameters 'vote' and 'value' are incompatible.
+        Type '{ id?: string | undefined; userId: string; selectedOptionId?: string | undefined; voteChoice?: "yes" | "no" | "abstain" | undefined; votedAt?: string | undefined; user?: { id: string; name: string; email?: string | undefined; } | undefined; }' has no properties in common with type '{ isPlaceholder?: boolean | undefined; }'.
+src/components/shared/ProposalDetailsDialog.tsx(332,54): error TS2367: This comparison appears to be unintentional because the types '"no" | "abstain" | undefined' and '"PRO"' have no overlap.
+src/components/shared/ProposalDetailsDialog.tsx(333,53): error TS2367: This comparison appears to be unintentional because the types '"abstain" | undefined' and '"CONTRA"' have no overlap.
+src/components/shared/ProposalDetailsDialog.tsx(336,55): error TS2367: This comparison appears to be unintentional because the types '"no" | "abstain" | undefined' and '"PRO"' have no overlap.
+src/components/shared/ProposalDetailsDialog.tsx(337,54): error TS2367: This comparison appears to be unintentional because the types '"abstain" | undefined' and '"CONTRA"' have no overlap.
+src/components/shared/ProposalDetailsDialog.tsx(345,60): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(predicate: (value: StructureProposalVote, index: number, array: StructureProposalVote[]) => value is StructureProposalVote, thisArg?: any): StructureProposalVote[]', gave the following error.
+    Argument of type '(vote: { isPlaceholder?: boolean; }) => boolean' is not assignable to parameter of type '(value: StructureProposalVote, index: number, array: StructureProposalVote[]) => value is StructureProposalVote'.
+      Types of parameters 'vote' and 'value' are incompatible.
+        Type 'StructureProposalVote' has no properties in common with type '{ isPlaceholder?: boolean | undefined; }'.
+  Overload 2 of 2, '(predicate: (value: StructureProposalVote, index: number, array: StructureProposalVote[]) => unknown, thisArg?: any): StructureProposalVote[]', gave the following error.
+    Argument of type '(vote: { isPlaceholder?: boolean; }) => boolean' is not assignable to parameter of type '(value: StructureProposalVote, index: number, array: StructureProposalVote[]) => unknown'.
+      Types of parameters 'vote' and 'value' are incompatible.
+        Type 'StructureProposalVote' has no properties in common with type '{ isPlaceholder?: boolean | undefined; }'.
+src/components/shared/ProposalDetailsDialog.tsx(369,55): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(predicate: (value: TreeProposalVote, index: number, array: TreeProposalVote[]) => value is TreeProposalVote, thisArg?: any): TreeProposalVote[]', gave the following error.
+    Argument of type '(vote: { isPlaceholder?: boolean; }) => boolean' is not assignable to parameter of type '(value: TreeProposalVote, index: number, array: TreeProposalVote[]) => value is TreeProposalVote'.
+      Types of parameters 'vote' and 'value' are incompatible.
+        Type 'TreeProposalVote' has no properties in common with type '{ isPlaceholder?: boolean | undefined; }'.
+  Overload 2 of 2, '(predicate: (value: TreeProposalVote, index: number, array: TreeProposalVote[]) => unknown, thisArg?: any): TreeProposalVote[]', gave the following error.
+    Argument of type '(vote: { isPlaceholder?: boolean; }) => boolean' is not assignable to parameter of type '(value: TreeProposalVote, index: number, array: TreeProposalVote[]) => unknown'.
+      Types of parameters 'vote' and 'value' are incompatible.
+        Type 'TreeProposalVote' has no properties in common with type '{ isPlaceholder?: boolean | undefined; }'.
+src/components/shared/RuleMetadataDisplay.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/shared/RuleMetadataDisplay.tsx(32,82): error TS2367: This comparison appears to be unintentional because the types 'string | number' and 'boolean' have no overlap.
+src/components/shared/UnifiedProposalList.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/shared/UnifiedProposalList.tsx(1,27): error TS6133: 'useEffect' is declared but its value is never read.
+src/components/shared/UnifiedProposalList.tsx(12,1): error TS6133: 'useWebSocket' is declared but its value is never read.
+src/components/shared/UnifiedProposalList.tsx(13,1): error TS6133: 'logger' is declared but its value is never read.
+src/components/shared/UnifiedProposalList.tsx(61,10): error TS6133: 'optimisticUpdates' is declared but its value is never read.
+src/components/shared/UnifiedProposalList.tsx(201,11): error TS2739: Type '{ all: number; }' is missing the following properties from type 'Record<"all" | ProposalType, number>': paragraph, structure, tree, rule, deletion
+src/components/shared/VoteResultsDisplay.tsx(8,1): error TS6133: 'VOTE' is declared but its value is never read.
+src/components/StructureHistory.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/StructureHistory.tsx(9,28): error TS6133: 'StructureSnapshot' is declared but its value is never read.
+src/components/StructureHistory.tsx(9,47): error TS6133: 'StructureChange' is declared but its value is never read.
+src/components/StructureHistory.tsx(9,70): error TS2307: Cannot find module '@/types' or its corresponding type declarations.
+src/components/StructureHistory.tsx(10,37): error TS2307: Cannot find module '@/lib/api' or its corresponding type declarations.
+src/components/StructureHistory.tsx(19,48): error TS6133: 'currentUserId' is declared but its value is never read.
+src/components/StructureHistory.tsx(23,10): error TS6133: 'selectedVersion' is declared but its value is never read.
+src/components/StructureHistory.tsx(23,27): error TS6133: 'setSelectedVersion' is declared but its value is never read.
+src/components/StructureHistory.tsx(183,61): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/components/StructureHistory.tsx(183,67): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/components/StructureProposalCardWrapper.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/StructureProposalMode.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/StructureProposalMode.tsx(24,20): error TS2307: Cannot find module '@/components/ui/utils' or its corresponding type declarations.
+src/components/StructureProposalMode.tsx(26,24): error TS2307: Cannot find module '@/components/ui/button' or its corresponding type declarations.
+src/components/StructureProposalMode.tsx(27,23): error TS2307: Cannot find module '@/components/ui/input' or its corresponding type declarations.
+src/components/StructureProposalMode.tsx(28,26): error TS2307: Cannot find module '@/components/ui/textarea' or its corresponding type declarations.
+src/components/StructureProposalMode.tsx(29,1): error TS6192: All imports in import declaration are unused.
+src/components/StructureProposalMode.tsx(29,58): error TS2307: Cannot find module '@/components/ui/card' or its corresponding type declarations.
+src/components/StructureProposalMode.tsx(30,23): error TS2307: Cannot find module '@/components/ui/badge' or its corresponding type declarations.
+src/components/StructureProposalMode.tsx(31,26): error TS2307: Cannot find module '@/components/ui/checkbox' or its corresponding type declarations.
+src/components/StructureProposalMode.tsx(32,41): error TS2307: Cannot find module '@/components/ui/alert' or its corresponding type declarations.
+src/components/StructureProposalMode.tsx(34,43): error TS6133: 'HeadingLevel' is declared but its value is never read.
+src/components/StructureProposalMode.tsx(34,63): error TS2307: Cannot find module '@/types' or its corresponding type declarations.
+src/components/StructureProposalMode.tsx(35,74): error TS2307: Cannot find module '@/lib/api' or its corresponding type declarations.
+src/components/StructureProposalMode.tsx(37,60): error TS2307: Cannot find module '@/lib/designSystem' or its corresponding type declarations.
+src/components/StructureProposalMode.tsx(38,31): error TS2307: Cannot find module '@/lib/statusColors' or its corresponding type declarations.
+src/components/StructureProposalMode.tsx(39,31): error TS2307: Cannot find module '@/contexts/ScreenSizeContext' or its corresponding type declarations.
+src/components/StructureProposalMode.tsx(328,13): error TS18046: 'error' is of type 'unknown'.
+src/components/StructureProposalMode.tsx(329,25): error TS18046: 'error' is of type 'unknown'.
+src/components/StructureProposalMode.tsx(330,20): error TS18046: 'error' is of type 'unknown'.
+src/components/StructureProposalMode.tsx(332,20): error TS18046: 'error' is of type 'unknown'.
+src/components/StructureProposalMode.tsx(335,25): error TS18046: 'error' is of type 'unknown'.
+src/components/StructureProposalMode.tsx(368,26): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/components/StructureProposalMode.tsx(378,26): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/components/ui/alert-dialog.tsx(13,30): error TS2322: Type '{ open?: boolean | undefined; children?: ReactNode; defaultOpen?: boolean | undefined; onOpenChange?: ((open: boolean) => void) | undefined; ref: ForwardedRef<never>; "data-slot": string; }' is not assignable to type 'IntrinsicAttributes & AlertDialogProps'.
+  Property 'ref' does not exist on type 'IntrinsicAttributes & AlertDialogProps'.
+src/components/ui/alert-dialog.tsx(29,32): error TS2322: Type '{ children?: ReactNode; container?: Element | DocumentFragment | null | undefined; forceMount?: true | undefined; ref: ForwardedRef<never>; "data-slot": string; }' is not assignable to type 'IntrinsicAttributes & AlertDialogPortalProps'.
+  Property 'ref' does not exist on type 'IntrinsicAttributes & AlertDialogPortalProps'.
+src/components/ui/button.tsx(48,7): error TS2322: Type 'ForwardedRef<HTMLElement>' is not assignable to type 'LegacyRef<HTMLButtonElement> | undefined'.
+  Type 'MutableRefObject<HTMLElement | null>' is not assignable to type 'LegacyRef<HTMLButtonElement> | undefined'.
+    Type 'MutableRefObject<HTMLElement | null>' is not assignable to type 'RefObject<HTMLButtonElement>'.
+      Types of property 'current' are incompatible.
+        Type 'HTMLElement | null' is not assignable to type 'HTMLButtonElement | null'.
+          Type 'HTMLElement' is missing the following properties from type 'HTMLButtonElement': disabled, form, formAction, formEnctype, and 15 more.
+src/components/ui/dialog.tsx(13,25): error TS2322: Type '{ children?: ReactNode; open?: boolean | undefined; defaultOpen?: boolean | undefined; onOpenChange?(open: boolean): void; modal?: boolean | undefined; ref: ForwardedRef<never>; "data-slot": string; }' is not assignable to type 'IntrinsicAttributes & DialogProps'.
+  Property 'ref' does not exist on type 'IntrinsicAttributes & DialogProps'.
+src/components/ui/sidebar.tsx(9,29): error TS2307: Cannot find module '../contexts/ScreenSizeContext' or its corresponding type declarations.
+src/components/ui/ThemeToggle.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/UserProfile.tsx(563,17): error TS2322: Type 'NotificationPreferencesData | null' is not assignable to type 'NotificationPreferencesData | undefined'.
+  Type 'null' is not assignable to type 'NotificationPreferencesData | undefined'.
+src/hooks/proposals/transforms.ts(8,42): error TS2367: This comparison appears to be unintentional because the types '"no" | "abstain" | undefined' and '"PRO"' have no overlap.
+src/hooks/proposals/transforms.ts(9,46): error TS2367: This comparison appears to be unintentional because the types '"abstain" | undefined' and '"CONTRA"' have no overlap.
+src/hooks/proposals/transforms.ts(14,8): error TS2551: Property 'votesPro' does not exist on type 'RuleProposal'. Did you mean 'votesNo'?
+src/hooks/proposals/transforms.ts(15,55): error TS2367: This comparison appears to be unintentional because the types '"no" | "abstain" | undefined' and '"PRO"' have no overlap.
+src/hooks/proposals/transforms.ts(19,8): error TS2339: Property 'votesContra' does not exist on type 'RuleProposal'.
+src/hooks/proposals/transforms.ts(20,54): error TS2367: This comparison appears to be unintentional because the types '"yes" | "abstain" | undefined' and '"CONTRA"' have no overlap.
+src/hooks/proposals/transforms.ts(24,8): error TS2339: Property 'votesNeutral' does not exist on type 'RuleProposal'.
+src/hooks/proposals/transforms.ts(25,59): error TS2367: This comparison appears to be unintentional because the types '"yes" | "no" | undefined' and '"NEUTRAL"' have no overlap.
+src/hooks/proposals/transforms.ts(37,24): error TS2339: Property 'organizationId' does not exist on type 'RuleProposal'.
+src/hooks/proposals/transforms.ts(41,28): error TS2339: Property 'approvalPercentage' does not exist on type 'RuleProposal'.
+src/hooks/proposals/transforms.ts(43,5): error TS2353: Object literal may only specify known properties, and 'calculationMethod' does not exist in type 'BaseProposal'.
+src/hooks/proposals/transforms.ts(43,27): error TS2339: Property 'calculationMethod' does not exist on type 'RuleProposal'.
+src/hooks/proposals/useFullProposalData.ts(30,15): error TS2741: Property 'createdBy' is missing in type '{ id: string; organizationId: string; title: string; description?: string | undefined; ruleField: string; proposedValue: unknown; status: string; createdAt: string; updatedAt: string; }' but required in type 'RuleProposal'.
+src/hooks/proposals/useFullProposalData.ts(38,15): error TS2739: Type '{ id: string; documentId: string; title: string; description?: string | undefined; operations: { [key: string]: unknown; type: string; }[]; status: string; createdAt: string; updatedAt: string; createdBy: { ...; }; votes?: Vote[] | undefined; comments?: Comment[] | undefined; }' is missing the following properties from type 'StructureProposal': userId, approved, applied, user
+src/hooks/proposals/useRuleProposals.ts(16,62): error TS2345: Argument of type '{ id: string; organizationId: string; title: string; description?: string | undefined; ruleField: string; proposedValue: unknown; status: string; createdAt: string; updatedAt: string; }' is not assignable to parameter of type 'RuleProposal'.
+  Property 'createdBy' is missing in type '{ id: string; organizationId: string; title: string; description?: string | undefined; ruleField: string; proposedValue: unknown; status: string; createdAt: string; updatedAt: string; }' but required in type 'RuleProposal'.
+src/hooks/proposals/useStructureProposals.ts(16,72): error TS2345: Argument of type '{ id: string; documentId: string; title: string; description?: string | undefined; operations: { [key: string]: unknown; type: string; }[]; status: string; createdAt: string; updatedAt: string; createdBy: { ...; }; votes?: Vote[] | undefined; comments?: Comment[] | undefined; }' is not assignable to parameter of type 'StructureProposal'.
+  Type '{ id: string; documentId: string; title: string; description?: string | undefined; operations: { [key: string]: unknown; type: string; }[]; status: string; createdAt: string; updatedAt: string; createdBy: { ...; }; votes?: Vote[] | undefined; comments?: Comment[] | undefined; }' is missing the following properties from type 'StructureProposal': userId, approved, applied, user
+src/hooks/useAppNavigation.ts(34,3): error TS6133: 'currentDocument' is declared but its value is never read.
+src/hooks/useAppNavigation.ts(35,3): error TS6133: 'documentOrganization' is declared but its value is never read.
+src/hooks/useAppNavigation.ts(143,11): error TS6133: 'parsed' is declared but its value is never read.
+src/hooks/useDevicePerformance.ts(1,31): error TS6133: 'useMemo' is declared but its value is never read.
+src/hooks/useDiffColors.ts(31,3): error TS6133: 'highlightColor' is declared but its value is never read.
+src/hooks/useDocumentOperations.ts(16,44): error TS6196: 'CommentApiResponse' is declared but never used.
+src/hooks/useDocumentOperations.ts(214,26): error TS6133: 'proposal' is declared but its value is never read.
+src/hooks/useDocumentOperations.ts(638,85): error TS2551: Property 'deleted_at' does not exist on type 'Comment'. Did you mean 'deletedAt'?
+src/hooks/useDocumentOperations.ts(673,26): error TS6133: 'proposal' is declared but its value is never read.
+src/hooks/useInvitationHandling.ts(35,3): error TS6133: 'organizations' is declared but its value is never read.
+src/hooks/useOptimisticVote.ts(72,7): error TS2353: Object literal may only specify known properties, and 'email' does not exist in type '{ id: string; name: string; }'.
+src/hooks/useOptimisticVote.ts(119,13): error TS6133: 'clearVotingStateAndToast' is declared but its value is never read.
+src/hooks/useOrganizationManagement.ts(34,3): error TS6133: 'setCurrentView' is declared but its value is never read.
+src/hooks/useOrganizationManagement.ts(68,55): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/hooks/useOrganizationManagement.ts(75,52): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/hooks/useOrganizationWebSocket.ts(3,24): error TS2305: Module '"../types"' has no exported member 'GovernanceRule'.
+src/hooks/useOrganizationWebSocket.ts(3,40): error TS2305: Module '"../types"' has no exported member 'Election'.
+src/hooks/useOrganizationWebSocket.ts(3,70): error TS6133: 'RuleProposal' is declared but its value is never read.
+src/hooks/useProposalNotifications.ts(1,10): error TS6133: 'useMemo' is declared but its value is never read.
+src/hooks/useProposalNotifications.ts(4,11): error TS6196: 'ProposalNotificationState' is declared but never used.
+src/hooks/useProposalNotifications.ts(63,5): error TS6133: 'proposalId' is declared but its value is never read.
+src/hooks/useProposalNotifications.ts(150,11): error TS7022: 'hasNewVotes' implicitly has type 'any' because it does not have a type annotation and is referenced directly or indirectly in its own initializer.
+src/hooks/useProposalNotifications.ts(151,9): error TS2448: Block-scoped variable 'hasNewVotes' used before its declaration.
+src/hooks/useRepresentativeActions.ts(1,44): error TS6133: 'useRef' is declared but its value is never read.
+src/hooks/useRepresentativeActions.ts(64,34): error TS6133: 'governanceRules' is declared but its value is never read.
+src/hooks/useRepresentativeActions.ts(116,24): error TS2352: Conversion of type '{ id: string; organizationId: string; title: string; description?: string | undefined; ruleField: string; proposedValue: unknown; status: string; createdAt: string; updatedAt: string; }[]' to type 'RuleProposal[]' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Property 'createdBy' is missing in type '{ id: string; organizationId: string; title: string; description?: string | undefined; ruleField: string; proposedValue: unknown; status: string; createdAt: string; updatedAt: string; }' but required in type 'RuleProposal'.
+src/hooks/useRepresentativeActions.ts(146,31): error TS2352: Conversion of type '{ id: string; documentId: string; title: string; description?: string | undefined; operations: { [key: string]: unknown; type: string; }[]; status: string; createdAt: string; updatedAt: string; createdBy: { ...; }; votes?: Vote[] | undefined; comments?: Comment[] | undefined; }[]' to type 'StructureProposal[]' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type '{ id: string; documentId: string; title: string; description?: string | undefined; operations: { [key: string]: unknown; type: string; }[]; status: string; createdAt: string; updatedAt: string; createdBy: { ...; }; votes?: Vote[] | undefined; comments?: Comment[] | undefined; }' is missing the following properties from type 'StructureProposal': userId, approved, applied, user
+src/hooks/useRepresentativeManagerActions.ts(89,44): error TS2339: Property 'initiateMistrustVote' does not exist on type '{ getGovernanceRules: (organizationId: string) => Promise<GovernanceRulesResponse>; updateGovernanceRules: (organizationId: string, updates: Partial<OrganizationGovernanceRules>) => Promise<...>; ... 22 more ...; auditLogsApi: { ...; }; }'.
+src/hooks/useStructureProposals.ts(44,29): error TS2345: Argument of type '{ id: string; documentId: string; title: string; description?: string | undefined; operations: { [key: string]: unknown; type: string; }[]; status: string; createdAt: string; updatedAt: string; createdBy: { ...; }; votes?: Vote[] | undefined; comments?: Comment[] | undefined; }[]' is not assignable to parameter of type 'SetStateAction<StructureProposal[]>'.
+  Type '{ id: string; documentId: string; title: string; description?: string | undefined; operations: { [key: string]: unknown; type: string; }[]; status: string; createdAt: string; updatedAt: string; createdBy: { ...; }; votes?: Vote[] | undefined; comments?: Comment[] | undefined; }[]' is not assignable to type 'StructureProposal[]'.
+    Type '{ id: string; documentId: string; title: string; description?: string | undefined; operations: { [key: string]: unknown; type: string; }[]; status: string; createdAt: string; updatedAt: string; createdBy: { ...; }; votes?: Vote[] | undefined; comments?: Comment[] | undefined; }' is missing the following properties from type 'StructureProposal': userId, approved, applied, user
+src/hooks/useStructureProposals.ts(67,59): error TS6133: 'proposalId' is declared but its value is never read.
+src/hooks/useUserOrganizations.ts(43,14): error TS2352: Conversion of type 'Promise<void>' to type 'Promise<Organization[]>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type 'void' is not comparable to type 'Organization[]'.
+src/hooks/useUserOrganizations.ts(76,15): error TS6133: 'fetchDuration' is declared but its value is never read.
+src/hooks/useUserOrganizations.ts(79,15): error TS6133: 'orgDetails' is declared but its value is never read.
+src/hooks/useUserOrganizations.ts(82,31): error TS2339: Property 'membershipStatus' does not exist on type 'Organization'.
+src/hooks/useUserOrganizations.ts(84,25): error TS2339: Property 'membershipStatus' does not exist on type 'Organization'.
+src/hooks/useUserOrganizations.ts(144,5): error TS2322: Type 'Promise<Organization[]>' is not assignable to type 'Promise<void>'.
+  Type 'Organization[]' is not assignable to type 'void'.
+src/hooks/useVoteButtonHandler.ts(44,3): error TS6133: 'setVotingState' is declared but its value is never read.
+src/hooks/useWebSocket.ts(3,60): error TS6133: 'DocumentUpdateEvent' is declared but its value is never read.
+src/hooks/useWebSocket.ts(3,81): error TS6133: 'OrganizationUpdateEvent' is declared but its value is never read.
+src/hooks/useWebSocketUpdates.ts(48,9): error TS6133: 'clearQueuedUpdatesStore' is declared but its value is never read.
+src/hooks/ws/useBatchedUpdates.ts(29,7): error TS2367: This comparison appears to be unintentional because the types '"paragraph" | "proposal" | "paragraph-created" | "paragraph-updated" | "document-vote" | "document-status-changed" | "proposal-cutoff-reached" | "deletion-proposed" | "deletion-vote" | ... 7 more ... | "document-updated"' and '"comment-upvote"' have no overlap.
+src/hooks/ws/useBatchedUpdates.ts(46,47): error TS2367: This comparison appears to be unintentional because the types '"paragraph" | "proposal" | "paragraph-created" | "paragraph-updated" | "document-vote" | "document-status-changed" | "proposal-cutoff-reached" | "deletion-proposed" | "deletion-vote" | ... 7 more ... | "document-updated"' and '"comment-upvote"' have no overlap.
+src/hooks/ws/useBatchedUpdates.ts(118,12): error TS2678: Type '"comment-upvote"' is not comparable to type 'DocumentUpdateEventType'.
+src/hooks/ws/useCommentUpdates.ts(13,58): error TS2339: Property 'proposalId' does not exist on type 'DocumentUpdateData'.
+  Property 'proposalId' does not exist on type '{ type: "proposal"; paragraphId: string; proposal: Proposal; }'.
+src/hooks/ws/useCommentUpdates.ts(168,11): error TS2367: This comparison appears to be unintentional because the types 'DocumentUpdateEventType' and '"comment-upvote"' have no overlap.
+src/hooks/ws/useCommentUpdates.ts(168,65): error TS2339: Property 'commentId' does not exist on type 'DocumentUpdateData'.
+  Property 'commentId' does not exist on type '{ type: "vote"; proposalId: string; paragraphId: string; vote: { voteId: string; userId: string; vote: "PRO" | "NEUTRAL" | "CONTRA"; action: string; allVotes: Vote[]; isAnonymous: boolean; }; }'.
+src/hooks/ws/useCommentUpdates.ts(169,44): error TS2352: Conversion of type 'DocumentUpdateData' to type '{ commentId: string; upvoteCount: number; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type '{ type: "document-updated"; amendmentsOpen?: boolean | undefined; }' is missing the following properties from type '{ commentId: string; upvoteCount: number; }': commentId, upvoteCount
+src/hooks/ws/useParagraphUpdates.ts(13,3): error TS2322: Type '{ id: string; paragraphId: string; userId: string; text: string; oldText: string | null; proposalId: string | null; acceptedAt: Date; approvalPercentage: number; type: string; headingLevel: string | undefined; user: { ...; }; }[]' is not assignable to type 'VersionHistory[]'.
+  Type '{ id: string; paragraphId: string; userId: string; text: string; oldText: string | null; proposalId: string | null; acceptedAt: Date; approvalPercentage: number; type: string; headingLevel: string | undefined; user: { ...; }; }' is not assignable to type 'VersionHistory'.
+    Types of property 'headingLevel' are incompatible.
+      Type 'string | undefined' is not assignable to type 'HeadingLevel | undefined'.
+        Type 'string' is not assignable to type 'HeadingLevel | undefined'.
+src/hooks/ws/useParagraphUpdates.ts(13,29): error TS2345: Argument of type '(entry: VersionHistory & { newText?: string; oldText?: string; heading_level?: string; }) => { id: string; paragraphId: string; userId: string; text: string; oldText: string | null; ... 5 more ...; user: { ...; }; }' is not assignable to parameter of type '(value: VersionHistory, index: number, array: VersionHistory[]) => { id: string; paragraphId: string; userId: string; text: string; oldText: string | null; ... 5 more ...; user: { ...; }; }'.
+  Types of parameters 'entry' and 'value' are incompatible.
+    Type 'VersionHistory' is not assignable to type 'VersionHistory & { newText?: string | undefined; oldText?: string | undefined; heading_level?: string | undefined; }'.
+      Type 'VersionHistory' is not assignable to type '{ newText?: string | undefined; oldText?: string | undefined; heading_level?: string | undefined; }'.
+        Types of property 'oldText' are incompatible.
+          Type 'string | null | undefined' is not assignable to type 'string | undefined'.
+            Type 'null' is not assignable to type 'string | undefined'.
+src/hooks/ws/useParagraphUpdates.ts(23,21): error TS2352: Conversion of type 'VersionHistory & { newText?: string | undefined; oldText?: string | undefined; heading_level?: string | undefined; }' to type '{ createdAt: string; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Property 'createdAt' is missing in type 'VersionHistory & { newText?: string | undefined; oldText?: string | undefined; heading_level?: string | undefined; }' but required in type '{ createdAt: string; }'.
+src/hooks/ws/useParagraphUpdates.ts(37,60): error TS2339: Property 'paragraphId' does not exist on type 'DocumentUpdateData'.
+  Property 'paragraphId' does not exist on type '{ type: "document-vote"; votes: DocumentVote[]; }'.
+src/hooks/ws/useParagraphUpdates.ts(60,24): error TS2345: Argument of type '(prevDoc: Document | null) => { paragraphs: (Paragraph | { text: string; title: string | undefined; headingLevel: string | null | undefined; history: VersionHistory[]; ... 7 more ...; isDocumentTitle?: boolean | undefined; })[]; ... 30 more ...; documentVotes?: DocumentVote[] | undefined; } | null' is not assignable to parameter of type 'SetStateAction<Document | null>'.
+  Type '(prevDoc: Document | null) => { paragraphs: (Paragraph | { text: string; title: string | undefined; headingLevel: string | null | undefined; history: VersionHistory[]; ... 7 more ...; isDocumentTitle?: boolean | undefined; })[]; ... 30 more ...; documentVotes?: DocumentVote[] | undefined; } | null' is not assignable to type '(prevState: Document | null) => Document | null'.
+    Type '{ paragraphs: (Paragraph | { text: string; title: string | undefined; headingLevel: string | null | undefined; history: VersionHistory[]; id: string; documentId: string; ... 5 more ...; isDocumentTitle?: boolean | undefined; })[]; ... 30 more ...; documentVotes?: DocumentVote[] | undefined; } | null' is not assignable to type 'Document | null'.
+      Type '{ paragraphs: (Paragraph | { text: string; title: string | undefined; headingLevel: string | null | undefined; history: VersionHistory[]; id: string; documentId: string; ... 5 more ...; isDocumentTitle?: boolean; })[]; ... 30 more ...; documentVotes?: DocumentVote[]; }' is not assignable to type 'Document'.
+        Types of property 'paragraphs' are incompatible.
+          Type '(Paragraph | { text: string; title: string | undefined; headingLevel: string | null | undefined; history: VersionHistory[]; id: string; documentId: string; ... 5 more ...; isDocumentTitle?: boolean | undefined; })[]' is not assignable to type 'Paragraph[]'.
+            Type 'Paragraph | { text: string; title: string | undefined; headingLevel: string | null | undefined; history: VersionHistory[]; id: string; documentId: string; ... 5 more ...; isDocumentTitle?: boolean | undefined; }' is not assignable to type 'Paragraph'.
+              Type '{ text: string; title: string | undefined; headingLevel: string | null | undefined; history: VersionHistory[]; id: string; documentId: string; order: number; createdAt: string; updatedAt: string; proposals: Proposal[]; suggestions?: Proposal[]; isDocumentTitle?: boolean; }' is not assignable to type 'Paragraph'.
+                Types of property 'headingLevel' are incompatible.
+                  Type 'string | null | undefined' is not assignable to type 'HeadingLevel | null | undefined'.
+                    Type 'string' is not assignable to type 'HeadingLevel | null | undefined'.
+src/hooks/ws/useParagraphUpdates.ts(101,68): error TS2339: Property 'paragraph' does not exist on type 'DocumentUpdateData'.
+  Property 'paragraph' does not exist on type '{ type: "vote"; proposalId: string; paragraphId: string; vote: { voteId: string; userId: string; vote: "PRO" | "NEUTRAL" | "CONTRA"; action: string; allVotes: Vote[]; isAnonymous: boolean; }; }'.
+src/hooks/ws/useParagraphUpdates.ts(102,44): error TS2352: Conversion of type 'DocumentUpdateData' to type '{ paragraphId: string; paragraph: Record<string, unknown> & { id: string; documentId?: string | undefined; text?: string | undefined; title?: string | undefined; headingLevel?: string | undefined; orderIndex?: number | undefined; order?: number | undefined; }; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type '{ type: "document-updated"; amendmentsOpen?: boolean | undefined; }' is missing the following properties from type '{ paragraphId: string; paragraph: Record<string, unknown> & { id: string; documentId?: string | undefined; text?: string | undefined; title?: string | undefined; headingLevel?: string | undefined; orderIndex?: number | undefined; order?: number | undefined; }; }': paragraphId, paragraph
+src/hooks/ws/useParagraphUpdates.ts(126,13): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/hooks/ws/useParagraphUpdates.ts(127,13): error TS2322: Type 'string | null' is not assignable to type 'HeadingLevel | null | undefined'.
+  Type 'string' is not assignable to type 'HeadingLevel | null | undefined'.
+src/hooks/ws/useParagraphUpdates.ts(145,68): error TS2339: Property 'paragraphId' does not exist on type 'DocumentUpdateData'.
+  Property 'paragraphId' does not exist on type '{ type: "document-vote"; votes: DocumentVote[]; }'.
+src/hooks/ws/useParagraphUpdates.ts(163,24): error TS2345: Argument of type '(prevDoc: Document | null) => { paragraphs: (Paragraph | { text: string; title: string | undefined; headingLevel: string | null | undefined; order: number; ... 7 more ...; isDocumentTitle?: boolean | undefined; })[]; ... 30 more ...; documentVotes?: DocumentVote[] | undefined; } | null' is not assignable to parameter of type 'SetStateAction<Document | null>'.
+  Type '(prevDoc: Document | null) => { paragraphs: (Paragraph | { text: string; title: string | undefined; headingLevel: string | null | undefined; order: number; ... 7 more ...; isDocumentTitle?: boolean | undefined; })[]; ... 30 more ...; documentVotes?: DocumentVote[] | undefined; } | null' is not assignable to type '(prevState: Document | null) => Document | null'.
+    Type '{ paragraphs: (Paragraph | { text: string; title: string | undefined; headingLevel: string | null | undefined; order: number; id: string; documentId: string; createdAt: string; ... 4 more ...; isDocumentTitle?: boolean | undefined; })[]; ... 30 more ...; documentVotes?: DocumentVote[] | undefined; } | null' is not assignable to type 'Document | null'.
+      Type '{ paragraphs: (Paragraph | { text: string; title: string | undefined; headingLevel: string | null | undefined; order: number; id: string; documentId: string; createdAt: string; ... 4 more ...; isDocumentTitle?: boolean; })[]; ... 30 more ...; documentVotes?: DocumentVote[]; }' is not assignable to type 'Document'.
+        Types of property 'paragraphs' are incompatible.
+          Type '(Paragraph | { text: string; title: string | undefined; headingLevel: string | null | undefined; order: number; id: string; documentId: string; createdAt: string; updatedAt: string; proposals: Proposal[]; history: VersionHistory[]; suggestions?: Proposal[] | undefined; isDocumentTitle?: boolean | undefined; })[]' is not assignable to type 'Paragraph[]'.
+            Type 'Paragraph | { text: string; title: string | undefined; headingLevel: string | null | undefined; order: number; id: string; documentId: string; createdAt: string; updatedAt: string; proposals: Proposal[]; history: VersionHistory[]; suggestions?: Proposal[] | undefined; isDocumentTitle?: boolean | undefined; }' is not assignable to type 'Paragraph'.
+              Type '{ text: string; title: string | undefined; headingLevel: string | null | undefined; order: number; id: string; documentId: string; createdAt: string; updatedAt: string; proposals: Proposal[]; history: VersionHistory[]; suggestions?: Proposal[]; isDocumentTitle?: boolean; }' is not assignable to type 'Paragraph'.
+                Types of property 'headingLevel' are incompatible.
+                  Type 'string | null | undefined' is not assignable to type 'HeadingLevel | null | undefined'.
+                    Type 'string' is not assignable to type 'HeadingLevel | null | undefined'.
+src/hooks/ws/useProposalUpdates.ts(12,60): error TS2339: Property 'proposal' does not exist on type 'DocumentUpdateData'.
+  Property 'proposal' does not exist on type '{ type: "vote"; proposalId: string; paragraphId: string; vote: { voteId: string; userId: string; vote: "PRO" | "NEUTRAL" | "CONTRA"; action: string; allVotes: Vote[]; isAnonymous: boolean; }; }'.
+src/hooks/ws/useProposalUpdates.ts(75,15): error TS2740: Type '{}' is missing the following properties from type 'Vote[]': length, pop, push, concat, and 29 more.
+src/hooks/ws/useProposalUpdates.ts(76,15): error TS2740: Type '{}' is missing the following properties from type 'Comment[]': length, pop, push, concat, and 29 more.
+src/hooks/ws/useProposalUpdates.ts(77,15): error TS2322: Type '{} | undefined' is not assignable to type 'PartialVoteCounts | undefined'.
+  Type '{}' is missing the following properties from type 'PartialVoteCounts': pro, contra, neutral, total
+src/hooks/ws/useProposalUpdates.ts(79,75): error TS2339: Property 'approvalPercentage' does not exist on type 'Proposal'.
+src/hooks/ws/useProposalUpdates.ts(80,15): error TS2739: Type '{}' is missing the following properties from type '{ id: string; name: string; email: string; avatar?: string | undefined; }': id, name, email
+src/hooks/ws/useStructureUpdates.ts(26,11): error TS2367: This comparison appears to be unintentional because the types 'DocumentUpdateEventType' and '"structure-proposal-created"' have no overlap.
+src/hooks/ws/useStructureUpdates.ts(34,11): error TS2367: This comparison appears to be unintentional because the types 'DocumentUpdateEventType' and '"tree-proposal-created"' have no overlap.
+src/hooks/ws/useStructureUpdates.ts(105,9): error TS2367: This comparison appears to be unintentional because the types 'DocumentUpdateEventType' and '"structure-proposal-completed"' have no overlap.
+src/hooks/ws/useStructureUpdates.ts(110,22): error TS2352: Conversion of type '{ type: "vote"; proposalId: string; paragraphId: string; vote: { voteId: string; userId: string; vote: "PRO" | "NEUTRAL" | "CONTRA"; action: string; allVotes: Vote[]; isAnonymous: boolean; }; } | { ...; } | { ...; } | { ...; }' to type '{ proposalId: string; applied: boolean; outcome: string; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type '{ type: "tree-proposal-vote"; proposalId: string; documentId?: string | undefined; voteId: string; userId: string; vote: "PRO" | "NEUTRAL" | "CONTRA"; action: string; allVotes: { id: string; userId: string; vote: "PRO" | ... 1 more ... | "CONTRA"; createdAt: string; user?: { ...; } | undefined; }[]; isAnonymous: boo...' is missing the following properties from type '{ proposalId: string; applied: boolean; outcome: string; }': applied, outcome
+src/hooks/ws/useStructureUpdates.ts(120,9): error TS2367: This comparison appears to be unintentional because the types 'DocumentUpdateEventType' and '"document-tree-proposal-completed"' have no overlap.
+src/hooks/ws/useStructureUpdates.ts(125,22): error TS2352: Conversion of type '{ type: "vote"; proposalId: string; paragraphId: string; vote: { voteId: string; userId: string; vote: "PRO" | "NEUTRAL" | "CONTRA"; action: string; allVotes: Vote[]; isAnonymous: boolean; }; } | { ...; } | { ...; } | { ...; }' to type '{ proposalId: string; applied: boolean; outcome: string; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type '{ type: "tree-proposal-vote"; proposalId: string; documentId?: string | undefined; voteId: string; userId: string; vote: "PRO" | "NEUTRAL" | "CONTRA"; action: string; allVotes: { id: string; userId: string; vote: "PRO" | ... 1 more ... | "CONTRA"; createdAt: string; user?: { ...; } | undefined; }[]; isAnonymous: boo...' is missing the following properties from type '{ proposalId: string; applied: boolean; outcome: string; }': applied, outcome
+src/hooks/ws/useStructureUpdates.ts(134,11): error TS2367: This comparison appears to be unintentional because the types 'DocumentUpdateEventType' and '"deletion-vote-completed"' have no overlap.
+src/hooks/ws/useVoteUpdates.ts(13,56): error TS2339: Property 'proposalId' does not exist on type 'DocumentUpdateData'.
+  Property 'proposalId' does not exist on type '{ type: "proposal"; paragraphId: string; proposal: Proposal; }'.
+src/hooks/ws/useVoteUpdates.ts(80,24): error TS2345: Argument of type '(prevDoc: Document | null) => { paragraphs: (Paragraph | { proposals: (Proposal | { votes: { id: string; userId: string; vote: "PRO" | "NEUTRAL" | "CONTRA"; createdAt: string; user: { ...; } | undefined; }[]; ... 18 more ...; isHistoryFallback?: boolean | undefined; })[]; ... 10 more ...; isDocumentTitle?: boolean |...' is not assignable to parameter of type 'SetStateAction<Document | null>'.
+  Type '(prevDoc: Document | null) => { paragraphs: (Paragraph | { proposals: (Proposal | { votes: { id: string; userId: string; vote: "PRO" | "NEUTRAL" | "CONTRA"; createdAt: string; user: { ...; } | undefined; }[]; ... 18 more ...; isHistoryFallback?: boolean | undefined; })[]; ... 10 more ...; isDocumentTitle?: boolean |...' is not assignable to type '(prevState: Document | null) => Document | null'.
+    Type '{ paragraphs: (Paragraph | { proposals: (Proposal | { votes: { id: string; userId: string; vote: "PRO" | "NEUTRAL" | "CONTRA"; createdAt: string; user: { id: string; name: string; } | undefined; }[]; ... 18 more ...; isHistoryFallback?: boolean | undefined; })[]; ... 10 more ...; isDocumentTitle?: boolean | undefine...' is not assignable to type 'Document | null'.
+      Type '{ paragraphs: (Paragraph | { proposals: (Proposal | { votes: { id: string; userId: string; vote: "PRO" | "NEUTRAL" | "CONTRA"; createdAt: string; user: { id: string; name: string; } | undefined; }[]; ... 18 more ...; isHistoryFallback?: boolean; })[]; ... 10 more ...; isDocumentTitle?: boolean; })[]; ... 30 more ......' is not assignable to type 'Document'.
+        Types of property 'paragraphs' are incompatible.
+          Type '(Paragraph | { proposals: (Proposal | { votes: { id: string; userId: string; vote: "PRO" | "NEUTRAL" | "CONTRA"; createdAt: string; user: { id: string; name: string; } | undefined; }[]; ... 18 more ...; isHistoryFallback?: boolean | undefined; })[]; ... 10 more ...; isDocumentTitle?: boolean | undefined; })[]' is not assignable to type 'Paragraph[]'.
+            Type 'Paragraph | { proposals: (Proposal | { votes: { id: string; userId: string; vote: "PRO" | "NEUTRAL" | "CONTRA"; createdAt: string; user: { id: string; name: string; } | undefined; }[]; ... 18 more ...; isHistoryFallback?: boolean | undefined; })[]; ... 10 more ...; isDocumentTitle?: boolean | undefined; }' is not assignable to type 'Paragraph'.
+              Type '{ proposals: (Proposal | { votes: { id: string; userId: string; vote: "PRO" | "NEUTRAL" | "CONTRA"; createdAt: string; user: { id: string; name: string; } | undefined; }[]; partialVoteCounts: { ...; }; ... 17 more ...; isHistoryFallback?: boolean; })[]; ... 10 more ...; isDocumentTitle?: boolean; }' is not assignable to type 'Paragraph'.
+                Types of property 'proposals' are incompatible.
+                  Type '(Proposal | { votes: { id: string; userId: string; vote: "PRO" | "NEUTRAL" | "CONTRA"; createdAt: string; user: { id: string; name: string; } | undefined; }[]; partialVoteCounts: { total?: number | undefined; }; ... 17 more ...; isHistoryFallback?: boolean | undefined; })[]' is not assignable to type 'Proposal[]'.
+                    Type 'Proposal | { votes: { id: string; userId: string; vote: "PRO" | "NEUTRAL" | "CONTRA"; createdAt: string; user: { id: string; name: string; } | undefined; }[]; partialVoteCounts: { total?: number | undefined; }; ... 17 more ...; isHistoryFallback?: boolean | undefined; }' is not assignable to type 'Proposal'.
+                      Type '{ votes: { id: string; userId: string; vote: "PRO" | "NEUTRAL" | "CONTRA"; createdAt: string; user: { id: string; name: string; } | undefined; }[]; partialVoteCounts: { total?: number; }; approved: boolean; ... 16 more ...; isHistoryFallback?: boolean; }' is not assignable to type 'Proposal'.
+                        Types of property 'votes' are incompatible.
+                          Type '{ id: string; userId: string; vote: "PRO" | "NEUTRAL" | "CONTRA"; createdAt: string; user: { id: string; name: string; } | undefined; }[]' is not assignable to type 'Vote[]'.
+                            Property 'proposalId' is missing in type '{ id: string; userId: string; vote: "PRO" | "NEUTRAL" | "CONTRA"; createdAt: string; user: { id: string; name: string; } | undefined; }' but required in type 'Vote'.
+src/hooks/ws/useVoteUpdates.ts(127,73): error TS2339: Property 'approvalPercentage' does not exist on type 'Proposal'.
+src/i18n.ts(16,8): error TS2345: Argument of type '(instance: unknown) => void' is not assignable to parameter of type 'Module | NewableModule<Module> | Newable<Module>'.
+src/lib/api/client.ts(613,58): error TS2339: Property 'includes' does not exist on type '{}'.
+src/lib/api/client.ts(613,88): error TS2339: Property 'includes' does not exist on type '{}'.
+src/lib/api/documents.ts(31,11): error TS6196: 'MessageResponse' is declared but never used.
+src/lib/api/documents.ts(50,11): error TS6196: 'VotingStatusResponse' is declared but never used.
+src/lib/api/documents.ts(73,11): error TS6196: 'StatusHistoryResponse' is declared but never used.
+src/lib/api/documents.ts(84,11): error TS6196: 'DeletionStatusResponse' is declared but never used.
+src/lib/api/governance/elections.ts(9,30): error TS2307: Cannot find module '../../types' or its corresponding type declarations.
+src/lib/api/governance/rule-proposals.ts(6,3): error TS2305: Module '"../types"' has no exported member 'Comment'.
+src/lib/api/governance/rules.ts(6,3): error TS6196: 'MessageResponse' is declared but never used.
+src/lib/api/organizations.ts(4,3): error TS6196: 'Organization' is declared but never used.
+src/lib/api/organizations.ts(5,3): error TS2724: '"../../types"' has no exported member named 'DocumentsResponse'. Did you mean 'DocumentApiResponse'?
+src/lib/api/types/index.ts(16,1): error TS2308: Module './meetingMinutes' has already exported a member named 'DecisionsResponse'. Consider explicitly re-exporting to resolve the ambiguity.
+src/lib/designSystem.types.ts(22,55): error TS2537: Type '{ readonly x: "px-4 md:px-6"; readonly top: "pt-4 md:pt-5"; readonly y: "pb-4 md:pb-5"; readonly all: "p-4 md:p-6 pb-4 md:pb-5"; } | { readonly gap: "space-y-6"; readonly margin: "mb-6"; readonly top: "mt-6"; readonly topWithBorder: "mt-6 pt-6"; readonly responsive: "space-y-4 md:space-y-6"; } | ... 7 more ... | { ....' has no matching index signature for type 'string'.
+src/lib/iconLoader.ts(54,7): error TS2322: Type '{ default: typeof import("C:/Users/me/Documents/Cursor Projects/Colabora/colabora_app-2/client/node_modules/@tabler/icons-react/dist/tabler-icons-react"); Icon123: ForwardRefExoticComponent<IconProps & RefAttributes<...>>; ... 6020 more ...; iconsList: typeof iconsList; }' is not assignable to type 'Record<string, ComponentType<{ className?: string | undefined; }>>'.
+  Property 'default' is incompatible with index signature.
+    Type 'typeof import("C:/Users/me/Documents/Cursor Projects/Colabora/colabora_app-2/client/node_modules/@tabler/icons-react/dist/tabler-icons-react")' is not assignable to type 'ComponentType<{ className?: string | undefined; }>'.
+src/lib/iconLoader.ts(67,7): error TS2322: Type '{ default: typeof import("C:/Users/me/Documents/Cursor Projects/Colabora/colabora_app-2/client/node_modules/@heroicons/react/24/outline/index"); AcademicCapIcon: ForwardRefExoticComponent<Omit<SVGProps<SVGSVGElement>, "ref"> & { ...; } & RefAttributes<...>>; ... 322 more ...; XMarkIcon: ForwardRefExoticComponent<......' is not assignable to type 'Record<string, ComponentType<{ className?: string | undefined; }>>'.
+  Property 'default' is incompatible with index signature.
+    Type 'typeof import("C:/Users/me/Documents/Cursor Projects/Colabora/colabora_app-2/client/node_modules/@heroicons/react/24/outline/index")' is not assignable to type 'ComponentType<{ className?: string | undefined; }>'.
+src/lib/iconLoader.ts(99,28): error TS18047: 'tabler' is possibly 'null'.
+src/lib/iconLoader.ts(113,26): error TS18047: 'heroiconsOutline' is possibly 'null'.
+src/lib/votingAdapters.ts(71,24): error TS2339: Property 'PRO' does not exist on type '{ total: number; breakdown: { PRO: number; NEUTRAL: number; CONTRA: number; }; approvalRate: number; }'.
+src/lib/votingAdapters.ts(72,28): error TS2339: Property 'NEUTRAL' does not exist on type '{ total: number; breakdown: { PRO: number; NEUTRAL: number; CONTRA: number; }; approvalRate: number; }'.
+src/lib/votingAdapters.ts(73,27): error TS2339: Property 'CONTRA' does not exist on type '{ total: number; breakdown: { PRO: number; NEUTRAL: number; CONTRA: number; }; approvalRate: number; }'.
+src/lib/votingAdapters.ts(75,22): error TS2339: Property 'PRO' does not exist on type '{ total: number; breakdown: { PRO: number; NEUTRAL: number; CONTRA: number; }; approvalRate: number; }'.
+src/lib/votingAdapters.ts(75,49): error TS2339: Property 'NEUTRAL' does not exist on type '{ total: number; breakdown: { PRO: number; NEUTRAL: number; CONTRA: number; }; approvalRate: number; }'.
+src/lib/votingAdapters.ts(75,80): error TS2339: Property 'CONTRA' does not exist on type '{ total: number; breakdown: { PRO: number; NEUTRAL: number; CONTRA: number; }; approvalRate: number; }'.
+src/pages/ActivityPage.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/pages/ActivityPage.tsx(37,7): error TS2322: Type 'User | null' is not assignable to type 'User'.
+  Type 'null' is not assignable to type 'User'.
+src/pages/DocumentsPage.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/pages/DocumentsPage.tsx(50,7): error TS2322: Type 'User | null' is not assignable to type 'User'.
+  Type 'null' is not assignable to type 'User'.
+src/pages/ProfilePage.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/pages/ReportIssuePage.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/stores/useAuthStore.ts(15,53): error TS6133: 'get' is declared but its value is never read.
+src/stores/useDocumentStore.ts(57,35): error TS6133: 's' is declared but its value is never read.
+src/stores/useDocumentStore.ts(72,9): error TS2322: Type '{ history: VersionHistory[]; headingLevel?: string | null | undefined; title?: string | undefined; text: string; id: string; documentId: string; order: number; createdAt: string; updatedAt: string; proposals: Proposal[]; suggestions?: Proposal[] | undefined; isDocumentTitle?: boolean | undefined; }[]' is not assignable to type 'Paragraph[]'.
+  Type '{ history: VersionHistory[]; headingLevel?: string | null | undefined; title?: string; text: string; id: string; documentId: string; order: number; createdAt: string; updatedAt: string; proposals: Proposal[]; suggestions?: Proposal[]; isDocumentTitle?: boolean; }' is not assignable to type 'Paragraph'.
+    Types of property 'headingLevel' are incompatible.
+      Type 'string | null | undefined' is not assignable to type 'HeadingLevel | null | undefined'.
+        Type 'string' is not assignable to type 'HeadingLevel | null | undefined'.
+src/utils/diffStatistics.ts(55,46): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/utils/diffStatistics.ts(103,8): error TS2367: This comparison appears to be unintentional because the types '"deleted" | "suggestion1" | "suggestion2"' and '"original"' have no overlap.
+src/utils/diffUtils.ts(1,34): error TS7016: Could not find a declaration file for module 'diff-match-patch'. 'C:/Users/me/Documents/Cursor Projects/Colabora/colabora_app-2/client/node_modules/diff-match-patch/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/diff-match-patch` if it exists or add a new declaration (.d.ts) file containing `declare module 'diff-match-patch';`
+src/utils/proposalAdapter.ts(1,10): error TS6133: 'Proposal' is declared but its value is never read.
+src/utils/proposalAdapter.ts(378,9): error TS6133: 'totalUsers' is declared but its value is never read.
+src/utils/proposalAdapter.ts(500,13): error TS2353: Object literal may only specify known properties, and 'email' does not exist in type '{ id: string; name: string; }'.
+src/utils/proposalAdapter.ts(507,13): error TS2353: Object literal may only specify known properties, and 'email' does not exist in type '{ id: string; name: string; }'.
+src/utils/proposalAdapter.ts(566,9): error TS6133: 'totalUsers' is declared but its value is never read.

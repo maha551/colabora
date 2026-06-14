@@ -1,0 +1,123 @@
+import { useTranslation } from 'react-i18next';
+import type { Organization } from '../../types';
+import { RADIUS } from '../../lib/designSystem';
+import { OrganizationAvatar } from './OrganizationAvatar';
+import {
+  DropdownMenuItem,
+  DropdownMenuLabel,
+} from '../ui/dropdown-menu';
+import { Icon } from '../ui/Icon';
+import { cn } from '../ui/utils';
+
+export interface OrganizationSwitcherProps {
+  organizations: Organization[];
+  activeOrganization?: Organization | null;
+  onSelectOrganization?: (organization: Organization) => void;
+  /** Desktop avatar dropdown */
+  variant: 'dropdown' | 'sheet';
+  /** Called after an organization is chosen (e.g. close mobile sheet). */
+  onAfterSelect?: () => void;
+}
+
+function OrganizationList({
+  organizations,
+  activeOrganization,
+  onSelectOrganization,
+  onAfterSelect,
+  className,
+  itemClassName,
+}: {
+  organizations: Organization[];
+  activeOrganization?: Organization | null;
+  onSelectOrganization: (organization: Organization) => void;
+  onAfterSelect?: () => void;
+  className?: string;
+  itemClassName?: string;
+}) {
+  return (
+    <ul className={cn('flex flex-col gap-0.5', className)}>
+      {organizations.map((org) => {
+        const isActive = activeOrganization?.id === org.id;
+
+        return (
+          <li key={org.id}>
+            <button
+              type="button"
+              onClick={() => {
+                onSelectOrganization(org);
+                onAfterSelect?.();
+              }}
+              className={cn(
+                'flex w-full min-w-0 items-center gap-2.5 text-left text-sm transition-colors',
+                itemClassName,
+                isActive ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'
+              )}
+              aria-current={isActive ? 'true' : undefined}
+            >
+              <OrganizationAvatar organization={org} size="xs" />
+              <span className="min-w-0 flex-1 truncate">{org.name}</span>
+              {isActive && (
+                <Icon name="Check" size="sm" className="shrink-0 opacity-70" aria-hidden />
+              )}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** Context switcher — only rendered when the user belongs to more than one organization. */
+export function OrganizationSwitcher({
+  organizations,
+  activeOrganization,
+  onSelectOrganization,
+  variant,
+  onAfterSelect,
+}: OrganizationSwitcherProps) {
+  const { t } = useTranslation('nav');
+
+  if (organizations.length <= 1 || !onSelectOrganization) {
+    return null;
+  }
+
+  const sectionLabel = t('switchOrganization', { defaultValue: 'Switch organization' });
+
+  if (variant === 'sheet') {
+    return (
+      <div className="px-4 py-2">
+        <p className="mb-2 px-1 text-xs font-medium text-muted-foreground">{sectionLabel}</p>
+        <OrganizationList
+          organizations={organizations}
+          activeOrganization={activeOrganization}
+          onSelectOrganization={onSelectOrganization}
+          onAfterSelect={onAfterSelect}
+          itemClassName={cn('rounded-md px-3 py-2.5', RADIUS.control)}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">
+        {sectionLabel}
+      </DropdownMenuLabel>
+      {organizations.map((org) => {
+        const isActive = activeOrganization?.id === org.id;
+
+        return (
+          <DropdownMenuItem
+            key={org.id}
+            onClick={() => onSelectOrganization(org)}
+            className={cn(isActive && 'bg-accent')}
+          >
+            <OrganizationAvatar organization={org} size="xs" />
+            <span className="min-w-0 flex-1 truncate">{org.name}</span>
+            {isActive && <Icon name="Check" size="sm" className="ml-auto shrink-0 opacity-70" />}
+          </DropdownMenuItem>
+        );
+      })}
+    </>
+  );
+}

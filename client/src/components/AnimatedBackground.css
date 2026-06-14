@@ -1,0 +1,431 @@
+@import './heartbeat.css';
+
+.animated-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  z-index: 0;
+  pointer-events: none;
+  /* Base background color that works with the animated gradients */
+  background: var(--background);
+  /* Performance optimization: limit repaint area with strict containment */
+  contain: strict;
+  /* Create a compositing layer to isolate from scroll performance */
+  transform: translate3d(0, 0, 0);
+  /* Force GPU acceleration */
+  backface-visibility: hidden;
+  
+  /* CSS custom properties for performance-based blur intensity */
+  /* Aggressively optimized: Reduced by 85-90% for maximum scroll performance */
+  --blur-intensity-high: 6px;     /* Was 40px - 85% reduction */
+  --blur-intensity-medium: 5px;   /* Was 30px - 83% reduction */
+  --blur-intensity-low: 4px;      /* Was 20px - 80% reduction */
+  --blur-intensity: var(--blur-intensity-high);
+  /* Performance optimization: skip off-screen rendering */
+  content-visibility: auto;
+}
+
+/* Performance tier-based blur intensity */
+.animated-background--high-performance {
+  --blur-intensity: var(--blur-intensity-high);
+}
+
+.animated-background--medium-performance {
+  --blur-intensity: var(--blur-intensity-medium);
+}
+
+.animated-background--low-performance {
+  --blur-intensity: var(--blur-intensity-low);
+}
+
+/* Normal animation mode - default speed (when no speed class is applied, layers use their default animations) */
+/* Optimized: Increased duration by 20-30% for smoother feel */
+.animated-background:not(.animated-background--slow):not(.animated-background--static) .layer-1 {
+  animation: float-1 25s ease-in-out infinite;
+}
+
+.animated-background:not(.animated-background--slow):not(.animated-background--static) .layer-2 {
+  animation: float-2 30s ease-in-out infinite;
+}
+
+.animated-background:not(.animated-background--slow):not(.animated-background--static) .layer-3 {
+  animation: float-3 28s ease-in-out infinite;
+}
+
+.animated-background:not(.animated-background--slow):not(.animated-background--static) .layer-4 {
+  animation: float-4 23s ease-in-out infinite;
+}
+
+.animated-background:not(.animated-background--slow):not(.animated-background--static) .layer-5 {
+  animation: float-5 26s ease-in-out infinite;
+}
+
+/* Slow animation mode - 5x slower for subtle, non-distracting movement */
+.animated-background--slow .layer-1 {
+  animation: float-1 50s ease-in-out infinite;
+}
+
+.animated-background--slow .layer-2 {
+  animation: float-2 60s ease-in-out infinite;
+}
+
+.animated-background--slow .layer-3 {
+  animation: float-3 55s ease-in-out infinite;
+}
+
+.animated-background--slow .layer-4 {
+  animation: float-4 45s ease-in-out infinite;
+}
+
+.animated-background--slow .layer-5 {
+  animation: float-5 52.5s ease-in-out infinite;
+}
+
+/* Static mode — still gradients, no float animation or blur on base layers */
+.animated-background--static .gradient-layer:not(.layer-heartbeat) {
+  animation: none;
+  will-change: auto;
+  filter: none !important;
+  mix-blend-mode: normal;
+}
+
+/* Heartbeat may still run in static mode (login: static floats + subtle pulse) */
+.animated-background--static .layer-heartbeat {
+  filter: none !important;
+  mix-blend-mode: normal;
+}
+
+.animated-background--static .layer-heartbeat:not(.heartbeat--opacity-only) {
+  will-change: transform, opacity;
+}
+
+.animated-background--static .layer-heartbeat.heartbeat--opacity-only {
+  will-change: opacity;
+}
+
+.dark .animated-background--static .layer-heartbeat {
+  mix-blend-mode: normal;
+}
+
+/* Login: skip content-visibility deferral for instant background paint */
+.animated-background--login {
+  content-visibility: visible;
+}
+
+/* Center base gradient so purple glow does not hug the card's left edge */
+.animated-background--login .layer-1 {
+  background: radial-gradient(
+    circle at 50% 45%,
+    rgb(139, 92, 246) 0%,
+    transparent 72%
+  ) !important;
+}
+
+@supports (color: oklch(0 0 0)) {
+  .animated-background--login .layer-1 {
+    background: radial-gradient(
+      circle at 50% 45%,
+      oklch(0.5738 0.245 318.39) 0%,
+      transparent 72%
+    ) !important;
+  }
+}
+
+.animated-background--login .layer-heartbeat.heartbeat--opacity-only {
+  will-change: opacity;
+  transform: none;
+}
+
+/* Header text contrast enhancement - ensures readability over animated background */
+.header-text-contrast {
+  text-shadow: 
+    0 1px 3px rgba(0, 0, 0, 0.8),
+    0 0 8px rgba(0, 0, 0, 0.5),
+    0 2px 4px rgba(0, 0, 0, 0.9);
+}
+
+.header-text-contrast-light {
+  text-shadow: 
+    0 1px 3px rgba(255, 255, 255, 0.9),
+    0 0 8px rgba(255, 255, 255, 0.7),
+    0 2px 4px rgba(255, 255, 255, 0.95);
+}
+
+/* Pause animations when not visible (for lazy loading) */
+.animated-background--paused .gradient-layer {
+  animation-play-state: paused;
+  opacity: 0;
+  /* Remove will-change when paused to prevent unnecessary layer promotion */
+  will-change: auto;
+}
+
+.animated-background--paused .layer-heartbeat {
+  animation-play-state: paused;
+  opacity: 0;
+  will-change: auto;
+}
+
+.gradient-layer {
+  position: absolute;
+  /* Aggressively optimized: Further reduced size to 130% - 58% less area than original */
+  top: -15%;
+  left: -15%;
+  width: 130%;
+  height: 130%;
+  border-radius: 50%;
+  /* Use CSS variable for blur intensity based on performance tier */
+  filter: blur(var(--blur-intensity));
+  /* Theme-aware opacity: fine-tuned for better visibility */
+  opacity: 0.4;
+  mix-blend-mode: overlay; /* Default, overridden below for light mode */
+  /* Performance optimizations */
+  contain: strict;
+  backface-visibility: hidden;
+  /* Force GPU acceleration and create compositing layer */
+  transform: translateZ(0);
+  transform-origin: center;
+  /* Better compositing performance */
+  isolation: isolate;
+  transform-style: preserve-3d;
+  /* Create a new stacking context to isolate blur from scroll */
+  will-change: auto; /* Will be set to transform,filter only when animating */
+}
+
+/* Only apply will-change when animations are actually running */
+/* Note: will-change on filter can be expensive, but needed for smooth animations */
+.animated-background:not(.animated-background--static):not(.animated-background--paused) .gradient-layer {
+  will-change: transform;
+  /* Only hint filter when actually needed - can cause performance issues */
+}
+
+/* Remove will-change in static mode and when paused (heartbeat exempt — see above) */
+.animated-background--static .gradient-layer:not(.layer-heartbeat),
+.animated-background--paused .gradient-layer {
+  will-change: auto;
+}
+
+/* Adjust opacity and blend mode for dark mode - gradients should be more visible */
+.dark .gradient-layer {
+  opacity: 0.38; /* Fine-tuned for better visibility on dark backgrounds */
+  mix-blend-mode: screen; /* Necessary for visibility on dark backgrounds */
+}
+
+/* Light mode: Use normal blend mode (3-5x cheaper) with adjusted opacity */
+:root:not(.dark) .gradient-layer {
+  opacity: 0.28; /* Fine-tuned for visibility with normal blend mode */
+  mix-blend-mode: normal; /* Cheapest blend mode - 3-5x faster than overlay */
+}
+
+/* Layer 1: Dark Amethyst */
+.layer-1 {
+  /* Fallback for browsers that don't support oklch */
+  background: radial-gradient(
+    circle at 30% 40%,
+    rgb(139, 92, 246) 0%,
+    transparent 70%
+  );
+  /* Animation is controlled by speed classes (normal, slow, static) */
+}
+
+@supports (color: oklch(0 0 0)) {
+  .layer-1 {
+    /* Modern browsers with oklch support - use decimal format for consistency */
+    background: radial-gradient(
+      circle at 30% 40%,
+      oklch(0.5738 0.245 318.39) 0%,
+      transparent 70%
+    );
+  }
+}
+
+/* Layer 2: Grape Soda */
+.layer-2 {
+  /* Fallback for browsers that don't support oklch */
+  background: radial-gradient(
+    circle at 70% 60%,
+    rgb(168, 85, 247) 0%,
+    transparent 70%
+  );
+  /* Animation is controlled by speed classes (normal, slow, static) */
+}
+
+@supports (color: oklch(0 0 0)) {
+  .layer-2 {
+    /* Modern browsers with oklch support - use decimal format for consistency */
+    background: radial-gradient(
+      circle at 70% 60%,
+      oklch(0.5793 0.174 336.23) 0%,
+      transparent 70%
+    );
+  }
+}
+
+/* Layer 3: Orchid Mist */
+.layer-3 {
+  /* Fallback for browsers that don't support oklch */
+  background: radial-gradient(
+    circle at 50% 30%,
+    rgb(196, 181, 253) 0%,
+    transparent 70%
+  );
+  /* Animation is controlled by speed classes (normal, slow, static) */
+}
+
+@supports (color: oklch(0 0 0)) {
+  .layer-3 {
+    /* Modern browsers with oklch support - use decimal format for consistency */
+    background: radial-gradient(
+      circle at 50% 30%,
+      oklch(0.5937 0.209 330.49) 0%,
+      transparent 70%
+    );
+  }
+}
+
+/* Layer 4: Pink Carnation */
+.layer-4 {
+  /* Fallback for browsers that don't support oklch */
+  background: radial-gradient(
+    circle at 20% 70%,
+    rgb(251, 146, 60) 0%,
+    transparent 70%
+  );
+  /* Animation is controlled by speed classes (normal, slow, static) */
+}
+
+@supports (color: oklch(0 0 0)) {
+  .layer-4 {
+    /* Modern browsers with oklch support - use decimal format for consistency */
+    background: radial-gradient(
+      circle at 20% 70%,
+      oklch(0.5958 0.227 1.37) 0%,
+      transparent 70%
+    );
+  }
+}
+
+/* Layer 5: Sweet Salmon */
+.layer-5 {
+  /* Fallback for browsers that don't support oklch */
+  background: radial-gradient(
+    circle at 80% 20%,
+    rgb(251, 113, 133) 0%,
+    transparent 70%
+  );
+  /* Animation is controlled by speed classes (normal, slow, static) */
+}
+
+@supports (color: oklch(0 0 0)) {
+  .layer-5 {
+    /* Modern browsers with oklch support - use decimal format for consistency */
+    background: radial-gradient(
+      circle at 80% 20%,
+      oklch(0.6322 0.254 29.99) 0%,
+      transparent 70%
+    );
+  }
+}
+
+/* Layer Heartbeat: Subtle pulsing animation using Orchid Mist */
+.layer-heartbeat {
+  /* Fallback for browsers that don't support oklch */
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgb(196, 181, 253) 0%,
+    transparent 70%
+  );
+  opacity: 0.65;
+  /* Animation is controlled by speed classes (normal, slow, static) */
+}
+
+@supports (color: oklch(0 0 0)) {
+  .layer-heartbeat {
+    /* Modern browsers with oklch support - use decimal format for consistency */
+    background: radial-gradient(
+      circle at 50% 50%,
+      oklch(0.5937 0.209 330.49) 0%,
+      transparent 70%
+    );
+  }
+}
+
+/* Adjust opacity for dark mode - heartbeat should be more visible */
+.dark .layer-heartbeat {
+  opacity: 0.55;
+}
+
+/* Keyframe Animations - Slow breathing motion with gentle swirling */
+
+/* Optimized keyframe animations - reduced movement by 40-50% for smoother, less expensive animations */
+@keyframes float-1 {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1) translateZ(0);
+  }
+  50% {
+    transform: translate3d(6%, -5%, 0) scale(1.02) translateZ(0);
+  }
+}
+
+@keyframes float-2 {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1) translateZ(0);
+  }
+  50% {
+    transform: translate3d(-6%, 5%, 0) scale(1.02) translateZ(0);
+  }
+}
+
+@keyframes float-3 {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1) translateZ(0);
+  }
+  50% {
+    transform: translate3d(7%, 7%, 0) scale(1.03) translateZ(0);
+  }
+}
+
+@keyframes float-4 {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1) translateZ(0);
+  }
+  50% {
+    transform: translate3d(-7%, -3%, 0) scale(1.02) translateZ(0);
+  }
+}
+
+@keyframes float-5 {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1) translateZ(0);
+  }
+  50% {
+    transform: translate3d(5%, -7%, 0) scale(1.03) translateZ(0);
+  }
+}
+
+/* Login heartbeat — decoupled from float layer speed */
+.animated-background .gradient-layer.layer-heartbeat.heartbeat--medium {
+  will-change: transform, opacity;
+}
+
+/* Accessibility: Respect user's motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .gradient-layer {
+    animation: none !important;
+  }
+  .layer-heartbeat {
+    animation: none !important;
+  }
+}
+
+/* Mobile optimizations: Further reduce blur on small screens for better performance */
+@media (max-width: 640px) {
+  .animated-background {
+    --blur-intensity-high: 4px;   /* Aggressively reduced for mobile */
+    --blur-intensity-medium: 3px;  /* Aggressively reduced for mobile */
+    --blur-intensity-low: 2px;     /* Aggressively reduced for mobile */
+  }
+}
+

@@ -1,0 +1,1 @@
+node -e "var u=process.env.DATABASE_URL||\"\";var m=u.match(/@([^/]+)/);console.log(m?m[1]:\"none\")"

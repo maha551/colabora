@@ -1,0 +1,18 @@
+name: Legacy CI (manual only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deprecation-notice:
+    name: Manual Workflow Notice
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain workflow ownership
+        run: |
+          echo "This workflow is intentionally manual-only."
+          echo "Authoritative CI/CD gates are in .github/workflows/ci-cd.yml."
+          echo "Use this file only for ad-hoc experiments; do not duplicate mandatory checks here."

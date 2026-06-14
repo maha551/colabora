@@ -1,0 +1,22 @@
+{
+  "errorBoundary": {
+    "description": "یک خطای غیرمنتظره رخ داد. ممکن است مشکل موقتی باشد.",
+    "reloadPage": "بارگذاری مجدد صفحه",
+    "reportError": "گزارش خطا",
+    "stackTrace": "ردیابی پشته",
+    "title": "مشکلی پیش آمد",
+    "tryAgain": "تلاش مجدد"
+  },
+  "generic": "مشکلی پیش آمد",
+  "reportForm": {
+    "addLogs": "افزودن گزارش‌ها",
+    "consoleLabel": "گزارش‌های کنسول (اختیاری)",
+    "consolePlaceholder": "خطاها یا گزارش‌های مرتبط کنسول",
+    "descriptionLabel": "توضیحات *",
+    "descriptionPlaceholder": "چه اتفاقی افتاد؟ چه کاری می‌خواستید انجام دهید؟ چه انتظاری داشتید؟",
+    "titleLabel": "عنوان *",
+    "titlePlaceholder": "توضیح کوتاه مشکل"
+  },
+  "reportIssue": "گزارش مشکل",
+  "tryAgain": "دوباره تلاش کنید"
+}

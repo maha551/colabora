@@ -1,0 +1,22 @@
+{
+  "errorBoundary": {
+    "description": "حدث خطأ غير متوقع. قد تكون هذه مشكلة مؤقتة.",
+    "reloadPage": "إعادة تحميل الصفحة",
+    "reportError": "الإبلاغ عن الخطأ",
+    "stackTrace": "تتبع المكدس",
+    "title": "حدث خطأ ما",
+    "tryAgain": "حاول مرة أخرى"
+  },
+  "generic": "حدث خطأ ما",
+  "reportForm": {
+    "addLogs": "إضافة السجلات",
+    "consoleLabel": "سجلات وحدة التحكم (اختياري)",
+    "consolePlaceholder": "أي أخطاء أو سجلات ذات صلة من وحدة التحكم",
+    "descriptionLabel": "الوصف *",
+    "descriptionPlaceholder": "ماذا حدث؟ ماذا كنت تحاول أن تفعل؟ ماذا كنت تتوقع أن يحدث؟",
+    "titleLabel": "العنوان *",
+    "titlePlaceholder": "وصف موجز للمشكلة"
+  },
+  "reportIssue": "الإبلاغ عن مشكلة",
+  "tryAgain": "يرجى المحاولة مرة أخرى"
+}

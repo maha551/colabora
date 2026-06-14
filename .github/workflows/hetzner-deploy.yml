@@ -1,0 +1,135 @@
+# Deploy Colabora to Hetzner via Kamal (manual trigger).
+#
+# Production uses private app IPs (10.0.0.x) — GitHub-hosted runners cannot SSH there.
+# Run production deploys from a machine on your Hetzner network, or use workflow_dispatch
+# with the pilot destination (public app IP in config/deploy.pilot.yml).
+#
+# Required GitHub secrets (Settings → Secrets → Actions):
+#   JWT_SECRET — CI and deploy
+#   KAMAL_SSH_PRIVATE_KEY — deploy@ SSH key (pilot / reachable hosts only)
+#   DATABASE_URL, REDIS_URL, FRONTEND_URL, ALLOWED_ORIGINS
+#   RESEND_API_KEY, RESEND_FROM_EMAIL (optional)
+#   CONTACT_EMAIL, SITE_OPERATOR_NAME, SITE_OPERATOR_ADDRESS
+#   KAMAL_REGISTRY_PASSWORD (optional — defaults to GITHUB_TOKEN for GHCR)
+
+name: Hetzner Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      destination:
+        description: Kamal destination
+        required: true
+        default: production
+        type: choice
+        options:
+          - production
+          - pilot
+          - staging
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: hetzner-deploy-${{ github.event.inputs.destination }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Hetzner (Kamal)
+    runs-on: ubuntu-latest
+    if: github.repository == 'maha551/colabora'
+    environment: production
+    env:
+      KAMAL_DESTINATION: ${{ github.event.inputs.destination }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Block production from GitHub-hosted runner
+        if: env.KAMAL_DESTINATION == 'production'
+        run: |
+          echo "Production hosts use private Hetzner IPs (10.0.0.x)."
+          echo "Deploy production from your workstation: kamal deploy"
+          echo "Or use destination=pilot for CI deploy to the public app IP."
+          exit 1
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: false
+
+      - name: Install Kamal
+        run: gem install kamal --no-document
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.KAMAL_REGISTRY_PASSWORD || github.token }}
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.KAMAL_SSH_PRIVATE_KEY }}
+
+      - name: Add app servers to known_hosts
+        run: |
+          DEST="${KAMAL_DESTINATION}"
+          if [ "$DEST" = "pilot" ]; then
+            CONFIG="config/deploy.pilot.yml"
+          elif [ "$DEST" = "staging" ]; then
+            CONFIG="config/deploy.staging.yml"
+          else
+            CONFIG="config/deploy.yml"
+          fi
+          echo "Using host list from $CONFIG (destination: $DEST)"
+          for ip in $(ruby -ryaml -e "puts YAML.load_file('$CONFIG').dig('servers','web','hosts') || []"); do
+            echo "Adding $ip"
+            ssh-keyscan -H "$ip" >> ~/.ssh/known_hosts 2>/dev/null || true
+          done
+
+      - name: Write Kamal secrets
+        env:
+          KAMAL_REGISTRY_PASSWORD: ${{ secrets.KAMAL_REGISTRY_PASSWORD || github.token }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
+          ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_FROM_EMAIL: ${{ secrets.RESEND_FROM_EMAIL }}
+          CONTACT_EMAIL: ${{ secrets.CONTACT_EMAIL }}
+          SITE_OPERATOR_NAME: ${{ secrets.SITE_OPERATOR_NAME }}
+          SITE_OPERATOR_ADDRESS: ${{ secrets.SITE_OPERATOR_ADDRESS }}
+        run: |
+          mkdir -p .kamal
+          cat > .kamal/secrets <<EOF
+          KAMAL_REGISTRY_PASSWORD=${KAMAL_REGISTRY_PASSWORD}
+          DATABASE_URL=${DATABASE_URL}
+          REDIS_URL=${REDIS_URL}
+          JWT_SECRET=${JWT_SECRET}
+          FRONTEND_URL=${FRONTEND_URL}
+          ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+          RESEND_API_KEY=${RESEND_API_KEY}
+          RESEND_FROM_EMAIL=${RESEND_FROM_EMAIL}
+          CONTACT_EMAIL=${CONTACT_EMAIL}
+          SITE_OPERATOR_NAME=${SITE_OPERATOR_NAME}
+          SITE_OPERATOR_ADDRESS=${SITE_OPERATOR_ADDRESS}
+          EOF
+
+      - name: Deploy with Kamal
+        env:
+          KAMAL_REGISTRY_PASSWORD: ${{ secrets.KAMAL_REGISTRY_PASSWORD || github.token }}
+        run: kamal deploy -d "${KAMAL_DESTINATION}" -v
+
+      - name: Post-deploy reminder
+        run: |
+          echo "Deployed destination: ${KAMAL_DESTINATION}"
+          echo "Fresh install: kamal app exec -d ${KAMAL_DESTINATION} -i 'node scripts/setup-admin.js'"

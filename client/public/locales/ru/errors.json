@@ -1,0 +1,22 @@
+{
+  "errorBoundary": {
+    "description": "Произошла непредвиденная ошибка. Возможно, это временная проблема.",
+    "reloadPage": "Обновить страницу",
+    "reportError": "Сообщить об ошибке",
+    "stackTrace": "Трассировка стека",
+    "title": "Что-то пошло не так",
+    "tryAgain": "Повторить"
+  },
+  "generic": "Что-то пошло не так",
+  "reportForm": {
+    "addLogs": "Add Logs",
+    "consoleLabel": "Console Logs (optional)",
+    "consolePlaceholder": "Any relevant console errors or logs",
+    "descriptionLabel": "Description *",
+    "descriptionPlaceholder": "What happened? What were you trying to do? What did you expect to happen?",
+    "titleLabel": "Title *",
+    "titlePlaceholder": "Brief description of the issue"
+  },
+  "reportIssue": "Сообщить о проблеме",
+  "tryAgain": "Попробуйте ещё раз"
+}

@@ -1,0 +1,22 @@
+{
+  "errorBoundary": {
+    "description": "ایک غیر متوقع خرابی واقع ہوئی۔ یہ عارضی مسئلہ ہو سکتا ہے۔",
+    "reloadPage": "صفحہ دوبارہ لوڈ کریں",
+    "reportError": "خرابی رپورٹ کریں",
+    "stackTrace": "اسٹیک ٹریس",
+    "title": "کچھ غلط ہو گیا",
+    "tryAgain": "دوبارہ کوشش کریں"
+  },
+  "generic": "کچھ غلط ہو گیا",
+  "reportForm": {
+    "addLogs": "لاگز شامل کریں",
+    "consoleLabel": "کنسول لاگز (اختیاری)",
+    "consolePlaceholder": "کنسول کی متعلقہ خرابیاں یا لاگز",
+    "descriptionLabel": "تفصیل *",
+    "descriptionPlaceholder": "کیا ہوا؟ آپ کیا کرنے کی کوشش کر رہے تھے؟ آپ کیا توقع کر رہے تھے؟",
+    "titleLabel": "عنوان *",
+    "titlePlaceholder": "مسئلے کی مختصر وضاحت"
+  },
+  "reportIssue": "مسئلہ رپورٹ کریں",
+  "tryAgain": "براہ کرم دوبارہ کوشش کریں"
+}

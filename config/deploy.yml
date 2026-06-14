@@ -1,0 +1,81 @@
+# Kamal 2 deployment — Colabora on Hetzner
+# Docs: docs/active/HETZNER_DEPLOYMENT.md
+#
+# Before first deploy:
+#   1. Replace YOUR_GITHUB_ORG, colabora.example.com, and server IPs below
+#   2. Copy .kamal/secrets.example → .kamal/secrets (local) or set GitHub Actions secrets
+#   3. Provision Postgres + Redis (infra/docker-compose.data.yml) on private network
+#   4. gem install kamal && kamal setup && kamal deploy
+#
+# Pilot (10–50 users, 1 app): kamal deploy -d pilot  — see docs/active/HETZNER_PILOT_CHECKLIST.md
+# Staging (single server): kamal deploy -d staging
+
+service: colabora
+image: maha551/colabora
+
+# SSH: use ssh-agent (local: ssh-add your key; CI: KAMAL_SSH_PRIVATE_KEY secret).
+# Do NOT put key file paths here — they break on Linux CI runners.
+ssh:
+  user: deploy
+
+servers:
+  web:
+    hosts:
+      # Production: public IPs or a self-hosted GitHub runner in your Hetzner private network.
+      # Private-only IPs (10.0.0.x) are unreachable from github.com runners — use pilot CI until LB is live.
+      - 10.0.0.11 # app-1
+      - 10.0.0.12 # app-2
+
+# Kamal 2 built-in proxy (Traefik-based). Terminates TLS via Let's Encrypt.
+# With 2+ app servers, put a Hetzner Load Balancer in front (TCP 443 → each host:443).
+proxy:
+  ssl: true
+  host: colabora.local-correspondent.com
+  app_port: 3000
+  healthcheck:
+    path: /api/health/ready
+
+registry:
+  server: ghcr.io
+  username: maha551
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+env:
+  clear:
+    NODE_ENV: production
+    PORT: "3000"
+    LOG_LEVEL: info
+    JWT_EXPIRES_IN: 24h
+    PG_POOL_MIN: "5"
+    PG_POOL_MAX: "40"
+    PG_POOL_ACQUIRE_TIMEOUT: "30000"
+    PG_KEEPALIVE_ENABLED: "true"
+    PG_SOCKET_TIMEOUT: "120000"
+    RATE_LIMIT_WINDOW_MS: "900000"
+    RATE_LIMIT_MAX_REQUESTS: "1000"
+    VIDEO_PROVIDER: none
+    RESEND_FROM_NAME: "Colabora"
+    TERMS_VERSION: "2026-06-11"
+    PRIVACY_VERSION: "2026-06-11"
+  secret:
+    - DATABASE_URL
+    - REDIS_URL
+    - JWT_SECRET
+    - FRONTEND_URL
+    - ALLOWED_ORIGINS
+    - RESEND_API_KEY
+    - RESEND_FROM_EMAIL
+    - CONTACT_EMAIL
+    - SITE_OPERATOR_NAME
+    - SITE_OPERATOR_ADDRESS
+
+builder:
+  arch: amd64
+  context: .
+  args:
+    GIT_SHA: <%= `git rev-parse --short HEAD`.strip %>
+    BUILD_TIME: <%= Time.now.utc.strftime('%Y-%m-%dT%H:%M:%SZ') %>
+
+# Database migrations run in the container start script (Dockerfile /start.sh).
+# For one-shot migrations instead: kamal app exec "npm run db:migrate"

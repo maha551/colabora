@@ -1,0 +1,22 @@
+{
+  "errorBoundary": {
+    "description": "Une erreur inattendue s'est produite. Il peut s'agir d'un problème temporaire.",
+    "reloadPage": "Recharger la page",
+    "reportError": "Signaler l'erreur",
+    "stackTrace": "Trace de la pile",
+    "title": "Une erreur s'est produite",
+    "tryAgain": "Réessayer"
+  },
+  "generic": "Une erreur s'est produite",
+  "reportForm": {
+    "addLogs": "Ajouter des enregistrements",
+    "consoleLabel": "Journaux de la console (facultatif)",
+    "consolePlaceholder": "Erreurs de console ou journaux pertinents",
+    "descriptionLabel": "Description *",
+    "descriptionPlaceholder": "Ce qui s'est passé? Qu'essayiez-vous de faire ? À quoi vous attendiez-vous ?",
+    "titleLabel": "Titre *",
+    "titlePlaceholder": "Brève description du problème"
+  },
+  "reportIssue": "Signaler un problème",
+  "tryAgain": "Veuillez réessayer"
+}

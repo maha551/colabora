@@ -1,0 +1,42 @@
+
+  <!DOCTYPE html>
+  <html lang="en">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+      <title>colabora</title>
+      <!-- Favicons -->
+      <link rel="icon" type="image/x-icon" href="/favicon.ico">
+      <link id="favicon-16" rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+      <link id="favicon-32" rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+      <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+      <link rel="manifest" href="/manifest.webmanifest">
+      <meta name="theme-color" content="#ffffff">
+      <script>
+        // Apply theme before React hydration to prevent flash
+        (function() {
+          function applyFavicon(resolvedTheme) {
+            var isDark = resolvedTheme === 'dark';
+            var el16 = document.getElementById('favicon-16');
+            var el32 = document.getElementById('favicon-32');
+            if (el16) el16.href = isDark ? '/favicon-dark-16x16.png' : '/favicon-16x16.png';
+            if (el32) el32.href = isDark ? '/favicon-dark-32x32.png' : '/favicon-32x32.png';
+          }
+          var theme = localStorage.getItem('colabora-theme') || 'system';
+          var resolvedTheme = theme === 'system'
+            ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+            : theme;
+          if (resolvedTheme === 'dark') {
+            document.documentElement.classList.add('dark');
+          }
+          applyFavicon(resolvedTheme);
+        })();
+      </script>
+    </head>
+
+    <body>
+      <div id="root"></div>
+      <script type="module" src="/src/main.tsx"></script>
+    </body>
+  </html>
+  

@@ -9,6 +9,11 @@ import {
 import { Icon } from '../ui/Icon';
 import { cn } from '../ui/utils';
 
+/** Indentation per tree depth level (px) for organization switcher lists. */
+export function organizationSwitcherIndentPx(treeDepth = 0): number {
+  return Math.max(0, treeDepth) * 12;
+}
+
 export interface OrganizationSwitcherProps {
   organizations: Organization[];
   activeOrganization?: Organization | null;
@@ -38,6 +43,7 @@ function OrganizationList({
     <ul className={cn('flex flex-col gap-0.5', className)}>
       {organizations.map((org) => {
         const isActive = activeOrganization?.id === org.id;
+        const indentPx = organizationSwitcherIndentPx(org.treeDepth);
 
         return (
           <li key={org.id}>
@@ -47,6 +53,7 @@ function OrganizationList({
                 onSelectOrganization(org);
                 onAfterSelect?.();
               }}
+              style={{ paddingLeft: `${12 + indentPx}px` }}
               className={cn(
                 'flex w-full min-w-0 items-center gap-2.5 text-left text-sm transition-colors',
                 itemClassName,
@@ -105,11 +112,13 @@ export function OrganizationSwitcher({
       </DropdownMenuLabel>
       {organizations.map((org) => {
         const isActive = activeOrganization?.id === org.id;
+        const indentPx = organizationSwitcherIndentPx(org.treeDepth);
 
         return (
           <DropdownMenuItem
             key={org.id}
             onClick={() => onSelectOrganization(org)}
+            style={{ paddingLeft: `${12 + indentPx}px` }}
             className={cn(isActive && 'bg-accent')}
           >
             <OrganizationAvatar organization={org} size="xs" />

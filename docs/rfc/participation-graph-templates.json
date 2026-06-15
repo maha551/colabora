@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "templates": {
+    "classical_cooperative": {
+      "label": "Classical Cooperative",
+      "description": "Tree + subgroups; no matrix, network, or delegation by default.",
+      "rootGovernanceDefaults": {
+        "participationGraphEnabled": true,
+        "subgroupsEnabled": true,
+        "subgroupCreationRequiresVote": true,
+        "matrixLinksEnabled": false,
+        "networksEnabled": false,
+        "flowEdgesEnabled": false,
+        "delegationEnabled": false,
+        "visualGraphEditorEnabled": false
+      },
+      "defaultSubgroupProfile": "classical_committee"
+    },
+    "classical_department": {
+      "label": "Classical Department",
+      "description": "Stricter parent visibility; nested working unit.",
+      "defaultSubgroupProfile": "classical_department"
+    },
+    "federation_union": {
+      "label": "Federation Union",
+      "description": "Apex with org-as-member chapters and delegate electorate.",
+      "defaultSubgroupProfile": "federation_chapter",
+      "rootGovernanceDefaults": {
+        "participationGraphEnabled": true,
+        "subgroupsEnabled": true,
+        "documentRatificationFlowsEnabled": true
+      }
+    },
+    "network_hub": {
+      "label": "Network Coalition",
+      "description": "Cross-cutting network with affiliate edges.",
+      "rootGovernanceDefaults": {
+        "networksEnabled": true,
+        "participationGraphEnabled": true
+      },
+      "defaultOrgKind": "network"
+    },
+    "matrix_campaign": {
+      "label": "Matrix Campaign",
+      "description": "Project org with matrix links to functional units.",
+      "defaultSubgroupProfile": "matrix_project",
+      "rootGovernanceDefaults": {
+        "matrixLinksEnabled": true,
+        "matrixElectorateMode": "project_only"
+      },
+      "defaultOrgKind": "initiative"
+    },
+    "liquid_democracy_chapter": {
+      "label": "Liquid Democracy Chapter",
+      "description": "Flat or shallow tree with delegation enabled.",
+      "rootGovernanceDefaults": {
+        "delegationEnabled": true,
+        "liquidDelegationEnabled": true,
+        "proxyVotingEnabled": true,
+        "domainTagsEnabled": true
+      }
+    }
+  },
+  "profiles": {
+    "classical_committee": {
+      "membership": { "requireParentMembership": false },
+      "visibility": { "listedOnParent": true },
+      "admin": { "parentRepsCanAdminister": true },
+      "documentFlows": []
+    },
+    "classical_department": {
+      "membership": { "requireParentMembership": true },
+      "visibility": { "listedOnParent": true, "parentCanViewActivity": true },
+      "admin": { "parentRepsCanAdminister": true },
+      "documentFlows": []
+    },
+    "federation_chapter": {
+      "membership": { "requireParentMembership": false },
+      "participation": { "autoCreateDoubleLink": true },
+      "documentFlows": [{ "id": "ratify-to-parent", "trigger": "document_agreed", "target": "parent", "action": "create_draft", "requireTargetVote": true }]
+    },
+    "network_affiliate": {
+      "membership": { "model": "open_affiliate" },
+      "documentFlows": []
+    },
+    "matrix_project": {
+      "membership": { "model": "project_roster" },
+      "admin": { "matrixAuthority": "balanced" },
+      "documentFlows": []
+    }
+  }
+}

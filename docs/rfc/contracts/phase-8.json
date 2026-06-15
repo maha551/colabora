@@ -1,0 +1,8 @@
+{
+  "phase": 8,
+  "title": "Vote delegation",
+  "migration": "025_vote_delegations.js",
+  "tables": ["vote_delegations"],
+  "delegationModes": ["global", "domain", "proxy"],
+  "governanceFields": ["liquidDelegationEnabled", "proxyVotingEnabled", "maxDelegationDepth", "allowTransitiveDelegation", "domainTagsEnabled"]
+}

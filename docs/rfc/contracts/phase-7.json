@@ -1,0 +1,7 @@
+{
+  "phase": 7,
+  "title": "Matrix links and context switcher",
+  "migration": "024_matrix_governance.js",
+  "governanceFields": ["matrixLinksEnabled", "matrixElectorateMode"],
+  "relationshipTypes": ["matrix_link"]
+}

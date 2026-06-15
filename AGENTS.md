@@ -1,4 +1,9 @@
-# AGENTS.md
+---
+description: 
+alwaysApply: true
+---
+
+# PONYTAIL.md
 
 ## Cursor Cloud specific instructions
 

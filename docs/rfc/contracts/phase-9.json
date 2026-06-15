@@ -1,0 +1,12 @@
+{
+  "phase": 9,
+  "title": "Visual graph editor",
+  "migration": "026_graph_layout.js",
+  "dependencies": ["@xyflow/react"],
+  "voteTypes": ["relationship_change"],
+  "endpoints": [
+    { "method": "GET", "path": "/api/organizations/:organizationId/participation-graph" },
+    { "method": "PUT", "path": "/api/organizations/:organizationId/participation-graph/layout" }
+  ],
+  "components": ["ParticipationGraphEditor"]
+}

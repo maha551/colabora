@@ -8,6 +8,7 @@ import {
   HeaderChromeUserMenu,
   HeaderCreateButton,
 } from './headerChromeShared';
+import { OrgBreadcrumb } from '../shared/OrgBreadcrumb';
 import { Icon } from '../ui/Icon';
 
 export interface AppHeaderBarContentProps {
@@ -89,8 +90,22 @@ export function AppHeaderBarContent({
         !contentVisible && 'app-chrome-content-hidden'
       )}
     >
-      <div className={cn('flex min-w-0 flex-1 items-center', SPACING.content.inline)}>
+      <div className={cn('flex min-w-0 flex-1 flex-col justify-center', SPACING.content.inline)}>
         {!shouldReorderOnMobile && backButton}
+        {activeOrganization && (
+          <OrgBreadcrumb
+            organizationId={activeOrganization.id}
+            organizationName={activeOrganization.name}
+            onNavigate={
+              onSelectOrganization
+                ? (orgId) => {
+                    const target = organizations.find((o) => o.id === orgId);
+                    if (target) onSelectOrganization(target);
+                  }
+                : undefined
+            }
+          />
+        )}
         {displayTitle && (
           <h1
             id={titleId}

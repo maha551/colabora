@@ -589,6 +589,12 @@ export interface Organization {
   overviewPinnedAt?: string | null;
   overviewPinnedByUserId?: string | null;
   overviewPinnedEvent?: import('../lib/api/calendar').CalendarEvent | null;
+  primaryParentId?: string | null;
+  orgKind?: 'standard' | 'network' | 'initiative';
+  participationProfile?: string;
+  treeDepth?: number;
+  treePath?: string;
+  participationGraphRootId?: string;
 }
 
 export interface OrganizationMember {

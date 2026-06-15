@@ -67,6 +67,18 @@ export const organizationsApi = {
     return apiRequest<OrganizationsResponse>('/api/organizations')
   },
 
+  async getOrganizationAncestors(organizationId: string): Promise<{
+    ancestors: Array<{ id: string; name: string; treeDepth: number }>;
+  }> {
+    return apiRequest(`/api/organizations/${organizationId}/ancestors`);
+  },
+
+  async getOrganizationChildren(organizationId: string): Promise<{
+    children: Array<{ id: string; name: string; treeDepth: number; participationProfile: string }>;
+  }> {
+    return apiRequest(`/api/organizations/${organizationId}/children`);
+  },
+
   // Get organization details
   async getOrganization(organizationId: string): Promise<OrganizationResponse> {
     return apiRequest<OrganizationResponse>(`/api/organizations/${organizationId}`)

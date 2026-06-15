@@ -171,7 +171,7 @@ Democratic organizations manage shared resources:
 | **P3** | **Webhooks & Public API** | Ecosystem integration |
 | **P3** | **Digital Signatures** | Legal validity |
 | **P3** | **Calendar Integration** | Quality of life |
-| **P3** | **Multi-Level Federation** | For large/networked organizations |
+| **P3** | **Multi-Level Federation** | For large/networked organizations — see [Participation Graph RFC](./rfc/PARTICIPATION_GRAPH.md) (Phases 0–9) |
 
 ---
 

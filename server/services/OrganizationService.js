@@ -44,6 +44,8 @@ async function getOrganizationsForUser(db, userId, options = {}) {
       o.created_at, o.branding_color, o.branding_logo_url,
       o.branding_title, o.branding_banner_url, o.icon_set, o.font_family,
       o.representatives,
+      o.primary_parent_id, o.org_kind, o.participation_profile,
+      o.tree_depth, o.tree_path, o.participation_graph_root_id,
       om.status as membership_status,
       om.joined_at,
       CASE 
@@ -121,6 +123,12 @@ async function getOrganizationsForUser(db, userId, options = {}) {
       brandingBannerUrl: row.branding_banner_url || null,
       iconSet: row.icon_set || null,
       fontFamily: row.font_family || null,
+      primaryParentId: row.primary_parent_id || null,
+      orgKind: row.org_kind || 'standard',
+      participationProfile: row.participation_profile || 'classical_committee',
+      treeDepth: row.tree_depth ?? 0,
+      treePath: row.tree_path || `/${row.id}`,
+      participationGraphRootId: row.participation_graph_root_id || row.id,
       ...(includeGovernanceRules && { governanceRules: governanceRulesMap.get(row.id) || null })
     };
   });
@@ -209,7 +217,8 @@ async function getOrganizationWithMembers(db, organizationId, options = {}) {
   const org = await TransactionManager.query(db, `SELECT id, name, description, representatives, membership_policy, voting_enabled,
     voting_threshold, is_active, created_by_admin_id, created_at,
     branding_color, branding_logo_url, branding_title, branding_banner_url, icon_set, font_family,
-    overview_pinned_event_id, overview_pinned_at, overview_pinned_by_user_id
+    overview_pinned_event_id, overview_pinned_at, overview_pinned_by_user_id,
+    primary_parent_id, org_kind, participation_profile, tree_depth, tree_path, participation_graph_root_id
     FROM organizations WHERE id = ?`, [organizationId]);
   if (!org) throw ApiError.notFound('Organization');
 
@@ -269,6 +278,12 @@ async function getOrganizationWithMembers(db, organizationId, options = {}) {
       overviewPinnedAt: org.overview_pinned_at || null,
       overviewPinnedByUserId: org.overview_pinned_by_user_id || null,
       overviewPinnedEvent,
+      primaryParentId: org.primary_parent_id || null,
+      orgKind: org.org_kind || 'standard',
+      participationProfile: org.participation_profile || 'classical_committee',
+      treeDepth: org.tree_depth ?? 0,
+      treePath: org.tree_path || `/${org.id}`,
+      participationGraphRootId: org.participation_graph_root_id || org.id,
       members: members.map(m => ({
         id: m.id,
         userId: m.user_id,

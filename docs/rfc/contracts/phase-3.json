@@ -1,0 +1,8 @@
+{
+  "phase": 3,
+  "title": "Meeting to org vote hook",
+  "migration": "020b_meeting_org_vote_link.js",
+  "endpoints": [],
+  "fields": { "meeting_decisions.organization_vote_id": "string | null" },
+  "components": ["DecisionBlock organization vote trigger"]
+}

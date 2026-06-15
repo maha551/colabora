@@ -8,6 +8,7 @@ const { isRepresentative } = require('../modules/permissions');
 const { canManageOrganizationActions } = require('../utils/adminPermissions');
 const OrganizationService = require('../services/OrganizationService');
 const { checkOrganizationHasDocuments, checkDataConsistency, logAudit, setOverviewPin, leaveOrganization } = OrganizationService;
+const ParticipationGraphService = require('../services/ParticipationGraphService');
 const config = require('../config');
 const GovernanceRulesService = require('../services/governance/GovernanceRulesService');
 const { TTL } = require('../utils/responseCache');
@@ -99,6 +100,34 @@ router.get('/', requireAuth, asyncHandler(async (req, res, next) => {
     logger.debug('Final organization result', { totalOrganizations: organizations.length, organizations: organizations.length > 0 ? organizations.map((org, idx) => ({ index: idx + 1, name: org.name, id: org.id, membershipStatus: org.membershipStatus || 'none', isActive: org.isActive, representativesCount: org.representatives?.length || 0 })) : [] });
   }
   res.json(payload);
+}));
+
+// Participation graph read APIs (must be registered before /:organizationId)
+router.get('/:organizationId/ancestors', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res) => {
+  const db = req.app.locals.db;
+  const { organizationId } = req.params;
+  const result = await ParticipationGraphService.getAncestors(db, organizationId);
+  res.json(result);
+}));
+
+router.get('/:organizationId/children', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res) => {
+  const db = req.app.locals.db;
+  const { organizationId } = req.params;
+  const result = await ParticipationGraphService.getDirectChildren(db, organizationId);
+  res.json(result);
+}));
+
+router.get('/:organizationId/tree', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res, next) => {
+  const db = req.app.locals.db;
+  const { organizationId } = req.params;
+  const userId = getUserId(req);
+  const isRep = await isRepresentative(db, userId, organizationId);
+  const isAdmin = req.user?.role === 'admin';
+  if (!isRep && !isAdmin) {
+    return next(ApiError.forbidden('Only representatives can view the full organization tree', 'NOT_REPRESENTATIVE'));
+  }
+  const result = await ParticipationGraphService.getTreeForUser(db, organizationId);
+  res.json(result);
 }));
 
 // Get specific organization details

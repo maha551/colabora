@@ -1,0 +1,6 @@
+{
+  "phase": 6,
+  "title": "Cross-cutting networks",
+  "migration": "023_network_governance.js",
+  "governanceFields": ["networksEnabled", "networkMembershipModel", "affiliateRequiresVote"]
+}

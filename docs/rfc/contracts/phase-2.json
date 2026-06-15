@@ -1,0 +1,10 @@
+{
+  "phase": 2,
+  "title": "Vote-gated subgroups",
+  "migration": "020_participation_graph_subgroups.js",
+  "voteTypes": ["subgroup_creation"],
+  "endpoints": [
+    { "method": "POST", "path": "/api/organizations/:organizationId/subgroups", "body": { "name": "string", "description": "string", "profile": "string", "visibility": "open|closed|secret" } }
+  ],
+  "governanceFields": ["subgroupsEnabled", "subgroupCreationRequiresVote", "membersCanProposeSubgroupCreation", "maxSubgroupDepth", "defaultSubgroupVisibility"]
+}

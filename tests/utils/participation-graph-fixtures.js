@@ -74,7 +74,20 @@ async function seedMember(server, organizationId, userId) {
   return id;
 }
 
+async function setSubgroupGovernance(server, organizationId, overrides = {}) {
+  const db = getServerDb(server);
+  const patch = {
+    participation_graph_enabled: true,
+    subgroups_enabled: true,
+    subgroup_creation_requires_vote: true,
+    members_can_propose_subgroup_creation: false,
+    ...overrides,
+  };
+  await db('organization_governance_rules').where({ organization_id: organizationId }).update(patch);
+}
+
 module.exports = {
+  setSubgroupGovernance,
   ensureParticipationGraphMigrations,
   createRootOrg,
   createChildOrg,

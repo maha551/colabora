@@ -1609,7 +1609,7 @@ async function createOrganizationVote(db, organizationId, userId, body, req) {
   if (!voteType || typeof voteType !== 'string' || !voteType.trim()) {
     throw ApiError.validation('Vote type is required', null, 'MISSING_VOTE_TYPE');
   }
-  const validVoteTypes = ['policy', 'document_change', 'document_amendment_adoption', 'membership', 'dissolution', 'other', 'representative_removal'];
+  const validVoteTypes = ['policy', 'document_change', 'document_amendment_adoption', 'membership', 'dissolution', 'other', 'representative_removal', 'subgroup_creation'];
   if (!validVoteTypes.includes(voteType)) {
     throw ApiError.validation(`Invalid vote type. Must be one of: ${validVoteTypes.join(', ')}`, null, 'INVALID_VOTE_TYPE');
   }
@@ -1633,9 +1633,30 @@ async function createOrganizationVote(db, organizationId, userId, body, req) {
     }
   }
 
+  const metadataJson = body.metadata_json ?? body.metadataJson;
+  const sourceMeetingDecisionId = body.source_meeting_decision_id ?? body.sourceMeetingDecisionId;
+
   if (voteType === 'document_change') {
     const member = await isActiveMember(db, userId, organizationId);
     if (!member) throw ApiError.forbidden('You must be an active member to request amendments', 'NOT_ACTIVE_MEMBER');
+  } else if (voteType === 'subgroup_creation') {
+    const ParticipationGraphService = require('./ParticipationGraphService');
+    const governance = await ParticipationGraphService.getSubgroupGovernanceRules(db, organizationId);
+    if (!governance?.subgroupsEnabled) {
+      throw ApiError.forbidden('Subgroups are not enabled for this organization', 'SUBGROUPS_DISABLED');
+    }
+    const isRep = await isRepresentative(db, userId, organizationId);
+    const isMember = await isActiveMember(db, userId, organizationId);
+    if (!isMember) throw ApiError.forbidden('Only active members can propose subgroup votes', 'NOT_ACTIVE_MEMBER');
+    if (!isRep && !governance.membersCanProposeSubgroupCreation) {
+      throw ApiError.forbidden('Only representatives can propose subgroup creation votes', 'NOT_REPRESENTATIVE');
+    }
+    if (!metadataJson || typeof metadataJson !== 'object' || !metadataJson.name) {
+      throw ApiError.validation('Subgroup metadata with name is required', null, 'MISSING_SUBGROUP_METADATA');
+    }
+    ParticipationGraphService.validateSubgroupPayload(metadataJson, governance);
+    const parentOrg = await TransactionManager.query(db, 'SELECT tree_depth FROM organizations WHERE id = ?', [organizationId]);
+    await ParticipationGraphService.assertSubgroupDepthAllowed(db, parentOrg, governance);
   } else {
     const isRep = await isRepresentative(db, userId, organizationId);
     if (!isRep) throw ApiError.forbidden('Only representatives can create votes', 'NOT_REPRESENTATIVE');
@@ -1668,14 +1689,19 @@ async function createOrganizationVote(db, organizationId, userId, body, req) {
     }
   }
 
+  const metadataJsonValue = metadataJson ? JSON.stringify(metadataJson) : null;
+
   await TransactionManager.execute(db, `INSERT INTO organization_votes (
     id, organization_id, title, description, vote_type, proposed_by_user_id,
-    threshold, status, voting_starts_at, voting_ends_at, target_document_id
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, 'proposed', ?, ?, ?)`, [
+    threshold, status, voting_starts_at, voting_ends_at, target_document_id,
+    metadata_json, source_meeting_decision_id
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, 'proposed', ?, ?, ?, ?, ?)`, [
     voteId, organizationId, title.trim(), description || null, voteType, userId, threshold,
     votingStartsAt ? votingStartsAt.toISOString() : null,
     votingEndsAt ? votingEndsAt.toISOString() : null,
-    targetDocumentId || null
+    targetDocumentId || null,
+    metadataJsonValue,
+    sourceMeetingDecisionId || null,
   ]);
 
   await logAudit(db, organizationId, 'vote_proposed', userId, null, { voteType, title }, req);
@@ -1914,7 +1940,8 @@ async function completeOrganizationVote(db, organizationId, voteId, userId, req)
 
   const vote = await TransactionManager.query(db, `SELECT id, organization_id, title, description, vote_type, proposed_by_user_id, 
     approved_by_rep_id, threshold, status, voting_starts_at, voting_ends_at, 
-    target_document_id, result_yes, result_no, result_abstain, created_at
+    target_document_id, result_yes, result_no, result_abstain, created_at,
+    metadata_json, source_meeting_decision_id
     FROM organization_votes
     WHERE id = ? AND organization_id = ? AND status = 'approved'`, [voteId, organizationId]);
 
@@ -2037,6 +2064,31 @@ async function completeOrganizationVote(db, organizationId, voteId, userId, req)
         voteId,
         targetDocumentId: vote.target_document_id
       });
+    }
+  }
+
+  if (vote.vote_type === 'subgroup_creation' && passed) {
+    try {
+      const ParticipationGraphService = require('./ParticipationGraphService');
+      await ParticipationGraphService.materializeSubgroupFromVote(db, organizationId, vote, userId, req);
+    } catch (subgroupErr) {
+      if (subgroupErr instanceof ApiError) throw subgroupErr;
+      logger.error('Error creating subgroup from vote', { error: subgroupErr.message, voteId, organizationId });
+      throw ApiError.database('Failed to create subgroup after vote');
+    }
+  }
+
+  if (vote.vote_type === 'dissolution' && passed) {
+    try {
+      const ParticipationGraphService = require('./ParticipationGraphService');
+      const governance = await ParticipationGraphService.getSubgroupGovernanceRules(db, organizationId);
+      await ParticipationGraphService.applyChildDissolutionPolicy(
+        db,
+        organizationId,
+        governance?.childDissolutionPolicy || 'independent'
+      );
+    } catch (dissErr) {
+      logger.error('Error applying child dissolution policy', { error: dissErr.message, voteId, organizationId });
     }
   }
 

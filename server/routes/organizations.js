@@ -113,8 +113,17 @@ router.get('/:organizationId/ancestors', requireAuth, requireOrganizationMember,
 router.get('/:organizationId/children', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res) => {
   const db = req.app.locals.db;
   const { organizationId } = req.params;
-  const result = await ParticipationGraphService.getDirectChildren(db, organizationId);
+  const userId = getUserId(req);
+  const result = await ParticipationGraphService.getDirectChildren(db, organizationId, userId);
   res.json(result);
+}));
+
+router.post('/:organizationId/subgroups', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res) => {
+  const db = req.app.locals.db;
+  const { organizationId } = req.params;
+  const userId = getUserId(req);
+  const result = await ParticipationGraphService.proposeOrCreateSubgroup(db, organizationId, userId, req.body, req);
+  res.status(result.mode === 'created' ? 201 : 200).json(result);
 }));
 
 router.get('/:organizationId/tree', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res, next) => {

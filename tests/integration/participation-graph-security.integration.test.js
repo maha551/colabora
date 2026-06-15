@@ -1,6 +1,6 @@
 const request = require('supertest');
 const { startApplication } = require('../../server/bootstrap');
-const { createRootOrg, createChildOrg, seedMember } = require('../utils/participation-graph-fixtures');
+const { createRootOrg, createChildOrg, seedMember, setSubgroupGovernance } = require('../utils/participation-graph-fixtures');
 
 let server;
 let adminToken;
@@ -51,4 +51,33 @@ describe('Participation graph security', () => {
       .set('Authorization', `Bearer ${memberToken}`)
       .expect(403);
   });
+  test('SEC-2.3 secret subgroup not listed for non-member parent member', async () => {
+    const bobLogin = await request(server)
+      .post('/api/auth/login')
+      .send({ email: 'bob@example.com', password: 'SecurePass123!' });
+    const bobToken = bobLogin.body.token;
+
+    const root = await createRootOrg(server, adminToken, {
+      name: 'PG Sec Secret Root ' + Date.now(),
+      representatives: [memberId, bobLogin.body.user.id],
+    });
+    await seedMember(server, root.id, memberId);
+    await setSubgroupGovernance(server, root.id, { subgroup_creation_requires_vote: false });
+
+    const secretName = 'Secret Child ' + Date.now();
+    await request(server)
+      .post('/api/organizations/' + root.id + '/subgroups')
+      .set('Authorization', 'Bearer ' + bobToken)
+      .send({ name: secretName, visibility: 'secret' })
+      .expect(201);
+
+    const children = await request(server)
+      .get('/api/organizations/' + root.id + '/children')
+      .set('Authorization', 'Bearer ' + memberToken)
+      .expect(200);
+
+    expect(children.body.children.some((c) => c.name === secretName)).toBe(false);
+  });
+
 });
+

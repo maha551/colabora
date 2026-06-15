@@ -97,29 +97,6 @@ async function getAncestors(db, orgId) {
   return { ancestors };
 }
 
-async function getDirectChildren(db, orgId) {
-  const org = await getOrgTreeRow(db, orgId);
-  if (!org) throw ApiError.notFound('Organization');
-
-  const rows = await TransactionManager.queryAll(
-    db,
-    `SELECT id, name, tree_depth, participation_profile
-     FROM organizations
-     WHERE primary_parent_id = ? AND is_active = true
-     ORDER BY name ASC`,
-    [orgId]
-  );
-
-  return {
-    children: rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      treeDepth: row.tree_depth ?? 0,
-      participationProfile: row.participation_profile || 'classical_committee',
-    })),
-  };
-}
-
 async function getTreeForUser(db, orgId) {
   const org = await getOrgTreeRow(db, orgId);
   if (!org) throw ApiError.notFound('Organization');
@@ -266,13 +243,15 @@ function initializeRootOrgFields(orgId) {
   };
 }
 
+const participationGraphSubgroups = require('./participationGraphSubgroups');
+
 module.exports = {
+  ...participationGraphSubgroups,
   mapTreeNode,
   computeTreePath,
   parseAncestorIdsFromPath,
   validateNoCycle,
   getAncestors,
-  getDirectChildren,
   getTreeForUser,
   recomputeTreePathSubtree,
   setPrimaryParent,

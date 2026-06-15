@@ -61,6 +61,15 @@ const GOVERNANCE_FIELD_MAPPING = {
   'membersCanInitiateMistrustVote': 'members_can_initiate_mistrust_vote',
   'mistrustVoteThreshold': 'mistrust_vote_threshold',
   'mistrustVoteQuorumPercentage': 'mistrust_vote_quorum_percentage',
+
+  // Participation graph (Phase 2+)
+  'participationGraphEnabled': 'participation_graph_enabled',
+  'subgroupsEnabled': 'subgroups_enabled',
+  'subgroupCreationRequiresVote': 'subgroup_creation_requires_vote',
+  'membersCanProposeSubgroupCreation': 'members_can_propose_subgroup_creation',
+  'maxSubgroupDepth': 'max_subgroup_depth',
+  'defaultSubgroupVisibility': 'default_subgroup_visibility',
+  'childDissolutionPolicy': 'child_dissolution_policy',
 };
 
 /**

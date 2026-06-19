@@ -328,6 +328,21 @@ export const organizationsApi = {
     return apiRequest(`/api/organizations/${organizationId}/participations${query}`);
   },
 
+  async getParticipationGraph(organizationId: string): Promise<{
+    nodes: Array<{ id: string; name: string; kind: string }>;
+    edges: Array<{ id: string; sourceOrgId: string; targetOrgId: string; relationshipType: string }>;
+    layout: Record<string, unknown>;
+  }> {
+    return apiRequest(`/api/organizations/${organizationId}/participation-graph`);
+  },
+
+  async saveParticipationGraphLayout(organizationId: string, layout: Record<string, unknown>): Promise<{ success: boolean }> {
+    return apiRequest(`/api/organizations/${organizationId}/participation-graph/layout`, {
+      method: 'PUT',
+      body: JSON.stringify({ layout }),
+    });
+  },
+
   // Approve vote (representatives only)
   async approveVote(organizationId: string, voteId: string): Promise<MessageResponse> {
     return apiRequest<MessageResponse>(`/api/organizations/${organizationId}/votes/${voteId}/approve`, {

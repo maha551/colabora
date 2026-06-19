@@ -9,6 +9,8 @@ const { canManageOrganizationActions } = require('../utils/adminPermissions');
 const OrganizationService = require('../services/OrganizationService');
 const { checkOrganizationHasDocuments, checkDataConsistency, logAudit, setOverviewPin, leaveOrganization } = OrganizationService;
 const ParticipationGraphService = require('../services/ParticipationGraphService');
+const { getParticipationGraph, saveGraphLayout } = require('../services/participationGraphEditor');
+const DelegationService = require('../services/DelegationService');
 const config = require('../config');
 const GovernanceRulesService = require('../services/governance/GovernanceRulesService');
 const { TTL } = require('../utils/responseCache');
@@ -147,6 +149,63 @@ router.post('/:organizationId/participations/rep-link', requireAuth, requireOrga
     db, organizationId, userId, { userId: targetUserId, chapterOrgId }, req
   );
   res.status(201).json({ participation });
+}));
+
+router.get('/:organizationId/affiliates', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res) => {
+  const db = req.app.locals.db;
+  const result = await ParticipationGraphService.listAffiliates(db, req.params.organizationId);
+  res.json(result);
+}));
+
+router.post('/:organizationId/affiliates', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res) => {
+  const db = req.app.locals.db;
+  const affiliateOrgId = req.body?.affiliateOrgId ?? req.body?.affiliate_org_id;
+  if (!affiliateOrgId) throw ApiError.validation('affiliateOrgId is required');
+  const result = await ParticipationGraphService.createAffiliateEdge(
+    db, req.params.organizationId, affiliateOrgId, getUserId(req), req.body
+  );
+  res.status(201).json(result);
+}));
+
+router.get('/:organizationId/matrix-links', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res) => {
+  const db = req.app.locals.db;
+  const result = await ParticipationGraphService.listMatrixLinks(db, req.params.organizationId);
+  res.json(result);
+}));
+
+router.post('/:organizationId/matrix-links', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res) => {
+  const db = req.app.locals.db;
+  const linkedOrgId = req.body?.linkedOrgId ?? req.body?.linked_org_id;
+  if (!linkedOrgId) throw ApiError.validation('linkedOrgId is required');
+  const result = await ParticipationGraphService.createMatrixLink(
+    db, req.params.organizationId, linkedOrgId, getUserId(req), req.body
+  );
+  res.status(201).json(result);
+}));
+
+router.get('/:organizationId/delegations', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res) => {
+  const db = req.app.locals.db;
+  const result = await DelegationService.listDelegations(db, req.params.organizationId, getUserId(req));
+  res.json(result);
+}));
+
+router.post('/:organizationId/delegations', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res) => {
+  const db = req.app.locals.db;
+  const result = await DelegationService.createDelegation(db, req.params.organizationId, getUserId(req), req.body);
+  res.status(201).json(result);
+}));
+
+router.get('/:organizationId/participation-graph', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res) => {
+  const db = req.app.locals.db;
+  const result = await getParticipationGraph(db, req.params.organizationId, getUserId(req));
+  res.json(result);
+}));
+
+router.put('/:organizationId/participation-graph/layout', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res) => {
+  const db = req.app.locals.db;
+  const layout = req.body?.layout ?? req.body;
+  const result = await saveGraphLayout(db, req.params.organizationId, getUserId(req), layout);
+  res.json(result);
 }));
 
 router.get('/:organizationId/tree', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res, next) => {

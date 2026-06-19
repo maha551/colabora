@@ -1609,7 +1609,7 @@ async function createOrganizationVote(db, organizationId, userId, body, req) {
   if (!voteType || typeof voteType !== 'string' || !voteType.trim()) {
     throw ApiError.validation('Vote type is required', null, 'MISSING_VOTE_TYPE');
   }
-  const validVoteTypes = ['policy', 'document_change', 'document_amendment_adoption', 'membership', 'dissolution', 'other', 'representative_removal', 'subgroup_creation'];
+  const validVoteTypes = ['policy', 'document_change', 'document_amendment_adoption', 'membership', 'dissolution', 'other', 'representative_removal', 'subgroup_creation', 'document_submission', 'relationship_change'];
   if (!validVoteTypes.includes(voteType)) {
     throw ApiError.validation(`Invalid vote type. Must be one of: ${validVoteTypes.join(', ')}`, null, 'INVALID_VOTE_TYPE');
   }
@@ -2095,6 +2095,31 @@ async function completeOrganizationVote(db, organizationId, voteId, userId, req)
       if (subgroupErr instanceof ApiError) throw subgroupErr;
       logger.error('Error creating subgroup from vote', { error: subgroupErr.message, voteId, organizationId });
       throw ApiError.database('Failed to create subgroup after vote');
+    }
+  }
+
+  if (vote.vote_type === 'relationship_change' && passed) {
+    const { safeJsonParse, safeJsonStringify } = require('../utils/jsonUtils');
+    const { v4: uuidv4 } = require('uuid');
+    const metadata = typeof vote.metadata_json === 'string'
+      ? safeJsonParse(vote.metadata_json, null)
+      : vote.metadata_json;
+    if (metadata?.relationshipType && metadata?.sourceOrgId && metadata?.targetOrgId) {
+      const edgeId = uuidv4();
+      await TransactionManager.execute(db,
+        `INSERT INTO organization_relationships
+           (id, source_org_id, target_org_id, relationship_type, membership_subject, config_json, status, created_by_vote_id, created_at)
+         VALUES (?, ?, ?, ?, 'organization', ?, 'active', ?, CURRENT_TIMESTAMP)
+         ON CONFLICT DO NOTHING`,
+        [
+          edgeId,
+          metadata.sourceOrgId,
+          metadata.targetOrgId,
+          metadata.relationshipType,
+          safeJsonStringify(metadata.configJson || {}),
+          voteId,
+        ]
+      );
     }
   }
 

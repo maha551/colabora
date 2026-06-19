@@ -250,10 +250,14 @@ function initializeRootOrgFields(orgId, options = {}) {
 
 const participationGraphSubgroups = require('./participationGraphSubgroups');
 const participationGraphFederation = require('./participationGraphFederation');
+const participationGraphNetworks = require('./participationGraphNetworks');
+const participationGraphMatrix = require('./participationGraphMatrix');
 
 module.exports = {
   ...participationGraphSubgroups,
   ...participationGraphFederation,
+  ...participationGraphNetworks,
+  ...participationGraphMatrix,
   mapTreeNode,
   computeTreePath,
   parseAncestorIdsFromPath,

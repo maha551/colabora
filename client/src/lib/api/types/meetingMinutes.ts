@@ -89,6 +89,7 @@ export interface MeetingDecision {
   minutesDocumentId: string | null;
   agendaItemId: string | null;
   meetingVoteId: string | null;
+  organizationVoteId: string | null;
   sourceEventId: string | null;
   title: string | null;
   text: string;
@@ -107,6 +108,7 @@ export type TimelineDecisionItem = {
   entityVersion?: string | null;
   agendaItemId?: string | null;
   meetingVoteId?: string | null;
+  organizationVoteId?: string | null;
   sourceEventId?: string | null;
   title?: string | null;
   text?: string;

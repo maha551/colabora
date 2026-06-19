@@ -245,6 +245,7 @@ async function proposeOrCreateSubgroup(db, parentOrgId, userId, body, req) {
 
   if (governance.subgroupCreationRequiresVote) {
     const OrganizationService = require('./OrganizationService');
+    const sourceMeetingDecisionId = body.sourceMeetingDecisionId ?? body.source_meeting_decision_id ?? null;
     const metadata = {
       name: payload.name,
       description: payload.description,
@@ -260,6 +261,7 @@ async function proposeOrCreateSubgroup(db, parentOrgId, userId, body, req) {
         description: payload.description || null,
         voteType: 'subgroup_creation',
         metadataJson: metadata,
+        ...(sourceMeetingDecisionId ? { sourceMeetingDecisionId } : {}),
       },
       req
     );

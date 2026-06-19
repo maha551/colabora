@@ -296,6 +296,28 @@ export const organizationsApi = {
     })
   },
 
+  async proposeSubgroup(
+    organizationId: string,
+    body: {
+      name: string;
+      description?: string;
+      visibility?: string;
+      profile?: string;
+      sourceMeetingDecisionId?: string;
+    }
+  ): Promise<{ mode: 'vote_proposed' | 'created'; vote?: { id: string }; organization?: { id: string } }> {
+    return apiRequest(`/api/organizations/${organizationId}/subgroups`, {
+      method: 'POST',
+      body: JSON.stringify({
+        name: body.name,
+        ...(body.description != null && { description: body.description }),
+        ...(body.visibility != null && { visibility: body.visibility }),
+        ...(body.profile != null && { profile: body.profile }),
+        ...(body.sourceMeetingDecisionId != null && { source_meeting_decision_id: body.sourceMeetingDecisionId }),
+      }),
+    });
+  },
+
   // Approve vote (representatives only)
   async approveVote(organizationId: string, voteId: string): Promise<MessageResponse> {
     return apiRequest<MessageResponse>(`/api/organizations/${organizationId}/votes/${voteId}/approve`, {

@@ -29,7 +29,7 @@ import { SPACING, COLORS, NAVIGATION, Z_INDEX, RADIUS } from '../../../lib/desig
 import { cn } from '../../ui/utils';
 import { TabPanelHeader } from '../../layout/TabPanelHeader';
 import { TabPanelBody } from '../../layout/TabPanelBody';
-import { meetingsApi, meetingMinutesApi, meetingAgendaApi, meetingVotesApi, meetingModeratorsApi, paragraphsApi, exportApi, schedulingApi, ApiError, invalidateCache } from '../../../lib/api';
+import { meetingsApi, meetingMinutesApi, meetingAgendaApi, meetingVotesApi, meetingModeratorsApi, paragraphsApi, exportApi, schedulingApi, organizationsApi, ApiError, invalidateCache } from '../../../lib/api';
 import type { Meeting } from '../../../lib/api/types/meetings';
 import type { MeetingAgendaItem } from '../../../lib/api/types/meetingAgenda';
 import type { MinutesEvent, TimelineDecisionItem, TimelineEventItem, TimelineItem, TimelineParagraphItem, TimelineTodoItem } from '../../../lib/api/types/meetingMinutes';
@@ -436,6 +436,7 @@ export function MeetingsTab({
   const [addParagraphTitle, setAddParagraphTitle] = useState('');
   const [addParagraphText, setAddParagraphText] = useState('');
   const [addParagraphSubmitting, setAddParagraphSubmitting] = useState(false);
+  const [proposeOrgVoteSubmitting, setProposeOrgVoteSubmitting] = useState(false);
   const [editParagraphOpen, setEditParagraphOpen] = useState(false);
   const [editParagraphItem, setEditParagraphItem] = useState<TimelineItem | null>(null);
   const [editParagraphNewTitle, setEditParagraphNewTitle] = useState('');
@@ -1800,6 +1801,35 @@ export function MeetingsTab({
     }
   };
 
+  const handleProposeOrgVoteFromDecision = async (decision: { id: string; title?: string | null; text?: string }) => {
+    if (!detail?.id || !organization.id || proposeOrgVoteSubmitting) return;
+    const name = (decision.title?.trim() || decision.text?.trim() || '').slice(0, 200);
+    if (!name) {
+      toast.error(t('protocolCanvas.proposeOrgVoteNeedsText', { defaultValue: 'Decision needs a title or text to propose a vote.' }));
+      return;
+    }
+    setProposeOrgVoteSubmitting(true);
+    try {
+      const result = await organizationsApi.proposeSubgroup(organization.id, {
+        name,
+        description: decision.text?.trim() || undefined,
+        sourceMeetingDecisionId: decision.id,
+      });
+      invalidateCache(`/api/organizations/${organization.id}/votes`);
+      if (result.mode === 'vote_proposed') {
+        toast.success(t('protocolCanvas.proposeOrgVoteSuccess', { defaultValue: 'Organization vote proposed from meeting decision.' }));
+      } else {
+        toast.success(t('protocolCanvas.proposeOrgVoteCreated', { defaultValue: 'Subgroup created from meeting decision.' }));
+      }
+      fetchTimeline(detail.id, { silent: true, scrollToBlockId: decision.id });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : t('meetingError');
+      toast.error(e instanceof ApiError ? e.message : msg);
+    } finally {
+      setProposeOrgVoteSubmitting(false);
+    }
+  };
+
   const handleEditParagraphSubmit = async () => {
     const newTitle = editParagraphNewTitle.trim();
     const newText = editParagraphNewText.trim();
@@ -2013,6 +2043,7 @@ export function MeetingsTab({
       onAddDecision: openAddDecisionDialog,
       onAddTodo: openAddTodoDialog,
       onStartVote: handleStartVoteOpen,
+      onProposeOrgVote: permissions.isRepresentative ? handleProposeOrgVoteFromDecision : undefined,
       onStartBrainstorm: handleStartBrainstorm,
       onDateDecided: openDateDecidedDialog,
       onDocumentCreated: openDocumentCreatedDialog,

@@ -1689,6 +1689,11 @@ async function createOrganizationVote(db, organizationId, userId, body, req) {
     }
   }
 
+  if (sourceMeetingDecisionId) {
+    const MeetingMinutesService = require('./MeetingMinutesService');
+    await MeetingMinutesService.assertDecisionInOrganization(db, sourceMeetingDecisionId, organizationId);
+  }
+
   const metadataJsonValue = metadataJson ? JSON.stringify(metadataJson) : null;
 
   await TransactionManager.execute(db, `INSERT INTO organization_votes (
@@ -1703,6 +1708,15 @@ async function createOrganizationVote(db, organizationId, userId, body, req) {
     metadataJsonValue,
     sourceMeetingDecisionId || null,
   ]);
+
+  if (sourceMeetingDecisionId) {
+    const MeetingMinutesService = require('./MeetingMinutesService');
+    await MeetingMinutesService.linkOrganizationVote(db, {
+      decisionId: sourceMeetingDecisionId,
+      organizationVoteId: voteId,
+      organizationId,
+    });
+  }
 
   await logAudit(db, organizationId, 'vote_proposed', userId, null, { voteType, title }, req);
   return {

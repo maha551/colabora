@@ -48,6 +48,7 @@ function rowToDecision(row) {
     minutesDocumentId: row.minutes_document_id || null,
     agendaItemId: row.agenda_item_id || null,
     meetingVoteId: row.meeting_vote_id || null,
+    organizationVoteId: row.organization_vote_id || null,
     sourceEventId: row.source_event_id || null,
     title: row.title || null,
     text: row.text || '',
@@ -57,6 +58,34 @@ function rowToDecision(row) {
     updatedAt: row.updated_at,
     createdByUserId: row.created_by_user_id || null
   };
+}
+
+async function assertDecisionInOrganization(db, decisionId, organizationId) {
+  const row = await TransactionManager.query(db,
+    `SELECT md.id, md.organization_vote_id
+       FROM meeting_decisions md
+       INNER JOIN meetings m ON m.id = md.meeting_id
+      WHERE md.id = ? AND m.organization_id = ?`,
+    [decisionId, organizationId]
+  );
+  if (!row) {
+    const { ApiError } = require('../middleware/errorHandler');
+    throw ApiError.notFound('Meeting decision not found in this organization');
+  }
+  return row;
+}
+
+async function linkOrganizationVote(db, { decisionId, organizationVoteId, organizationId }) {
+  const decision = await assertDecisionInOrganization(db, decisionId, organizationId);
+  if (decision.organization_vote_id && decision.organization_vote_id !== organizationVoteId) {
+    const { ApiError } = require('../middleware/errorHandler');
+    throw ApiError.validation('Meeting decision is already linked to another organization vote', null, 'DECISION_ALREADY_LINKED');
+  }
+  await TransactionManager.execute(db,
+    `UPDATE meeting_decisions SET organization_vote_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+    [organizationVoteId, decisionId]
+  );
+  return rowToDecision(await TransactionManager.query(db, 'SELECT * FROM meeting_decisions WHERE id = ?', [decisionId]));
 }
 
 function parseJsonObject(value) {
@@ -481,6 +510,7 @@ async function getTimeline(db, { organizationId, meetingId, minutesDocumentId, l
     status: row.status || 'recorded',
     agendaItemId: row.agenda_item_id || null,
     meetingVoteId: row.meeting_vote_id || null,
+    organizationVoteId: row.organization_vote_id || null,
     sourceEventId: row.source_event_id || null,
     createdByUserId: row.created_by_user_id || null
   }));
@@ -1499,6 +1529,8 @@ module.exports = {
   setCurrentTopic,
   rowToAgendaItem,
   rowToDecision,
+  assertDecisionInOrganization,
+  linkOrganizationVote,
   formatMinutesEventLine,
   getMergedMinutesBlocks,
   getPublicFinalizedMinutesBlocks

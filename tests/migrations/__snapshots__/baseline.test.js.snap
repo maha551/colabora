@@ -1929,6 +1929,13 @@ exports[`baseline schema drift matches expected PostgreSQL schema baseline 1`] =
       "type": "text",
     },
     {
+      "column": "organization_vote_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "meeting_decisions",
+      "type": "text",
+    },
+    {
       "column": "source_event_id",
       "default": null,
       "nullable": "YES",
@@ -6550,6 +6557,11 @@ exports[`baseline schema drift matches expected PostgreSQL schema baseline 1`] =
     {
       "definition": "CREATE INDEX idx_meeting_decisions_vote ON <worker_schema>.meeting_decisions USING btree (meeting_vote_id)",
       "name": "idx_meeting_decisions_vote",
+      "table": "meeting_decisions",
+    },
+    {
+      "definition": "CREATE INDEX idx_meeting_decisions_org_vote ON <worker_schema>.meeting_decisions USING btree (organization_vote_id)",
+      "name": "idx_meeting_decisions_org_vote",
       "table": "meeting_decisions",
     },
     {

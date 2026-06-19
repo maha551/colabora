@@ -366,6 +366,21 @@ router.post('/:id/close-amendments', requireAuth, requireDocumentAccess, asyncHa
   });
 }));
 
+router.post('/:id/submit-for-ratification', requireAuth, requireDocumentAccess, asyncHandler(async (req, res) => {
+  const db = req.app.locals.knex || req.app.locals.db;
+  const DocumentLineageService = require('../services/DocumentLineageService');
+  const result = await DocumentLineageService.submitForRatification(
+    db,
+    req.params.id,
+    getUserId(req),
+    {
+      targetOrgId: req.body?.targetOrgId ?? req.body?.target_org_id,
+    },
+    req
+  );
+  res.status(201).json(result);
+}));
+
 // Export createDocument from service for use in other modules
 module.exports = router;
 module.exports.createDocument = require('../services/DocumentService').createDocument;

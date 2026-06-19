@@ -227,7 +227,8 @@ router.post('/organizations', requireAdmin, ...organizationValidation.adminCreat
       const isActiveValue = true;
       const votingEnabledValue = !!actualVotingEnabled;
       const { initializeRootOrgFields } = require('../services/ParticipationGraphService');
-      const rootFields = initializeRootOrgFields(organizationId);
+      const participationTemplate = req.body.participationTemplate || req.body.participation_template || 'classical_cooperative';
+      const rootFields = initializeRootOrgFields(organizationId, { template: participationTemplate });
 
       await TransactionManager.execute(
         trx,
@@ -291,6 +292,21 @@ router.post('/organizations', requireAdmin, ...organizationValidation.adminCreat
       // 4. Create governance rules using shared function (includes all 21 fields)
       const { createDefaultGovernanceRules } = require('./governance');
       await createDefaultGovernanceRules(trx, organizationId, defaultRules);
+
+      const pgDefaults = rootFields.governanceDefaults || {};
+      if (Object.keys(pgDefaults).length > 0 || participationTemplate === 'federation_union') {
+        const patch = {
+          participation_graph_enabled: pgDefaults.participationGraphEnabled === true,
+          subgroups_enabled: pgDefaults.subgroupsEnabled !== false,
+          federation_electorate_mode: participationTemplate === 'federation_union' ? 'delegates_only' : 'all_members',
+        };
+        const sets = Object.entries(patch).map(([k]) => `${k} = ?`).join(', ');
+        await TransactionManager.execute(
+          trx,
+          `UPDATE organization_governance_rules SET ${sets} WHERE organization_id = ?`,
+          [...Object.values(patch), organizationId]
+        );
+      }
 
       // 5. Add all representatives as organization members (only if representatives are user IDs, not emails)
       if (hasValidRepresentatives) {

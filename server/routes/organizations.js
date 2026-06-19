@@ -126,6 +126,29 @@ router.post('/:organizationId/subgroups', requireAuth, requireOrganizationMember
   res.status(result.mode === 'created' ? 201 : 200).json(result);
 }));
 
+router.get('/:organizationId/participations', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res) => {
+  const db = req.app.locals.db;
+  const { organizationId } = req.params;
+  const kind = req.query.kind || null;
+  const result = await ParticipationGraphService.listParticipations(db, organizationId, { kind });
+  res.json(result);
+}));
+
+router.post('/:organizationId/participations/rep-link', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res) => {
+  const db = req.app.locals.db;
+  const { organizationId } = req.params;
+  const userId = getUserId(req);
+  const targetUserId = req.body?.userId ?? req.body?.user_id;
+  const chapterOrgId = req.body?.chapterOrgId ?? req.body?.chapter_org_id;
+  if (!targetUserId || !chapterOrgId) {
+    throw ApiError.validation('userId and chapterOrgId are required', null, 'VALIDATION_ERROR');
+  }
+  const participation = await ParticipationGraphService.assignRepLink(
+    db, organizationId, userId, { userId: targetUserId, chapterOrgId }, req
+  );
+  res.status(201).json({ participation });
+}));
+
 router.get('/:organizationId/tree', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res, next) => {
   const db = req.app.locals.db;
   const { organizationId } = req.params;

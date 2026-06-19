@@ -86,10 +86,32 @@ async function setSubgroupGovernance(server, organizationId, overrides = {}) {
   await db('organization_governance_rules').where({ organization_id: organizationId }).update(patch);
 }
 
+async function createFederationApex(server, adminToken, { name, representatives }) {
+  const response = await request(server)
+    .post('/api/admin/organizations')
+    .set('Authorization', `Bearer ${adminToken}`)
+    .send({
+      name,
+      description: `${name} federation apex`,
+      representatives,
+      membershipPolicy: 'invitation',
+      votingThreshold: 0.75,
+      participationTemplate: 'federation_union',
+    })
+    .expect(201);
+  const org = response.body.organization;
+  await setSubgroupGovernance(server, org.id, {
+    federation_electorate_mode: 'delegates_only',
+    subgroup_creation_requires_vote: false,
+  });
+  return org;
+}
+
 module.exports = {
   setSubgroupGovernance,
   ensureParticipationGraphMigrations,
   createRootOrg,
   createChildOrg,
+  createFederationApex,
   seedMember,
 };

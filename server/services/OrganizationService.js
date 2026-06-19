@@ -1834,6 +1834,12 @@ async function castOrganizationVote(db, organizationId, voteId, userId, body, re
   const isActive = await isActiveMember(db, userId, organizationId);
   if (!isActive) throw ApiError.forbidden('Only active members can vote', 'NOT_ACTIVE_MEMBER');
 
+  const ParticipationGraphService = require('./ParticipationGraphService');
+  const electorateCheck = await ParticipationGraphService.canCastInOrganizationVote(db, organizationId, userId);
+  if (!electorateCheck.allowed) {
+    throw ApiError.forbidden(electorateCheck.reason || 'Not eligible to vote in this organization', 'NOT_ELIGIBLE_VOTER');
+  }
+
   const choice = body.choice;
   let ballotId;
   let voteRecordedAt;

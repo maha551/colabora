@@ -212,6 +212,21 @@ async function createSubgroupRecord(db, parentOrgId, creatorUserId, payload, opt
       childOrganizationId: childId,
       voteId,
     }, req);
+
+    if (subgroup.profile === 'federation_chapter') {
+      const { createOrgMemberEdge, ensureFederationChapterLinks } = require('./participationGraphFederation');
+      const edgeId = await createOrgMemberEdge(trx, {
+        apexOrgId: parentOrgId,
+        memberOrgId: childId,
+        voteId,
+      });
+      await ensureFederationChapterLinks(trx, {
+        apexOrgId: parentOrgId,
+        chapterOrgId: childId,
+        creatorUserId,
+        edgeId,
+      });
+    }
   });
 
   const created = await getOrgTreeRowLocal(db, childId);

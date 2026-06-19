@@ -232,21 +232,28 @@ async function setPrimaryParent(db, orgId, primaryParentId) {
   return { organization: mapTreeNode(updated) };
 }
 
-function initializeRootOrgFields(orgId) {
+function initializeRootOrgFields(orgId, options = {}) {
+  const template = options.template || 'classical_cooperative';
+  const templates = require('../../docs/rfc/participation-graph-templates.json').templates || {};
+  const preset = templates[template] || templates.classical_cooperative || {};
   return {
     primary_parent_id: null,
-    org_kind: 'standard',
-    participation_profile: 'classical_committee',
+    org_kind: preset.defaultOrgKind || 'standard',
+    participation_profile: preset.defaultSubgroupProfile || 'classical_committee',
     tree_depth: 0,
     tree_path: `/${orgId}`,
     participation_graph_root_id: orgId,
+    participationTemplate: template,
+    governanceDefaults: preset.rootGovernanceDefaults || {},
   };
 }
 
 const participationGraphSubgroups = require('./participationGraphSubgroups');
+const participationGraphFederation = require('./participationGraphFederation');
 
 module.exports = {
   ...participationGraphSubgroups,
+  ...participationGraphFederation,
   mapTreeNode,
   computeTreePath,
   parseAncestorIdsFromPath,

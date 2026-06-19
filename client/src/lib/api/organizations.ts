@@ -318,6 +318,16 @@ export const organizationsApi = {
     });
   },
 
+  async getParticipations(organizationId: string, kind?: string): Promise<{ participations: Array<{
+    id: string;
+    organizationId: string;
+    userId: string | null;
+    participationKind: string;
+  }> }> {
+    const query = kind ? `?kind=${encodeURIComponent(kind)}` : '';
+    return apiRequest(`/api/organizations/${organizationId}/participations${query}`);
+  },
+
   // Approve vote (representatives only)
   async approveVote(organizationId: string, voteId: string): Promise<MessageResponse> {
     return apiRequest<MessageResponse>(`/api/organizations/${organizationId}/votes/${voteId}/approve`, {

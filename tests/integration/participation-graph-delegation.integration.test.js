@@ -7,6 +7,7 @@ let server;
 let adminToken;
 let repToken;
 let repId;
+let otherRepToken;
 let otherRepId;
 
 beforeAll(async () => {
@@ -16,7 +17,9 @@ beforeAll(async () => {
   const alice = await request(server).post('/api/auth/login').send({ email: 'alice@example.com', password: 'SecurePass123!' });
   repToken = alice.body.token;
   repId = alice.body.user.id;
-  otherRepId = (await request(server).post('/api/auth/login').send({ email: 'bob@example.com', password: 'SecurePass123!' })).body.user.id;
+  const bob = await request(server).post('/api/auth/login').send({ email: 'bob@example.com', password: 'SecurePass123!' });
+  otherRepToken = bob.body.token;
+  otherRepId = bob.body.user.id;
 });
 
 afterAll(async () => {
@@ -55,7 +58,7 @@ describe('Participation graph delegation', () => {
 
     await request(server)
       .post(`/api/organizations/${org.id}/delegations`)
-      .set('Authorization', `Bearer ${otherRepId}`)
+      .set('Authorization', `Bearer ${otherRepToken}`)
       .send({ delegateUserId: repId })
       .expect(400);
   });

@@ -53,13 +53,24 @@ describe('ParticipationGraphService', () => {
   describe('initializeRootOrgFields', () => {
     it('sets root tree metadata', () => {
       const fields = ParticipationGraphService.initializeRootOrgFields('org-1');
-      expect(fields).toEqual({
+            expect(fields).toEqual({
         primary_parent_id: null,
         org_kind: 'standard',
         participation_profile: 'classical_committee',
         tree_depth: 0,
         tree_path: '/org-1',
         participation_graph_root_id: 'org-1',
+        participationTemplate: 'classical_cooperative',
+        governanceDefaults: {
+          participationGraphEnabled: true,
+          subgroupsEnabled: true,
+          subgroupCreationRequiresVote: true,
+          matrixLinksEnabled: false,
+          networksEnabled: false,
+          flowEdgesEnabled: false,
+          delegationEnabled: false,
+          visualGraphEditorEnabled: false,
+        },
       });
     });
   });

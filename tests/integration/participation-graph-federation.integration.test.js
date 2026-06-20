@@ -39,7 +39,7 @@ beforeAll(async () => {
   const reg = await request(server)
     .post('/api/auth/register')
     .send(withLegalConsent({
-      name: 'PG4 Chapter Only',
+      name: 'Chapter Only User',
       email: `pg4.chapter.only.${Date.now()}@test.com`,
       password: 'ChapterOnly123!',
     }))

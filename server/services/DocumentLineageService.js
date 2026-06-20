@@ -18,7 +18,7 @@ async function resolveTargetOrg(db, sourceOrgId, explicitTargetOrgId = null) {
 async function cloneDocumentToOrgAsDraft(db, sourceDocId, targetOrgId, userId) {
   const source = await TransactionManager.query(
     db,
-    'SELECT title, description FROM documents WHERE id = ?',
+    'SELECT title, description, acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed, structure_proposals_enabled FROM documents WHERE id = ?',
     [sourceDocId]
   );
   if (!source) throw ApiError.notFound('Source document');
@@ -26,22 +26,33 @@ async function cloneDocumentToOrgAsDraft(db, sourceDocId, targetOrgId, userId) {
   const derivedId = uuidv4();
   await TransactionManager.execute(
     db,
-    `INSERT INTO documents (id, title, description, organization_id, ownership_type, status, created_by_user_id, ratification_scope, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'organizational', 'draft', ?, 'pending_upstream', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-    [derivedId, source.title, source.description || null, targetOrgId, userId]
+    `INSERT INTO documents (id, title, description, owner_id, ownership_type, creator_ids, organization_id, parent_id, sort_order, status, acceptance_threshold, voting_anonymous, voting_anonymity_locked, vote_change_allowed, structure_proposals_enabled, ratification_scope, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'organizational', NULL, ?, NULL, NULL, 'draft', ?, ?, ?, ?, ?, 'pending_upstream', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+    [
+      derivedId,
+      source.title,
+      source.description || null,
+      targetOrgId,
+      targetOrgId,
+      source.acceptance_threshold,
+      source.voting_anonymous,
+      source.voting_anonymity_locked,
+      source.vote_change_allowed,
+      source.structure_proposals_enabled,
+    ]
   );
 
   const paragraphs = await TransactionManager.queryAll(
     db,
-    'SELECT title, text, sort_order, heading_level FROM paragraphs WHERE document_id = ? ORDER BY sort_order ASC',
+    'SELECT title, text, order_index, heading_level FROM paragraphs WHERE document_id = ? ORDER BY order_index ASC',
     [sourceDocId]
   );
   for (const p of paragraphs) {
     await TransactionManager.execute(
       db,
-      `INSERT INTO paragraphs (id, document_id, title, text, sort_order, heading_level, created_by_user_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-      [uuidv4(), derivedId, p.title, p.text, p.sort_order, p.heading_level, userId]
+      `INSERT INTO paragraphs (id, document_id, title, text, order_index, heading_level, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      [uuidv4(), derivedId, p.title, p.text, p.order_index, p.heading_level]
     );
   }
   return derivedId;

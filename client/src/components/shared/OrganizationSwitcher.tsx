@@ -24,6 +24,36 @@ export interface OrganizationSwitcherProps {
   onAfterSelect?: () => void;
 }
 
+function OrganizationSwitcherItemContent({
+  org,
+  isActive,
+  showGuide,
+}: {
+  org: Organization;
+  isActive: boolean;
+  showGuide: boolean;
+}) {
+  return (
+    <>
+      {showGuide ? (
+        <Icon
+          name="CornerDownRight"
+          size="xs"
+          className="shrink-0 text-muted-foreground/45"
+          aria-hidden
+        />
+      ) : null}
+      <OrganizationAvatar organization={org} size="xs" />
+      <span className="min-w-0 flex-1 truncate" title={org.name}>
+        {org.name}
+      </span>
+      {isActive && (
+        <Icon name="Check" size="sm" className="shrink-0 opacity-70" aria-hidden />
+      )}
+    </>
+  );
+}
+
 function OrganizationList({
   organizations,
   activeOrganization,
@@ -31,6 +61,7 @@ function OrganizationList({
   onAfterSelect,
   className,
   itemClassName,
+  itemAriaLabel,
 }: {
   organizations: Organization[];
   activeOrganization?: Organization | null;
@@ -38,34 +69,37 @@ function OrganizationList({
   onAfterSelect?: () => void;
   className?: string;
   itemClassName?: string;
+  itemAriaLabel: (name: string) => string;
 }) {
   return (
-    <ul className={cn('flex flex-col gap-0.5', className)}>
+    <ul className={cn('flex flex-col gap-0.5', className)} role="listbox">
       {organizations.map((org) => {
         const isActive = activeOrganization?.id === org.id;
         const indentPx = organizationSwitcherIndentPx(org.treeDepth);
+        const nested = (org.treeDepth ?? 0) > 0;
 
         return (
-          <li key={org.id}>
+          <li key={org.id} role="none">
             <button
               type="button"
+              role="option"
+              aria-selected={isActive}
+              aria-label={itemAriaLabel(org.name)}
               onClick={() => {
                 onSelectOrganization(org);
                 onAfterSelect?.();
               }}
               style={{ paddingLeft: `${12 + indentPx}px` }}
               className={cn(
-                'flex w-full min-w-0 items-center gap-2.5 text-left text-sm transition-colors',
+                'flex w-full min-w-0 items-center gap-2 text-left text-sm transition-colors',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+                nested && 'border-l border-border/50',
                 itemClassName,
                 isActive ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'
               )}
               aria-current={isActive ? 'true' : undefined}
             >
-              <OrganizationAvatar organization={org} size="xs" />
-              <span className="min-w-0 flex-1 truncate">{org.name}</span>
-              {isActive && (
-                <Icon name="Check" size="sm" className="shrink-0 opacity-70" aria-hidden />
-              )}
+              <OrganizationSwitcherItemContent org={org} isActive={isActive} showGuide={nested} />
             </button>
           </li>
         );
@@ -89,6 +123,8 @@ export function OrganizationSwitcher({
   }
 
   const sectionLabel = t('switchOrganization', { defaultValue: 'Switch organization' });
+  const itemAriaLabel = (name: string) =>
+    t('organizationItemAria', { name, defaultValue: `Switch to ${name}` });
 
   if (variant === 'sheet') {
     return (
@@ -99,6 +135,7 @@ export function OrganizationSwitcher({
           activeOrganization={activeOrganization}
           onSelectOrganization={onSelectOrganization}
           onAfterSelect={onAfterSelect}
+          itemAriaLabel={itemAriaLabel}
           itemClassName={cn('rounded-md px-3 py-2.5', RADIUS.control)}
         />
       </div>
@@ -113,17 +150,21 @@ export function OrganizationSwitcher({
       {organizations.map((org) => {
         const isActive = activeOrganization?.id === org.id;
         const indentPx = organizationSwitcherIndentPx(org.treeDepth);
+        const nested = (org.treeDepth ?? 0) > 0;
 
         return (
           <DropdownMenuItem
             key={org.id}
+            aria-label={itemAriaLabel(org.name)}
             onClick={() => onSelectOrganization(org)}
             style={{ paddingLeft: `${12 + indentPx}px` }}
-            className={cn(isActive && 'bg-accent')}
+            className={cn(
+              'gap-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+              nested && 'border-l border-border/50',
+              isActive && 'bg-accent'
+            )}
           >
-            <OrganizationAvatar organization={org} size="xs" />
-            <span className="min-w-0 flex-1 truncate">{org.name}</span>
-            {isActive && <Icon name="Check" size="sm" className="ml-auto shrink-0 opacity-70" />}
+            <OrganizationSwitcherItemContent org={org} isActive={isActive} showGuide={nested} />
           </DropdownMenuItem>
         );
       })}

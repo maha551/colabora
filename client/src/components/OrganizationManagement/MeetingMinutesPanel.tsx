@@ -214,6 +214,7 @@ export interface MeetingMinutesPanelProps {
   onStartVote: () => void;
   /** Propose organization vote (e.g. subgroup_creation) linked to a meeting decision. */
   onProposeOrgVote?: (decision: { id: string; title?: string | null; text?: string }) => void;
+  proposeOrgVoteSubmitting?: boolean;
   onStartBrainstorm: () => void;
   onDateDecided: () => void;
   onDocumentCreated: () => void;
@@ -281,6 +282,7 @@ export function MeetingMinutesPanel({
   onAddTodo,
   onStartVote,
   onProposeOrgVote,
+  proposeOrgVoteSubmitting = false,
   onStartBrainstorm,
   onDateDecided,
   onDocumentCreated,
@@ -470,19 +472,39 @@ export function MeetingMinutesPanel({
                 {t('addTodo', { defaultValue: 'Add to-do' })}
               </Button>
             }
-            proposeOrgVoteSlot={onProposeOrgVote && decisionId && !linkedOrgVoteId ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                className={protocolUi.blockActionBtn}
-                disabled={!canAct}
-                onClick={() => onProposeOrgVote({ id: decisionId, title: decisionTitle, text: decisionText })}
-              >
-                <Icon name="Vote" className="h-3.5 w-3.5" aria-hidden />
-                {t('protocolCanvas.proposeOrgVote', { defaultValue: 'Propose organization vote' })}
-              </Button>
-            ) : undefined}
+            proposeOrgVoteSlot={
+              linkedOrgVoteId ? (
+                <span
+                  className={cn(
+                    protocolUi.blockActionBtn,
+                    'inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-muted/40 px-3 text-xs text-muted-foreground'
+                  )}
+                >
+                  <Icon name="CheckCircle2" className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  {t('protocolCanvas.orgVoteLinked', { defaultValue: 'Organization vote proposed' })}
+                </span>
+              ) : onProposeOrgVote && decisionId ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className={protocolUi.blockActionBtn}
+                  disabled={!canAct || proposeOrgVoteSubmitting}
+                  onClick={() =>
+                    onProposeOrgVote({ id: decisionId, title: decisionTitle, text: decisionText })
+                  }
+                >
+                  {proposeOrgVoteSubmitting ? (
+                    <Icon name="Loader2" className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                  ) : (
+                    <Icon name="Vote" className="h-3.5 w-3.5" aria-hidden />
+                  )}
+                  {proposeOrgVoteSubmitting
+                    ? t('protocolCanvas.proposeOrgVotePending', { defaultValue: 'Proposing…' })
+                    : t('protocolCanvas.proposeOrgVote', { defaultValue: 'Propose organization vote' })}
+                </Button>
+              ) : undefined
+            }
             secondaryActionSlot={
               <Button
                 type="button"

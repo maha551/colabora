@@ -90,10 +90,11 @@ export function AppHeaderBarContent({
         !contentVisible && 'app-chrome-content-hidden'
       )}
     >
-      <div className={cn('flex min-w-0 flex-1 flex-col justify-center', SPACING.content.inline)}>
+      <div className={cn('flex min-w-0 flex-1 flex-col justify-center gap-0.5 overflow-hidden', SPACING.content.inline)}>
         {!shouldReorderOnMobile && backButton}
         {activeOrganization && (
           <OrgBreadcrumb
+            className="max-sm:max-w-[calc(100vw-8rem)]"
             organizationId={activeOrganization.id}
             organizationName={activeOrganization.name}
             onNavigate={
@@ -109,6 +110,7 @@ export function AppHeaderBarContent({
         {displayTitle && (
           <h1
             id={titleId}
+            title={displayTitle}
             className={cn(NAVIGATION.typography.title, 'min-w-0 truncate font-bold')}
             style={{ color: brandingStyles.textColor }}
           >

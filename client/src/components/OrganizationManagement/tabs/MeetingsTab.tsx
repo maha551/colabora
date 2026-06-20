@@ -2044,6 +2044,7 @@ export function MeetingsTab({
       onAddTodo: openAddTodoDialog,
       onStartVote: handleStartVoteOpen,
       onProposeOrgVote: permissions.isRepresentative ? handleProposeOrgVoteFromDecision : undefined,
+      proposeOrgVoteSubmitting,
       onStartBrainstorm: handleStartBrainstorm,
       onDateDecided: openDateDecidedDialog,
       onDocumentCreated: openDocumentCreatedDialog,

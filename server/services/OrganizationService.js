@@ -44,6 +44,8 @@ async function getOrganizationsForUser(db, userId, options = {}) {
       o.created_at, o.branding_color, o.branding_logo_url,
       o.branding_title, o.branding_banner_url, o.icon_set, o.font_family,
       o.representatives,
+      o.primary_parent_id, o.org_kind, o.participation_profile,
+      o.tree_depth, o.tree_path, o.participation_graph_root_id,
       om.status as membership_status,
       om.joined_at,
       CASE 
@@ -121,6 +123,12 @@ async function getOrganizationsForUser(db, userId, options = {}) {
       brandingBannerUrl: row.branding_banner_url || null,
       iconSet: row.icon_set || null,
       fontFamily: row.font_family || null,
+      primaryParentId: row.primary_parent_id || null,
+      orgKind: row.org_kind || 'standard',
+      participationProfile: row.participation_profile || 'classical_committee',
+      treeDepth: row.tree_depth ?? 0,
+      treePath: row.tree_path || `/${row.id}`,
+      participationGraphRootId: row.participation_graph_root_id || row.id,
       ...(includeGovernanceRules && { governanceRules: governanceRulesMap.get(row.id) || null })
     };
   });
@@ -209,7 +217,8 @@ async function getOrganizationWithMembers(db, organizationId, options = {}) {
   const org = await TransactionManager.query(db, `SELECT id, name, description, representatives, membership_policy, voting_enabled,
     voting_threshold, is_active, created_by_admin_id, created_at,
     branding_color, branding_logo_url, branding_title, branding_banner_url, icon_set, font_family,
-    overview_pinned_event_id, overview_pinned_at, overview_pinned_by_user_id
+    overview_pinned_event_id, overview_pinned_at, overview_pinned_by_user_id,
+    primary_parent_id, org_kind, participation_profile, tree_depth, tree_path, participation_graph_root_id
     FROM organizations WHERE id = ?`, [organizationId]);
   if (!org) throw ApiError.notFound('Organization');
 
@@ -269,6 +278,12 @@ async function getOrganizationWithMembers(db, organizationId, options = {}) {
       overviewPinnedAt: org.overview_pinned_at || null,
       overviewPinnedByUserId: org.overview_pinned_by_user_id || null,
       overviewPinnedEvent,
+      primaryParentId: org.primary_parent_id || null,
+      orgKind: org.org_kind || 'standard',
+      participationProfile: org.participation_profile || 'classical_committee',
+      treeDepth: org.tree_depth ?? 0,
+      treePath: org.tree_path || `/${org.id}`,
+      participationGraphRootId: org.participation_graph_root_id || org.id,
       members: members.map(m => ({
         id: m.id,
         userId: m.user_id,
@@ -1594,7 +1609,7 @@ async function createOrganizationVote(db, organizationId, userId, body, req) {
   if (!voteType || typeof voteType !== 'string' || !voteType.trim()) {
     throw ApiError.validation('Vote type is required', null, 'MISSING_VOTE_TYPE');
   }
-  const validVoteTypes = ['policy', 'document_change', 'document_amendment_adoption', 'membership', 'dissolution', 'other', 'representative_removal'];
+  const validVoteTypes = ['policy', 'document_change', 'document_amendment_adoption', 'membership', 'dissolution', 'other', 'representative_removal', 'subgroup_creation', 'document_submission', 'relationship_change'];
   if (!validVoteTypes.includes(voteType)) {
     throw ApiError.validation(`Invalid vote type. Must be one of: ${validVoteTypes.join(', ')}`, null, 'INVALID_VOTE_TYPE');
   }
@@ -1618,9 +1633,30 @@ async function createOrganizationVote(db, organizationId, userId, body, req) {
     }
   }
 
+  const metadataJson = body.metadata_json ?? body.metadataJson;
+  const sourceMeetingDecisionId = body.source_meeting_decision_id ?? body.sourceMeetingDecisionId;
+
   if (voteType === 'document_change') {
     const member = await isActiveMember(db, userId, organizationId);
     if (!member) throw ApiError.forbidden('You must be an active member to request amendments', 'NOT_ACTIVE_MEMBER');
+  } else if (voteType === 'subgroup_creation') {
+    const ParticipationGraphService = require('./ParticipationGraphService');
+    const governance = await ParticipationGraphService.getSubgroupGovernanceRules(db, organizationId);
+    if (!governance?.subgroupsEnabled) {
+      throw ApiError.forbidden('Subgroups are not enabled for this organization', 'SUBGROUPS_DISABLED');
+    }
+    const isRep = await isRepresentative(db, userId, organizationId);
+    const isMember = await isActiveMember(db, userId, organizationId);
+    if (!isMember) throw ApiError.forbidden('Only active members can propose subgroup votes', 'NOT_ACTIVE_MEMBER');
+    if (!isRep && !governance.membersCanProposeSubgroupCreation) {
+      throw ApiError.forbidden('Only representatives can propose subgroup creation votes', 'NOT_REPRESENTATIVE');
+    }
+    if (!metadataJson || typeof metadataJson !== 'object' || !metadataJson.name) {
+      throw ApiError.validation('Subgroup metadata with name is required', null, 'MISSING_SUBGROUP_METADATA');
+    }
+    ParticipationGraphService.validateSubgroupPayload(metadataJson, governance);
+    const parentOrg = await TransactionManager.query(db, 'SELECT tree_depth FROM organizations WHERE id = ?', [organizationId]);
+    await ParticipationGraphService.assertSubgroupDepthAllowed(db, parentOrg, governance);
   } else {
     const isRep = await isRepresentative(db, userId, organizationId);
     if (!isRep) throw ApiError.forbidden('Only representatives can create votes', 'NOT_REPRESENTATIVE');
@@ -1653,15 +1689,34 @@ async function createOrganizationVote(db, organizationId, userId, body, req) {
     }
   }
 
+  if (sourceMeetingDecisionId) {
+    const MeetingMinutesService = require('./MeetingMinutesService');
+    await MeetingMinutesService.assertDecisionInOrganization(db, sourceMeetingDecisionId, organizationId);
+  }
+
+  const metadataJsonValue = metadataJson ? JSON.stringify(metadataJson) : null;
+
   await TransactionManager.execute(db, `INSERT INTO organization_votes (
     id, organization_id, title, description, vote_type, proposed_by_user_id,
-    threshold, status, voting_starts_at, voting_ends_at, target_document_id
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, 'proposed', ?, ?, ?)`, [
+    threshold, status, voting_starts_at, voting_ends_at, target_document_id,
+    metadata_json, source_meeting_decision_id
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, 'proposed', ?, ?, ?, ?, ?)`, [
     voteId, organizationId, title.trim(), description || null, voteType, userId, threshold,
     votingStartsAt ? votingStartsAt.toISOString() : null,
     votingEndsAt ? votingEndsAt.toISOString() : null,
-    targetDocumentId || null
+    targetDocumentId || null,
+    metadataJsonValue,
+    sourceMeetingDecisionId || null,
   ]);
+
+  if (sourceMeetingDecisionId) {
+    const MeetingMinutesService = require('./MeetingMinutesService');
+    await MeetingMinutesService.linkOrganizationVote(db, {
+      decisionId: sourceMeetingDecisionId,
+      organizationVoteId: voteId,
+      organizationId,
+    });
+  }
 
   await logAudit(db, organizationId, 'vote_proposed', userId, null, { voteType, title }, req);
   return {
@@ -1778,6 +1833,12 @@ async function declineVote(db, organizationId, voteId, userId, body, req) {
 async function castOrganizationVote(db, organizationId, voteId, userId, body, req) {
   const isActive = await isActiveMember(db, userId, organizationId);
   if (!isActive) throw ApiError.forbidden('Only active members can vote', 'NOT_ACTIVE_MEMBER');
+
+  const ParticipationGraphService = require('./ParticipationGraphService');
+  const electorateCheck = await ParticipationGraphService.canCastInOrganizationVote(db, organizationId, userId);
+  if (!electorateCheck.allowed) {
+    throw ApiError.forbidden(electorateCheck.reason || 'Not eligible to vote in this organization', 'NOT_ELIGIBLE_VOTER');
+  }
 
   const choice = body.choice;
   let ballotId;
@@ -1899,7 +1960,8 @@ async function completeOrganizationVote(db, organizationId, voteId, userId, req)
 
   const vote = await TransactionManager.query(db, `SELECT id, organization_id, title, description, vote_type, proposed_by_user_id, 
     approved_by_rep_id, threshold, status, voting_starts_at, voting_ends_at, 
-    target_document_id, result_yes, result_no, result_abstain, created_at
+    target_document_id, result_yes, result_no, result_abstain, created_at,
+    metadata_json, source_meeting_decision_id
     FROM organization_votes
     WHERE id = ? AND organization_id = ? AND status = 'approved'`, [voteId, organizationId]);
 
@@ -2022,6 +2084,56 @@ async function completeOrganizationVote(db, organizationId, voteId, userId, req)
         voteId,
         targetDocumentId: vote.target_document_id
       });
+    }
+  }
+
+  if (vote.vote_type === 'subgroup_creation' && passed) {
+    try {
+      const ParticipationGraphService = require('./ParticipationGraphService');
+      await ParticipationGraphService.materializeSubgroupFromVote(db, organizationId, vote, userId, req);
+    } catch (subgroupErr) {
+      if (subgroupErr instanceof ApiError) throw subgroupErr;
+      logger.error('Error creating subgroup from vote', { error: subgroupErr.message, voteId, organizationId });
+      throw ApiError.database('Failed to create subgroup after vote');
+    }
+  }
+
+  if (vote.vote_type === 'relationship_change' && passed) {
+    const { safeJsonParse, safeJsonStringify } = require('../utils/jsonUtils');
+    const { v4: uuidv4 } = require('uuid');
+    const metadata = typeof vote.metadata_json === 'string'
+      ? safeJsonParse(vote.metadata_json, null)
+      : vote.metadata_json;
+    if (metadata?.relationshipType && metadata?.sourceOrgId && metadata?.targetOrgId) {
+      const edgeId = uuidv4();
+      await TransactionManager.execute(db,
+        `INSERT INTO organization_relationships
+           (id, source_org_id, target_org_id, relationship_type, membership_subject, config_json, status, created_by_vote_id, created_at)
+         VALUES (?, ?, ?, ?, 'organization', ?, 'active', ?, CURRENT_TIMESTAMP)
+         ON CONFLICT DO NOTHING`,
+        [
+          edgeId,
+          metadata.sourceOrgId,
+          metadata.targetOrgId,
+          metadata.relationshipType,
+          safeJsonStringify(metadata.configJson || {}),
+          voteId,
+        ]
+      );
+    }
+  }
+
+  if (vote.vote_type === 'dissolution' && passed) {
+    try {
+      const ParticipationGraphService = require('./ParticipationGraphService');
+      const governance = await ParticipationGraphService.getSubgroupGovernanceRules(db, organizationId);
+      await ParticipationGraphService.applyChildDissolutionPolicy(
+        db,
+        organizationId,
+        governance?.childDissolutionPolicy || 'independent'
+      );
+    } catch (dissErr) {
+      logger.error('Error applying child dissolution policy', { error: dissErr.message, voteId, organizationId });
     }
   }
 

@@ -24,6 +24,7 @@ export type ProtocolBlockStatus =
 export type ProtocolNextActionType =
   | 'start_vote'
   | 'record_decision'
+  | 'propose_org_vote'
   | 'create_todo'
   | 'view_poll'
   | 'create_meeting'

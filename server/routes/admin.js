@@ -226,12 +226,24 @@ router.post('/organizations', requireAdmin, ...organizationValidation.adminCreat
       // 1. Create organization
       const isActiveValue = true;
       const votingEnabledValue = !!actualVotingEnabled;
-      
+      const { initializeRootOrgFields } = require('../services/ParticipationGraphService');
+      const participationTemplate = req.body.participationTemplate || req.body.participation_template || 'classical_cooperative';
+      const rootFields = initializeRootOrgFields(organizationId, { template: participationTemplate });
+
       await TransactionManager.execute(
         trx,
-        `INSERT INTO organizations (id, name, description, representatives, membership_policy, voting_enabled, voting_threshold, is_active, created_by_admin_id, branding_color)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [organizationId, name, orgDescription, initialRepresentatives, actualMembershipPolicy, votingEnabledValue, actualVotingThreshold, isActiveValue, userId, defaultBrandingColor]
+        `INSERT INTO organizations (
+          id, name, description, representatives, membership_policy, voting_enabled, voting_threshold,
+          is_active, created_by_admin_id, branding_color,
+          primary_parent_id, org_kind, participation_profile, tree_depth, tree_path, participation_graph_root_id
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          organizationId, name, orgDescription, initialRepresentatives, actualMembershipPolicy,
+          votingEnabledValue, actualVotingThreshold, isActiveValue, userId, defaultBrandingColor,
+          rootFields.primary_parent_id, rootFields.org_kind, rootFields.participation_profile,
+          rootFields.tree_depth, rootFields.tree_path, rootFields.participation_graph_root_id,
+        ]
       );
 
       // 2. Dual-write: If representatives provided as IDs, add them to organization_representatives table
@@ -280,6 +292,21 @@ router.post('/organizations', requireAdmin, ...organizationValidation.adminCreat
       // 4. Create governance rules using shared function (includes all 21 fields)
       const { createDefaultGovernanceRules } = require('./governance');
       await createDefaultGovernanceRules(trx, organizationId, defaultRules);
+
+      const pgDefaults = rootFields.governanceDefaults || {};
+      if (Object.keys(pgDefaults).length > 0 || participationTemplate === 'federation_union') {
+        const patch = {
+          participation_graph_enabled: pgDefaults.participationGraphEnabled === true,
+          subgroups_enabled: pgDefaults.subgroupsEnabled !== false,
+          federation_electorate_mode: participationTemplate === 'federation_union' ? 'delegates_only' : 'all_members',
+        };
+        const sets = Object.entries(patch).map(([k]) => `${k} = ?`).join(', ');
+        await TransactionManager.execute(
+          trx,
+          `UPDATE organization_governance_rules SET ${sets} WHERE organization_id = ?`,
+          [...Object.values(patch), organizationId]
+        );
+      }
 
       // 5. Add all representatives as organization members (only if representatives are user IDs, not emails)
       if (hasValidRepresentatives) {
@@ -568,6 +595,36 @@ router.get('/organizations', requireAdmin, asyncHandler(async (req, res) => {
       originalError: err.message,
       code: err.code
     }, 'FETCH_ORGANIZATIONS_FAILED');
+  }
+}));
+
+// Admin dogfooding: reparent organization in participation graph (temporary until vote-gated reparent in Phase 7)
+router.patch('/organizations/:id/parent', requireAdmin, [
+  body('primaryParentId')
+    .optional({ nullable: true })
+    .custom((value, { req }) => {
+      const raw = value !== undefined ? value : req.body.primary_parent_id;
+      if (raw === null || raw === undefined || raw === '') return true;
+      if (typeof raw !== 'string' || raw.trim().length === 0) {
+        throw new Error('primaryParentId must be a non-empty string or null');
+      }
+      return true;
+    }),
+  handleValidationErrors,
+], asyncHandler(async (req, res, next) => {
+  const db = req.app.locals.db;
+  const { id } = req.params;
+  const rawParent = req.body.primaryParentId !== undefined ? req.body.primaryParentId : req.body.primary_parent_id;
+  const primaryParentId = rawParent === '' || rawParent === undefined ? null : rawParent;
+
+  try {
+    const ParticipationGraphService = require('../services/ParticipationGraphService');
+    const result = await ParticipationGraphService.setPrimaryParent(db, id, primaryParentId);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    logger.error('Error reparenting organization', { error: error.message, organizationId: id, primaryParentId });
+    throw ApiError.database('Failed to update organization parent', { originalError: error.message });
   }
 }));
 

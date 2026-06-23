@@ -8,6 +8,9 @@ const { isRepresentative } = require('../modules/permissions');
 const { canManageOrganizationActions } = require('../utils/adminPermissions');
 const OrganizationService = require('../services/OrganizationService');
 const { checkOrganizationHasDocuments, checkDataConsistency, logAudit, setOverviewPin, leaveOrganization } = OrganizationService;
+const ParticipationGraphService = require('../services/ParticipationGraphService');
+const { getParticipationGraph, saveGraphLayout } = require('../services/participationGraphEditor');
+const DelegationService = require('../services/DelegationService');
 const config = require('../config');
 const GovernanceRulesService = require('../services/governance/GovernanceRulesService');
 const { TTL } = require('../utils/responseCache');
@@ -99,6 +102,123 @@ router.get('/', requireAuth, asyncHandler(async (req, res, next) => {
     logger.debug('Final organization result', { totalOrganizations: organizations.length, organizations: organizations.length > 0 ? organizations.map((org, idx) => ({ index: idx + 1, name: org.name, id: org.id, membershipStatus: org.membershipStatus || 'none', isActive: org.isActive, representativesCount: org.representatives?.length || 0 })) : [] });
   }
   res.json(payload);
+}));
+
+// Participation graph read APIs (must be registered before /:organizationId)
+router.get('/:organizationId/ancestors', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res) => {
+  const db = req.app.locals.db;
+  const { organizationId } = req.params;
+  const result = await ParticipationGraphService.getAncestors(db, organizationId);
+  res.json(result);
+}));
+
+router.get('/:organizationId/children', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res) => {
+  const db = req.app.locals.db;
+  const { organizationId } = req.params;
+  const userId = getUserId(req);
+  const result = await ParticipationGraphService.getDirectChildren(db, organizationId, userId);
+  res.json(result);
+}));
+
+router.post('/:organizationId/subgroups', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res) => {
+  const db = req.app.locals.db;
+  const { organizationId } = req.params;
+  const userId = getUserId(req);
+  const result = await ParticipationGraphService.proposeOrCreateSubgroup(db, organizationId, userId, req.body, req);
+  res.status(result.mode === 'created' ? 201 : 200).json(result);
+}));
+
+router.get('/:organizationId/participations', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res) => {
+  const db = req.app.locals.db;
+  const { organizationId } = req.params;
+  const kind = req.query.kind || null;
+  const result = await ParticipationGraphService.listParticipations(db, organizationId, { kind });
+  res.json(result);
+}));
+
+router.post('/:organizationId/participations/rep-link', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res) => {
+  const db = req.app.locals.db;
+  const { organizationId } = req.params;
+  const userId = getUserId(req);
+  const targetUserId = req.body?.userId ?? req.body?.user_id;
+  const chapterOrgId = req.body?.chapterOrgId ?? req.body?.chapter_org_id;
+  if (!targetUserId || !chapterOrgId) {
+    throw ApiError.validation('userId and chapterOrgId are required', null, 'VALIDATION_ERROR');
+  }
+  const participation = await ParticipationGraphService.assignRepLink(
+    db, organizationId, userId, { userId: targetUserId, chapterOrgId }, req
+  );
+  res.status(201).json({ participation });
+}));
+
+router.get('/:organizationId/affiliates', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res) => {
+  const db = req.app.locals.db;
+  const result = await ParticipationGraphService.listAffiliates(db, req.params.organizationId);
+  res.json(result);
+}));
+
+router.post('/:organizationId/affiliates', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res) => {
+  const db = req.app.locals.db;
+  const affiliateOrgId = req.body?.affiliateOrgId ?? req.body?.affiliate_org_id;
+  if (!affiliateOrgId) throw ApiError.validation('affiliateOrgId is required');
+  const result = await ParticipationGraphService.createAffiliateEdge(
+    db, req.params.organizationId, affiliateOrgId, getUserId(req), req.body
+  );
+  res.status(201).json(result);
+}));
+
+router.get('/:organizationId/matrix-links', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res) => {
+  const db = req.app.locals.db;
+  const result = await ParticipationGraphService.listMatrixLinks(db, req.params.organizationId);
+  res.json(result);
+}));
+
+router.post('/:organizationId/matrix-links', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res) => {
+  const db = req.app.locals.db;
+  const linkedOrgId = req.body?.linkedOrgId ?? req.body?.linked_org_id;
+  if (!linkedOrgId) throw ApiError.validation('linkedOrgId is required');
+  const result = await ParticipationGraphService.createMatrixLink(
+    db, req.params.organizationId, linkedOrgId, getUserId(req), req.body
+  );
+  res.status(201).json(result);
+}));
+
+router.get('/:organizationId/delegations', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res) => {
+  const db = req.app.locals.db;
+  const result = await DelegationService.listDelegations(db, req.params.organizationId, getUserId(req));
+  res.json(result);
+}));
+
+router.post('/:organizationId/delegations', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res) => {
+  const db = req.app.locals.db;
+  const result = await DelegationService.createDelegation(db, req.params.organizationId, getUserId(req), req.body);
+  res.status(201).json(result);
+}));
+
+router.get('/:organizationId/participation-graph', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res) => {
+  const db = req.app.locals.db;
+  const result = await getParticipationGraph(db, req.params.organizationId, getUserId(req));
+  res.json(result);
+}));
+
+router.put('/:organizationId/participation-graph/layout', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res) => {
+  const db = req.app.locals.db;
+  const layout = req.body?.layout ?? req.body;
+  const result = await saveGraphLayout(db, req.params.organizationId, getUserId(req), layout);
+  res.json(result);
+}));
+
+router.get('/:organizationId/tree', requireAuth, requireOrganizationMember, ...paramValidation.organizationId, asyncHandler(async (req, res, next) => {
+  const db = req.app.locals.db;
+  const { organizationId } = req.params;
+  const userId = getUserId(req);
+  const isRep = await isRepresentative(db, userId, organizationId);
+  const isAdmin = req.user?.role === 'admin';
+  if (!isRep && !isAdmin) {
+    return next(ApiError.forbidden('Only representatives can view the full organization tree', 'NOT_REPRESENTATIVE'));
+  }
+  const result = await ParticipationGraphService.getTreeForUser(db, organizationId);
+  res.json(result);
 }));
 
 // Get specific organization details

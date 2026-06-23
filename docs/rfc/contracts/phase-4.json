@@ -1,0 +1,8 @@
+{
+  "phase": 4,
+  "title": "Federation and delegate seats",
+  "migration": "021_participation_graph_federation.js",
+  "tables": ["organization_participations"],
+  "relationshipFields": { "membership_subject": ["user", "organization"] },
+  "participationKinds": ["member", "representative", "lead_link", "rep_link", "liaison", "observer"]
+}

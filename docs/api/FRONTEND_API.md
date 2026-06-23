@@ -588,6 +588,22 @@ Get user's organizations.
 
 **Returns:** `Promise<OrganizationsResponse>`
 
+#### `getOrganizationAncestors(organizationId)` *(Participation Graph — Phase 1+)*
+Get ancestor chain for breadcrumb navigation.
+
+**Parameters:**
+- `organizationId: string` - Organization ID
+
+**Returns:** `Promise<{ ancestors: Array<{ id: string; name: string; treeDepth: number }> }>`
+
+#### `getOrganizationChildren(organizationId)` *(Participation Graph — Phase 1+)*
+Get direct child organizations.
+
+**Parameters:**
+- `organizationId: string` - Organization ID
+
+**Returns:** `Promise<{ children: Array<{ id: string; name: string; treeDepth: number; participationProfile: string }> }>`
+
 #### `getOrganization(organizationId)`
 Get organization details.
 

@@ -9,6 +9,7 @@ export interface DecisionBlockProps {
   block: DecisionProtocolBlock;
   className?: string;
   createTodoSlot?: React.ReactNode;
+  proposeOrgVoteSlot?: React.ReactNode;
   secondaryActionSlot?: React.ReactNode;
   /**
    * `prominent` — larger quote typography for protocol canvas (closer visual weight to vote cards).
@@ -41,6 +42,7 @@ export function DecisionBlock({
   block,
   className,
   createTodoSlot,
+  proposeOrgVoteSlot,
   secondaryActionSlot,
   visualWeight = 'prominent',
 }: DecisionBlockProps) {
@@ -84,9 +86,10 @@ export function DecisionBlock({
         )}
       </blockquote>
 
-      {createTodoSlot || secondaryActionSlot ? (
+      {createTodoSlot || proposeOrgVoteSlot || secondaryActionSlot ? (
         <div className={protocolUi.blockActionsRow} aria-label={t('protocolCanvas.decisionActionsLabel', { defaultValue: 'Follow-up actions' })}>
           {createTodoSlot ? <div className="shrink-0">{createTodoSlot}</div> : null}
+          {proposeOrgVoteSlot ? <div className="shrink-0">{proposeOrgVoteSlot}</div> : null}
           {secondaryActionSlot ? <div className="shrink-0">{secondaryActionSlot}</div> : null}
         </div>
       ) : null}

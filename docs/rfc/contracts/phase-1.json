@@ -1,0 +1,46 @@
+{
+  "phase": 1,
+  "title": "Tree schema and read APIs",
+  "migration": "019_participation_graph_foundation.js",
+  "types": {
+    "OrgKind": ["standard", "network", "initiative"],
+    "RelationshipType": ["primary_parent", "matrix_link", "affiliate", "ratifies_to", "participates_in"]
+  },
+  "organizationFields": {
+    "primaryParentId": "string | null",
+    "orgKind": "OrgKind",
+    "participationProfile": "string",
+    "treeDepth": "number",
+    "treePath": "string",
+    "participationGraphRootId": "string"
+  },
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/api/organizations/:organizationId/ancestors",
+      "auth": "requireOrganizationMember",
+      "response": { "ancestors": [{ "id": "string", "name": "string", "treeDepth": "number" }] }
+    },
+    {
+      "method": "GET",
+      "path": "/api/organizations/:organizationId/children",
+      "auth": "requireOrganizationMember",
+      "response": { "children": [{ "id": "string", "name": "string", "treeDepth": "number", "participationProfile": "string" }] }
+    },
+    {
+      "method": "GET",
+      "path": "/api/organizations/:organizationId/tree",
+      "auth": "requireOrganizationMember + admin or rep",
+      "response": { "nodes": "OrganizationTreeNode[]" }
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/organizations/:id/parent",
+      "auth": "requireAdmin",
+      "body": { "primaryParentId": "string | null" },
+      "response": { "organization": "Organization" }
+    }
+  ],
+  "securityScenarios": ["SEC-IDOR-parent-not-child-member", "SEC-cycle-reparent-rejected"],
+  "testIds": ["PG1-ancestors-chain", "PG1-children-list", "PG1-flat-org-unchanged"]
+}

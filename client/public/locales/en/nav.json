@@ -7,6 +7,7 @@
   "organizations": "Organizations",
   "organizationsShort": "Orgs",
   "switchOrganization": "Switch organization",
+  "organizationItemAria": "Switch to {{name}}",
   "reportIssue": "Report an Issue",
   "reportIssueDescription": "Help us improve by reporting bugs, errors, or issues you've encountered. All information will be kept confidential.",
   "adminDashboard": "Admin Dashboard",

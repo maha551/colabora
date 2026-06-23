@@ -1,0 +1,8 @@
+{
+  "phase": 5,
+  "title": "Document ratification lineage",
+  "migration": "022_document_lineage.js",
+  "voteTypes": ["document_submission"],
+  "tables": ["document_lineage"],
+  "service": "DocumentLineageService"
+}

@@ -67,6 +67,18 @@ export const organizationsApi = {
     return apiRequest<OrganizationsResponse>('/api/organizations')
   },
 
+  async getOrganizationAncestors(organizationId: string): Promise<{
+    ancestors: Array<{ id: string; name: string; treeDepth: number }>;
+  }> {
+    return apiRequest(`/api/organizations/${organizationId}/ancestors`);
+  },
+
+  async getOrganizationChildren(organizationId: string): Promise<{
+    children: Array<{ id: string; name: string; treeDepth: number; participationProfile: string }>;
+  }> {
+    return apiRequest(`/api/organizations/${organizationId}/children`);
+  },
+
   // Get organization details
   async getOrganization(organizationId: string): Promise<OrganizationResponse> {
     return apiRequest<OrganizationResponse>(`/api/organizations/${organizationId}`)
@@ -282,6 +294,53 @@ export const organizationsApi = {
         votingEndDate
       }),
     })
+  },
+
+  async proposeSubgroup(
+    organizationId: string,
+    body: {
+      name: string;
+      description?: string;
+      visibility?: string;
+      profile?: string;
+      sourceMeetingDecisionId?: string;
+    }
+  ): Promise<{ mode: 'vote_proposed' | 'created'; vote?: { id: string }; organization?: { id: string } }> {
+    return apiRequest(`/api/organizations/${organizationId}/subgroups`, {
+      method: 'POST',
+      body: JSON.stringify({
+        name: body.name,
+        ...(body.description != null && { description: body.description }),
+        ...(body.visibility != null && { visibility: body.visibility }),
+        ...(body.profile != null && { profile: body.profile }),
+        ...(body.sourceMeetingDecisionId != null && { source_meeting_decision_id: body.sourceMeetingDecisionId }),
+      }),
+    });
+  },
+
+  async getParticipations(organizationId: string, kind?: string): Promise<{ participations: Array<{
+    id: string;
+    organizationId: string;
+    userId: string | null;
+    participationKind: string;
+  }> }> {
+    const query = kind ? `?kind=${encodeURIComponent(kind)}` : '';
+    return apiRequest(`/api/organizations/${organizationId}/participations${query}`);
+  },
+
+  async getParticipationGraph(organizationId: string): Promise<{
+    nodes: Array<{ id: string; name: string; kind: string }>;
+    edges: Array<{ id: string; sourceOrgId: string; targetOrgId: string; relationshipType: string }>;
+    layout: Record<string, unknown>;
+  }> {
+    return apiRequest(`/api/organizations/${organizationId}/participation-graph`);
+  },
+
+  async saveParticipationGraphLayout(organizationId: string, layout: Record<string, unknown>): Promise<{ success: boolean }> {
+    return apiRequest(`/api/organizations/${organizationId}/participation-graph/layout`, {
+      method: 'PUT',
+      body: JSON.stringify({ layout }),
+    });
   },
 
   // Approve vote (representatives only)

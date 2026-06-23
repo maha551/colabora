@@ -1,5 +1,22 @@
 {
   "dashboard": "Dashboard",
+  "breadcrumb": {
+    "label": "Organization hierarchy",
+    "loading": "Loading organization path"
+  },
+  "participationGraph": {
+    "title": "Participation graph",
+    "description": "Organizations and relationships in your participation network.",
+    "emptyTitle": "No related organizations yet",
+    "emptyDescription": "Child organizations and matrix links will appear here as your network grows.",
+    "loadError": "Failed to load participation graph",
+    "findPath": "Find path",
+    "findPathHint": "Click two organizations to highlight the shortest path between them.",
+    "findPathPickOne": "Select a second organization…",
+    "findPathNoPath": "No path found between these organizations.",
+    "clearPath": "Clear highlight",
+    "exitFindPath": "Done"
+  },
   "overview": "Overview",
   "folderNav": {
     "primary": "Organization sections",
@@ -697,6 +714,13 @@
   "protocolCanvas.nextAction.createMeeting": "Create meeting",
   "protocolCanvas.nextAction.viewPoll": "View poll",
   "protocolCanvas.nextAction.openDocument": "Open document",
+  "protocolCanvas.nextAction.proposeOrgVote": "Propose organization vote",
+  "protocolCanvas.proposeOrgVote": "Propose organization vote",
+  "protocolCanvas.proposeOrgVotePending": "Proposing…",
+  "protocolCanvas.orgVoteLinked": "Organization vote proposed",
+  "protocolCanvas.proposeOrgVoteSuccess": "Organization vote proposed from meeting decision.",
+  "protocolCanvas.proposeOrgVoteCreated": "Subgroup created from meeting decision.",
+  "protocolCanvas.proposeOrgVoteNeedsText": "Decision needs a title or text to propose a vote.",
   "protocolCanvas.blockType.agenda": "Agenda item",
   "protocolCanvas.blockType.paragraph": "Paragraph",
   "protocolCanvas.blockType.vote": "Vote",

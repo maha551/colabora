@@ -212,6 +212,9 @@ export interface MeetingMinutesPanelProps {
   onAddDecision: (context?: { meetingVoteId?: string; agendaItemId?: string }) => void;
   onAddTodo: () => void;
   onStartVote: () => void;
+  /** Propose organization vote (e.g. subgroup_creation) linked to a meeting decision. */
+  onProposeOrgVote?: (decision: { id: string; title?: string | null; text?: string }) => void;
+  proposeOrgVoteSubmitting?: boolean;
   onStartBrainstorm: () => void;
   onDateDecided: () => void;
   onDocumentCreated: () => void;
@@ -278,6 +281,8 @@ export function MeetingMinutesPanel({
   onAddDecision,
   onAddTodo,
   onStartVote,
+  onProposeOrgVote,
+  proposeOrgVoteSubmitting = false,
   onStartBrainstorm,
   onDateDecided,
   onDocumentCreated,
@@ -438,6 +443,18 @@ export function MeetingMinutesPanel({
       decision: ({ block }) => {
         if (block.type !== 'decision') return null;
         const canAct = isModerator && !detail.minutesFinalizedAt;
+        const decisionId = block.decision && typeof block.decision === 'object' && 'id' in block.decision
+          ? String(block.decision.id)
+          : block.sourceTimelineItemId;
+        const decisionTitle = block.decision && typeof block.decision === 'object'
+          ? (typeof block.decision.title === 'string' ? block.decision.title : null)
+          : null;
+        const decisionText = block.decision && typeof block.decision === 'object'
+          ? (typeof block.decision.text === 'string' ? block.decision.text : '')
+          : '';
+        const linkedOrgVoteId = block.decision && typeof block.decision === 'object' && 'organizationVoteId' in block.decision
+          ? (block.decision.organizationVoteId as string | null)
+          : null;
         return (
           <DecisionBlock
             block={block}
@@ -454,6 +471,39 @@ export function MeetingMinutesPanel({
                 <Icon name="ListOrdered" className="h-3.5 w-3.5" aria-hidden />
                 {t('addTodo', { defaultValue: 'Add to-do' })}
               </Button>
+            }
+            proposeOrgVoteSlot={
+              linkedOrgVoteId ? (
+                <span
+                  className={cn(
+                    protocolUi.blockActionBtn,
+                    'inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-muted/40 px-3 text-xs text-muted-foreground'
+                  )}
+                >
+                  <Icon name="CheckCircle2" className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  {t('protocolCanvas.orgVoteLinked', { defaultValue: 'Organization vote proposed' })}
+                </span>
+              ) : onProposeOrgVote && decisionId ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className={protocolUi.blockActionBtn}
+                  disabled={!canAct || proposeOrgVoteSubmitting}
+                  onClick={() =>
+                    onProposeOrgVote({ id: decisionId, title: decisionTitle, text: decisionText })
+                  }
+                >
+                  {proposeOrgVoteSubmitting ? (
+                    <Icon name="Loader2" className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                  ) : (
+                    <Icon name="Vote" className="h-3.5 w-3.5" aria-hidden />
+                  )}
+                  {proposeOrgVoteSubmitting
+                    ? t('protocolCanvas.proposeOrgVotePending', { defaultValue: 'Proposing…' })
+                    : t('protocolCanvas.proposeOrgVote', { defaultValue: 'Propose organization vote' })}
+                </Button>
+              ) : undefined
             }
             secondaryActionSlot={
               <Button
@@ -548,6 +598,7 @@ export function MeetingMinutesPanel({
       onTodoStatusChange,
       onAddTodo,
       onStartVote,
+      onProposeOrgVote,
       onNavigateToDocument,
       onNavigateToHash,
       organizationId,
@@ -565,9 +616,16 @@ export function MeetingMinutesPanel({
         if (block.type === 'vote' && block.vote?.id) ctx.meetingVoteId = block.vote.id;
         if (block.agendaItemId) ctx.agendaItemId = block.agendaItemId;
         onAddDecision(Object.keys(ctx).length > 0 ? ctx : undefined);
+      } else if (block.nextAction?.type === 'propose_org_vote' && block.type === 'decision' && onProposeOrgVote) {
+        const decision = block.decision;
+        const id = decision && typeof decision === 'object' && 'id' in decision ? String(decision.id) : block.sourceTimelineItemId;
+        if (!id) return;
+        const title = decision && typeof decision === 'object' && typeof decision.title === 'string' ? decision.title : null;
+        const text = decision && typeof decision === 'object' && typeof decision.text === 'string' ? decision.text : '';
+        onProposeOrgVote({ id, title, text });
       }
     },
-    [onAddDecision]
+    [onAddDecision, onProposeOrgVote]
   );
   const canvasTimelineBlocks = useMemo(() => {
     const timelineOnly = protocolBlocks.blocks.filter((block): block is ProtocolBlock => block.type !== 'agenda_item');
